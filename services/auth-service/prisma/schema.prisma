@@ -1,0 +1,138 @@
+// Auth Service Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PlatformAdmin {
+  id                 Int       @id @default(autoincrement())
+  email              String    @unique
+  encryptedPassword  String
+  name               String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Tenant {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  domain             String?   @unique
+  status             String    @default("active")
+  logo               String?
+  description        String?
+  industry           String?
+  location           String?
+  email              String?
+  phone              String?
+  subscriptionPlan   String    @default("trial")
+  subscriptionStatus String    @default("trial")
+  stripeCustomerId   String?
+  trialEndsAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  users              User[]
+  roles              Role[]
+}
+
+model User {
+  id                 Int       @id @default(autoincrement())
+  tenantId           Int
+  email              String
+  encryptedPassword  String
+  resetPasswordToken String?   @unique
+  resetPasswordSentAt DateTime?
+  rememberCreatedAt  DateTime?
+  name               String?
+  roleId             Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role               Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, email])
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users       User[]
+  permissions RolePermission[]
+
+  @@unique([tenantId, name])
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String
+  module      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Agent {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  name        String   @db.VarChar(255)
+  email       String?  @db.VarChar(255)
+  phoneNumber String?  @db.VarChar(50)
+  gdsSystem   String?  @db.VarChar(100)
+  client      String?  @db.VarChar(255)
+  pcc         String?  @db.VarChar(100)
+  jobStatus   String   @default("Active") @db.VarChar(50)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  marginSegments AgentMarginSegment[]
+}
+
+model AgentMarginSegment {
+  id            Int      @id @default(autoincrement())
+  agentId       Int
+  minAmount     Decimal  @db.Decimal(12, 2)
+  maxAmount     Decimal? @db.Decimal(12, 2)
+  marginPercent Decimal  @db.Decimal(5, 2)
+  label         String?  @db.VarChar(100)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+}
+
+model Vendor {
+  id            Int      @id @default(autoincrement())
+  tenantId      Int
+  name          String   @db.VarChar(255)
+  phoneNumber   String?  @db.VarChar(50)
+  email         String?  @db.VarChar(255)
+  website       String?  @db.VarChar(255)
+  vendorType    String?  @db.VarChar(100)
+  creditBalance Decimal  @default(0.00) @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, name])
+}

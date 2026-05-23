@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: travel_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: travel_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - travel_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: travel_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - travel_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: travel_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - travel_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Microservices
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    container_name: travel_api_gateway
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - AUTH_SERVICE_URL=http://auth-service:4001
+      - USER_SERVICE_URL=http://user-service:4002
+      - HOTEL_SERVICE_URL=http://hotel-service:4003
+      - FLIGHT_SERVICE_URL=http://flight-service:4004
+      - BOOKING_SERVICE_URL=http://booking-service:4005
+    networks:
+      - travel_network
+    depends_on:
+      - auth-service
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+    container_name: travel_auth_service
+    ports:
+      - "4001:4001"
+    environment:
+      - PORT=4001
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/travel_platform_auth?schema=public
+      - JWT_SECRET=super_secret_jwt_key
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadminpassword
+      - MINIO_BUCKET=travelbooker-media
+      - MINIO_EXTERNAL_URL=http://localhost:9000
+    networks:
+      - travel_network
+    depends_on:
+      - postgres
+      - minio
+
+  booking-service:
+    build:
+      context: ./services/booking-service
+    container_name: travel_booking_service
+    ports:
+      - "4005:4005"
+    environment:
+      - PORT=4005
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/travel_platform?schema=public
+      - AUTH_SERVICE_URL=http://auth-service:4001
+    networks:
+      - travel_network
+    depends_on:
+      - postgres
+      - auth-service
+
+  minio:
+    image: minio/minio:RELEASE.2024-01-28T22-35-53Z
+    container_name: travel_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - travel_network
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  travel_network:
+    driver: bridge

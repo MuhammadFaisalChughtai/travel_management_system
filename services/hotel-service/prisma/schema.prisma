@@ -1,0 +1,50 @@
+// Hotel Service Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Vendor {
+  id           Int       @id @default(autoincrement())
+  tenantId     Int
+  name         String
+  contactEmail String?
+  contactPhone String?   @db.VarChar(50)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  accommodations AccommodationService[]
+}
+
+model AccommodationService {
+  id                      Int       @id @default(autoincrement())
+  tenantId                Int
+  bookingId               Int       // External Reference to Booking Service
+  vendorId                Int
+  hotelName               String
+  roomType                String?   @db.VarChar(100)
+  checkInDate             DateTime? @db.Date
+  checkOutDate            DateTime? @db.Date
+  mealType                String?   @db.VarChar(100)
+  reservationNumber       String?   @db.VarChar(100)
+  qty                     Int       @default(1)
+  price                   Decimal   @default(0.00) @db.Decimal(10, 2)
+  currency                String?   @db.VarChar(10)
+  otherCurrency           String?   @db.VarChar(10)
+  conversionRate          Decimal?  @db.Decimal(10, 4)
+  issueDate               DateTime? @db.Date
+  refundAmount            Decimal   @default(0.00) @db.Decimal(10, 2)
+  fineAmount              Decimal   @default(0.00) @db.Decimal(10, 2)
+  hotelConfirmationNumber String?   @db.VarChar(100)
+  hotelAddress            String?   @db.Text
+  lastCancellationDate    DateTime? @db.Date
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  vendor                  Vendor    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+}

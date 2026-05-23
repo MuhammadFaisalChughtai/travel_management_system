@@ -1,0 +1,52 @@
+// User Service Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id                 Int       @id @default(autoincrement())
+  tenantId           Int
+  title              String?   @db.VarChar(10)
+  firstName          String
+  lastName           String
+  ageCategory        String?   @db.VarChar(50) // Adult, Child, Infant
+  email              String?
+  phoneNumber        String?   @db.VarChar(50)
+  passportNumber     String?
+  passportExpiryDate DateTime? @db.Date
+  agentId            Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  agent              Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, email])
+}
+
+model Agent {
+  id               Int       @id @default(autoincrement())
+  tenantId         Int
+  name             String
+  email            String
+  phoneNumber      String?   @db.VarChar(50)
+  gdsSystem        String?   @db.VarChar(100)
+  clientId         String?   @db.VarChar(100)
+  pcc              String?   @db.VarChar(50)
+  signInCount      Int       @default(0)
+  currentSignInAt  DateTime?
+  lastSignInAt     DateTime?
+  currentSignInIp  String?   @db.VarChar(45)
+  lastSignInIp     String?   @db.VarChar(45)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  customers        Customer[]
+
+  @@unique([tenantId, email])
+}

@@ -1,0 +1,254 @@
+// Booking Service Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Booking {
+  id                  Int       @id @default(autoincrement())
+  tenantId            Int
+  bookingReference    String    @db.VarChar(50)
+  date                DateTime  @db.Date
+  departureDate       DateTime? @db.Date
+  agentId             Int?      // External Reference
+  agentName           String?   // Name of the agent who made the booking
+  totalPrice          Decimal   @default(0.00) @db.Decimal(10, 2)
+  paidAmount          Decimal   @default(0.00) @db.Decimal(10, 2)
+  refundAmount        Decimal   @default(0.00) @db.Decimal(10, 2)
+  cardPaymentCharges  Decimal   @default(0.00) @db.Decimal(10, 2)
+  cancellationCharges Decimal   @default(0.00) @db.Decimal(10, 2)
+  remainingAmount     Decimal   @default(0.00) @db.Decimal(10, 2)
+  status              String    @default("confirmed") @db.VarChar(50)
+  paymentStatus       String    @default("unpaid") @db.VarChar(50)
+  lockedStatus        String    @default("unlocked") @db.VarChar(50)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  customers           BookingCustomer[]
+  payments            BookingPayment[]
+  vendorPayments      VendorPayment[]
+  accommodations      AccommodationService[]
+  flightServices      FlightService[]
+  transportServices   TransportService[]
+  visaServices        VisaService[]
+  discounts           BookingDiscount[]
+  refunds             BookingRefund[]
+  additionalServices  AdditionalService[]
+
+  @@unique([tenantId, bookingReference])
+}
+
+model BookingCustomer {
+  id                 Int       @id @default(autoincrement())
+  tenantId           Int
+  bookingId          Int
+  customerId         Int?      // Optional if we want to save local passenger info
+  title              String?   @db.VarChar(10)
+  firstName          String    @db.VarChar(255)
+  lastName           String    @db.VarChar(255)
+  ageCategory        String    @default("Adult") @db.VarChar(50) // 'Adult', 'Child', 'Infant'
+  email              String?   @db.VarChar(255)
+  phoneNumber        String?   @db.VarChar(50)
+  passportNumber     String?   @db.VarChar(255)
+  passportExpiryDate DateTime? @db.Date
+  agentName          String?   @db.VarChar(255)
+  role               String?   @db.VarChar(50) // 'Leader', 'Family Member'
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  booking            Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model BookingPayment {
+  id            Int      @id @default(autoincrement())
+  tenantId      Int
+  bookingId     Int
+  amount        Decimal  @db.Decimal(10, 2)
+  paymentMethod String   @db.VarChar(100) // e.g. bank_transfer
+  paymentType   String   @db.VarChar(100) // e.g. instalment
+  paidOn        DateTime @db.Date
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model VendorPayment {
+  id                Int       @id @default(autoincrement())
+  tenantId          Int
+  bookingId         Int
+  vendorId          Int?
+  vendorName        String    @db.VarChar(255)
+  amount            Decimal   @db.Decimal(10, 2)
+  paymentStatus     String    @default("unpaid") @db.VarChar(50)
+  paidOn            DateTime? @db.Date
+  flightPnr         String?   @db.VarChar(100)
+  issueDate         DateTime? @db.Date
+  reservationNumber String?   @db.VarChar(100)
+  notes             String?   @db.Text
+  totalPaid         Decimal   @default(0.00) @db.Decimal(10, 2)
+  totalRefunded     Decimal   @default(0.00) @db.Decimal(10, 2)
+  remainingDue      Decimal   @default(0.00) @db.Decimal(10, 2)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  booking           Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model AccommodationService {
+  id                       Int       @id @default(autoincrement())
+  tenantId                 Int
+  bookingId                Int
+  vendorId                 Int?
+  vendorName               String    @db.VarChar(255)
+  hotelName                String    @db.VarChar(255)
+  roomType                 String?   @db.VarChar(100)
+  checkInDate              DateTime? @db.Date
+  checkOutDate             DateTime? @db.Date
+  mealType                 String?   @db.VarChar(100)
+  reservationNumber        String?   @db.VarChar(100)
+  qty                      Int       @default(1)
+  price                    Decimal   @default(0.00) @db.Decimal(10, 2)
+  currency                 String?   @db.VarChar(10)
+  otherCurrency            String?   @db.VarChar(10)
+  conversionRate           Decimal?  @db.Decimal(10, 4)
+  issueDate                DateTime? @db.Date
+  refundAmount             Decimal   @default(0.00) @db.Decimal(10, 2)
+  fineAmount               Decimal   @default(0.00) @db.Decimal(10, 2)
+  hotelConfirmationNumber  String?   @db.VarChar(100)
+  hotelAddress             String?   @db.Text
+  lastCancellationDate     DateTime? @db.Date
+  createdAt                DateTime  @default(now())
+  isPaidToVendor    Boolean   @default(false)
+  updatedAt                DateTime  @updatedAt
+
+  booking                  Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model FlightService {
+  id                Int       @id @default(autoincrement())
+  tenantId          Int
+  bookingId         Int
+  date              DateTime? @db.Date
+  vendorName        String    @db.VarChar(255)
+  flightNo          String    @db.VarChar(100)
+  pnr               String    @db.VarChar(50)
+  departedFrom      String    @db.VarChar(255)
+  arrivedAt         String    @db.VarChar(255)
+  departTime        String?   @db.VarChar(50)
+  arrivalTime       String?   @db.VarChar(50)
+  price             Decimal   @default(0.00) @db.Decimal(10, 2)
+  currency          String?   @db.VarChar(10)
+  issueDate         DateTime? @db.Date
+  refundAmount      Decimal   @default(0.00) @db.Decimal(10, 2)
+  fineAmount        Decimal   @default(0.00) @db.Decimal(10, 2)
+  baggage           String?   @db.VarChar(255)
+  carryOnBaggage    String?   @db.VarChar(255)
+  checkedBaggage    String?   @db.VarChar(255)
+  flightClass       String?   @db.VarChar(100)
+  createdAt         DateTime  @default(now())
+  isPaidToVendor    Boolean   @default(false)
+  updatedAt         DateTime  @updatedAt
+
+  booking           Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model TransportService {
+  id                    Int       @id @default(autoincrement())
+  tenantId              Int
+  bookingId             Int
+  vendorName            String    @db.VarChar(255)
+  vehicleType           String    @db.VarChar(255)
+  departureDestination  String    @db.VarChar(255)
+  arrivalDestination    String    @db.VarChar(255)
+  date                  DateTime? @db.Date
+  departureTime         String?   @db.VarChar(50)
+  arrivalTime           String?   @db.VarChar(50)
+  flightNo              String?   @db.VarChar(100)
+  price                 Decimal   @default(0.00) @db.Decimal(10, 2)
+  currency              String?   @db.VarChar(10)
+  otherCurrency         String?   @db.VarChar(10)
+  conversionRate        Decimal?  @db.Decimal(10, 4)
+  issueDate             DateTime? @db.Date
+  refundAmount          Decimal   @default(0.00) @db.Decimal(10, 2)
+  fineAmount            Decimal   @default(0.00) @db.Decimal(10, 2)
+  createdAt             DateTime  @default(now())
+  isPaidToVendor    Boolean   @default(false)
+  updatedAt             DateTime  @updatedAt
+
+  booking               Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model VisaService {
+  id                Int       @id @default(autoincrement())
+  tenantId          Int
+  bookingId         Int
+  vendorName        String    @db.VarChar(255)
+  passportNumber    String    @db.VarChar(100)
+  visaType          String    @db.VarChar(100)
+  visaNumber        String?   @db.VarChar(100)
+  issueDate         DateTime? @db.Date
+  expiryDate        DateTime? @db.Date
+  price             Decimal   @default(0.00) @db.Decimal(10, 2)
+  currency          String?   @db.VarChar(10)
+  otherCurrency     String?   @db.VarChar(10)
+  conversionRate    Decimal?  @db.Decimal(10, 4)
+  refundAmount      Decimal   @default(0.00) @db.Decimal(10, 2)
+  fineAmount        Decimal   @default(0.00) @db.Decimal(10, 2)
+  createdAt         DateTime  @default(now())
+  isPaidToVendor    Boolean   @default(false)
+  updatedAt         DateTime  @updatedAt
+
+  booking           Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model BookingDiscount {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  bookingId       Int
+  vendorCategory  String   @db.VarChar(100) // e.g. Hotel, Flight, Visa
+  serviceName     String?  @db.VarChar(255) // Specific service line item
+  amount          Decimal  @db.Decimal(10, 2)
+  notes           String?  @db.Text
+  date            DateTime @db.Date
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model BookingRefund {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  bookingId       Int
+  direction       String   @db.VarChar(50)  // 'Refund to Client' | 'Refund from Vendor'
+  vendorCategory  String   @db.VarChar(100) // e.g. Hotel, Flight, Visa
+  serviceName     String?  @db.VarChar(255) // Specific service line item
+  amount          Decimal  @db.Decimal(10, 2)
+  notes           String?  @db.Text
+  date            DateTime @db.Date
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model AdditionalService {
+  id            Int      @id @default(autoincrement())
+  tenantId      Int
+  bookingId     Int
+  serviceName   String   @db.VarChar(255)
+  charges       Decimal  @default(0.00) @db.Decimal(10, 2)
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  isPaidToVendor    Boolean   @default(false)
+  updatedAt     DateTime @updatedAt
+
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}

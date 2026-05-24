@@ -27,12 +27,11 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
   if (booking?.visaServices?.length) availableCategories.push('Visa');
   if (booking?.additionalServices?.length) availableCategories.push('Additional Service');
 
-  let availableItems: any[] = [];
-  if (form.vendorCategory === 'Flight') availableItems = (booking?.flightServices || []).filter(f => f.pnr && f.pnr.trim() !== '');
-  else if (form.vendorCategory === 'Accommodation') availableItems = booking?.accommodations || [];
-  else if (form.vendorCategory === 'Transportation') availableItems = booking?.transportServices || [];
-  else if (form.vendorCategory === 'Visa') availableItems = booking?.visaServices || [];
-  else if (form.vendorCategory === 'Additional Service') availableItems = booking?.additionalServices || [];
+  let availableItems: any[] = (form.vendorCategory as string) === 'Flight' ? (booking?.flightServices || []).filter(f => f.pnr && f.pnr.trim() !== '') :
+                (form.vendorCategory as string) === 'Accommodation' ? booking?.accommodations || [] :
+                (form.vendorCategory as string) === 'Transportation' ? booking?.transportServices || [] :
+                (form.vendorCategory as string) === 'Visa' ? booking?.visaServices || [] :
+                (form.vendorCategory as string) === 'Additional Service' ? booking?.additionalServices || [] : [];
 
   const previousRefunds = booking?.refunds?.filter(r => r.serviceName === form.serviceName && r.direction === form.direction).reduce((acc, r) => acc + (parseFloat(r.amount) || 0), 0) || 0;
   

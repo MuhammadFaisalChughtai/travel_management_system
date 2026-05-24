@@ -3,12 +3,13 @@ import type { Accommodation } from '../../types/booking';
 
 interface StaysSectionProps {
   onAdd?: () => void;
-  onEdit?: (item: AccommodationService) => void;
+  onEdit?: (item: any) => void;
+  onDelete?: (item: any) => void;
   stays: Accommodation[];
   
 }
 
-export function StaysSection({ stays, onEdit}: StaysSectionProps) {
+export function StaysSection({ stays, onEdit, onDelete}: StaysSectionProps) {
   return (
     <div className="flex flex-col gap-4">
       {stays.length === 0 ? (
@@ -45,7 +46,7 @@ export function StaysSection({ stays, onEdit}: StaysSectionProps) {
                         <button onClick={() => onEdit?.(s)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                        <button onClick={() => onDelete?.(s)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

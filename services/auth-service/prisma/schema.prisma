@@ -43,7 +43,7 @@ model Tenant {
 model User {
   id                 Int       @id @default(autoincrement())
   tenantId           Int
-  email              String
+  email              String    @unique
   encryptedPassword  String
   resetPasswordToken String?   @unique
   resetPasswordSentAt DateTime?
@@ -55,8 +55,6 @@ model User {
   
   tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   role               Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
-
-  @@unique([tenantId, email])
 }
 
 model Role {

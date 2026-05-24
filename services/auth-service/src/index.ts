@@ -177,12 +177,12 @@ app.post('/register', async (req: Request, res: Response) => {
     const parsedData = registerSchema.parse(req.body);
     const tenantId = parsedData.tenantId || 1; // Default tenant
     
-    const existingUser = await prisma.user.findFirst({
-      where: { email: parsedData.email, tenantId }
+    const existingUser = await prisma.user.findUnique({
+      where: { email: parsedData.email }
     });
 
     if (existingUser) {
-      return res.status(409).json({ error: 'User already exists under this tenant' });
+      return res.status(409).json({ error: 'This email is already registered in the system. Users cannot cross-login across different companies.' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -391,6 +391,11 @@ app.post('/tenants', requirePlatformAdmin, async (req: Request, res: Response) =
       }
     }
 
+    const existingEmail = await prisma.user.findUnique({ where: { email: parsedData.adminEmail } });
+    if (existingEmail) {
+      return res.status(409).json({ error: 'This admin email is already registered to another company. Users cannot cross-login across different companies.' });
+    }
+
     let trialEndsAt: Date | null = null;
     if (parsedData.subscriptionPlan === 'trial') {
       const durationDays = parsedData.trialDurationDays || 14;
@@ -551,6 +556,156 @@ app.get('/agents/:id', requireTenantContext, async (req: Request, res: Response)
 });
 
 // POST /agents — create agent
+
+// ==========================================
+// TEAM MANAGEMENT ROUTES (USER CRUD)
+// ==========================================
+
+app.get('/users', requireTenantContext, async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const users = await prisma.user.findMany({
+      where: { tenantId },
+      include: { role: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    // Map response to hide password and format role
+    const sanitized = users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role?.name || 'UNKNOWN',
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt
+    }));
+
+    res.status(200).json({ users: sanitized });
+  } catch (error) {
+    console.error('Fetch Users Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/users', requireTenantContext, async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { name, email, password, roleName } = req.body;
+
+    if (!name || !email || !password || !roleName) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ error: 'This email is already registered in the system.' });
+    }
+
+    // Find or create role
+    let role = await prisma.role.findFirst({
+      where: { tenantId, name: roleName }
+    });
+
+    if (!role) {
+      role = await prisma.role.create({
+        data: { name: roleName, tenantId }
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        encryptedPassword: hashedPassword,
+        tenantId,
+        roleId: role.id
+      }
+    });
+
+    res.status(201).json({
+      message: 'Team member created successfully',
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: role.name
+      }
+    });
+  } catch (error) {
+    console.error('Create User Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.patch('/users/:id', requireTenantContext, async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const userId = parseInt(req.params.id);
+    const { name, roleName, password } = req.body;
+
+    const user = await prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    let dataToUpdate: any = {};
+    if (name) dataToUpdate.name = name;
+
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      dataToUpdate.encryptedPassword = await bcrypt.hash(password, salt);
+    }
+
+    if (roleName) {
+      let role = await prisma.role.findFirst({ where: { tenantId, name: roleName } });
+      if (!role) {
+        role = await prisma.role.create({ data: { name: roleName, tenantId } });
+      }
+      dataToUpdate.roleId = role.id;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: dataToUpdate,
+      include: { role: true }
+    });
+
+    res.status(200).json({
+      message: 'User updated successfully',
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role?.name
+      }
+    });
+  } catch (error) {
+    console.error('Update User Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.delete('/users/:id', requireTenantContext, async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const userId = parseInt(req.params.id);
+
+    const user = await prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    await prisma.user.delete({ where: { id: userId } });
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete User Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 app.post('/agents', requireTenantContext, async (req: Request, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);

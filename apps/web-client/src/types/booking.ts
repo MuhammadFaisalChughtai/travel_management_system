@@ -74,6 +74,7 @@ export interface Accommodation {
   hotelConfirmationNumber: string | null;
   hotelAddress: string | null;
   lastCancellationDate: string | null;
+  isPaidToVendor?: boolean;
 }
 
 export interface Sector {
@@ -95,6 +96,8 @@ export interface FlightService {
   arrivalTime: string | null;
   price: string;
   currency: string | null;
+  otherCurrency?: string | null;
+  conversionRate?: string | null;
   issueDate: string | null;
   refundAmount: string;
   fineAmount: string;
@@ -109,6 +112,7 @@ export interface FlightService {
   passengerIds?: number[];
   fareDetails?: string;
   sectors?: Sector[];
+  isPaidToVendor?: boolean;
 }
 
 export interface TransportService {
@@ -128,6 +132,7 @@ export interface TransportService {
   issueDate: string | null;
   refundAmount: string;
   fineAmount: string;
+  isPaidToVendor?: boolean;
 }
 
 export interface VisaService {
@@ -144,13 +149,18 @@ export interface VisaService {
   conversionRate: string | null;
   refundAmount: string;
   fineAmount: string;
+  isPaidToVendor?: boolean;
 }
 
 export interface AdditionalService {
   id: number;
   serviceName: string;
   charges: string;
+  currency?: string | null;
+  otherCurrency?: string | null;
+  conversionRate?: string | null;
   notes: string | null;
+  isPaidToVendor?: boolean;
 }
 
 export interface BookingDetail {

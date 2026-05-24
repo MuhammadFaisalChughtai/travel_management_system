@@ -3,12 +3,13 @@ import type { VisaService } from '../../types/booking';
 
 interface VisaServicesSectionProps {
   onAdd?: () => void;
-  onEdit?: (item: VisaService) => void;
+  onEdit?: (item: any) => void;
+  onDelete?: (item: any) => void;
   visas: VisaService[];
   
 }
 
-export function VisaServicesSection({ visas, onEdit}: VisaServicesSectionProps) {
+export function VisaServicesSection({ visas, onEdit, onDelete}: VisaServicesSectionProps) {
   return (
     <div className="flex flex-col gap-4">
       {visas.length === 0 ? (
@@ -41,7 +42,7 @@ export function VisaServicesSection({ visas, onEdit}: VisaServicesSectionProps) 
                         <button onClick={() => onEdit?.(v)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                        <button onClick={() => onDelete?.(v)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

@@ -33,8 +33,8 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData }: AddVisa
         const mappedData = { ...initialData };
         // Format dates correctly for inputs
         ['date', 'issueDate', 'checkIn', 'checkOut', 'dob', 'expiryDate', 'departureDate'].forEach(field => {
-          if (mappedData[field]) {
-            try { mappedData[field] = new Date(mappedData[field]).toISOString().split('T')[0]; } catch(e) {}
+          if ((mappedData as any)[field]) {
+            try { (mappedData as any)[field] = new Date((mappedData as any)[field]).toISOString().split('T')[0]; } catch(e) {}
           }
         });
         setForm(mappedData);
@@ -98,6 +98,14 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData }: AddVisa
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Currency</label>
               <input type="text" value={form.currency || 'GBP'} onChange={e => setForm({...form, currency: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
             </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Other Currency</label>
+                <input type="text" value={form.otherCurrency || ''} onChange={e => setForm({...form, otherCurrency: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Conv. Rate</label>
+                <input type="number" step="0.0001" value={form.conversionRate || ''} onChange={e => setForm({...form, conversionRate: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+              </div>
           </div>
         </div>
 

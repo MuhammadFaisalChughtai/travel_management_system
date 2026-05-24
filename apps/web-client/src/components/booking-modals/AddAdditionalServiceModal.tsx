@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, Save, PlusCircle } from "lucide-react";
+import { X, PlusCircle } from "lucide-react";
 
 interface AddAdditionalServiceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: any) => Promise<void> | void;
+  initialData?: any;
 }
 
 export function AddAdditionalServiceModal({
@@ -14,7 +15,6 @@ export function AddAdditionalServiceModal({
   onSubmit,
   initialData,
 }: AddAdditionalServiceModalProps) {
-  const [loading, setLoading] = useState(false);
   const [fType, setFType] = useState("Extra Baggage");
   const [fCustomType, setFCustomType] = useState("");
   const [charges, setCharges] = useState("");
@@ -72,7 +72,6 @@ export function AddAdditionalServiceModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      setLoading(true);
       const serviceName = fType === "Other" ? fCustomType || "Other" : fType;
       await onSubmit({
         serviceName,
@@ -82,8 +81,6 @@ export function AddAdditionalServiceModal({
       onClose();
     } catch (error) {
       console.error("Failed to save additional service:", error);
-    } finally {
-      setLoading(false);
     }
   };
 

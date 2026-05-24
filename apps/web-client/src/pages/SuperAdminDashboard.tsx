@@ -1,13 +1,15 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { 
   Building2, Plus, Users, Shield, RefreshCw, Layers, CheckCircle, 
   AlertTriangle, Upload, Edit, Calendar, MapPin, Briefcase, 
-  Mail, Phone, Clock, X
+  Mail, Phone, Clock, X, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../api/axios';
+import { TechbarredLogo } from '../components/TechbarredLogo';
 
 interface Tenant {
   id: number;
@@ -30,7 +32,7 @@ interface Tenant {
 }
 
 export function SuperAdminDashboard() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
   
   // Data State
@@ -93,6 +95,11 @@ export function SuperAdminDashboard() {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/super-admin/login');
+  };
+
   // Handles uploading logo to the MinIO media endpoint
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     const file = e.target.files?.[0];
@@ -114,7 +121,7 @@ export function SuperAdminDashboard() {
         setNewCompanyLogo(response.data.url);
       }
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to upload logo image');
+      toast.error(err.response?.data?.error || 'Failed to upload logo image');
     } finally {
       setLogoUploading(false);
     }
@@ -227,7 +234,7 @@ export function SuperAdminDashboard() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex-shrink-0 hidden md:block">
+      <aside className="w-64 bg-white border-r border-slate-200 flex-shrink-0 hidden md:flex flex-col justify-between">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
             <Shield className="h-6 w-6 text-primary-600" />
@@ -247,6 +254,16 @@ export function SuperAdminDashboard() {
               Subscription Plans
             </a>
           </nav>
+        </div>
+        
+        <div className="p-6 border-t border-slate-100 flex flex-col gap-6">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 text-red-500 hover:bg-red-50/80 w-full px-4 py-3 rounded-2xl font-semibold transition-all duration-200 text-xs text-left"
+          >
+            <LogOut className="h-4.5 w-4.5" />
+            Sign Out
+          </button>
         </div>
       </aside>
 
@@ -966,6 +983,11 @@ export function SuperAdminDashboard() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Background Watermark Logo */}
+      <div className="fixed bottom-6 right-8 pointer-events-none z-0 opacity-40 mix-blend-multiply">
+        <TechbarredLogo />
+      </div>
     </div>
   );
 }

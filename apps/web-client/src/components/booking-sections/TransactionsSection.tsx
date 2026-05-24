@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import type { BookingDetail } from '../../types/booking';
 import { ArrowDownLeft, ArrowUpRight, Clock, AlertCircle, Percent, Receipt, RefreshCcw, Tag } from 'lucide-react';
 import { api } from '../../api/axios';
+import { VendorTransactionsModal } from '../booking-modals/VendorTransactionsModal';
+import { ClientTransactionsModal } from '../booking-modals/ClientTransactionsModal';
+import { ProfitLedgerModal } from '../booking-modals/ProfitLedgerModal';
+import { PieChart } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 
 interface TransactionsSectionProps {
   booking: BookingDetail;
@@ -14,6 +19,9 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
   const [customMarginPercentage, setCustomMarginPercentage] = useState<string>('0');
   const [marginPercentage, setMarginPercentage] = useState<number>(0);
   const [loadingMargin, setLoadingMargin] = useState(false);
+  const [showVendorTransactions, setShowVendorTransactions] = useState(false);
+  const [showClientTransactions, setShowClientTransactions] = useState(false);
+  const [showProfitLedger, setShowProfitLedger] = useState(false);
 
   // Parse Booking Total
   const bookingTotal = parseFloat(booking.totalPrice) || 0;
@@ -25,9 +33,14 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
   const refundsToClient = booking.refunds?.filter(r => r.direction === 'Refund to Client').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
   const refundsFromVendor = booking.refunds?.filter(r => r.direction === 'Refund from Vendor').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
 
-  const moneyIn = clientPayments + refundsFromVendor + totalDiscounts;
-  const moneyOut = vendorPayments + refundsToClient;
-  const netProfit = moneyIn - moneyOut;
+  // Strict Net Accounting (Contra-accounts)
+  // CLIENT_REFUND is a contra-revenue (subtracts from Total Received)
+  // VENDOR_REFUND is a contra-expense (subtracts from Total Sent)
+  const totalReceived = clientPayments - refundsToClient;
+  const totalSent = vendorPayments - refundsFromVendor;
+  const clientBalance = bookingTotal - totalReceived;
+  
+  const netProfit = (totalReceived - totalSent) + totalDiscounts;
 
   // Fetch Agent Margin based on Slabs (evaluated against net profit)
   useEffect(() => {
@@ -114,7 +127,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
             {/* Total Cost */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Total Cost</p>
@@ -122,17 +135,34 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
             </div>
 
             {/* Total Received */}
+            <div 
+              className="bg-white/5 rounded-xl p-3 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
+              onClick={() => setShowClientTransactions(true)}
+            >
+              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1 flex items-center justify-between">Total Received <ArrowDownLeft className="w-3 h-3 text-emerald-400 opacity-50" /></p>
+              <p className="font-black text-emerald-400 text-lg">£{totalReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              {refundsToClient > 0 && <p className="text-[8px] text-emerald-300 mt-0.5">After £{refundsToClient.toFixed(2)} refunded to client</p>}
+            </div>
+
+            {/* Remaining Balance */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Total Received</p>
-              <p className="font-black text-emerald-400 text-lg">£{(clientPayments + refundsFromVendor).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-              {refundsFromVendor > 0 && <p className="text-[8px] text-emerald-300 mt-0.5">Includes £{refundsFromVendor.toFixed(2)} Refund from Vendor</p>}
+              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Remaining Balance</p>
+              <p className={`font-black text-lg ${clientBalance > 0 ? 'text-amber-400' : 'text-slate-300'}`}>£{clientBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              {clientBalance <= 0 ? (
+                <p className="text-[8px] text-emerald-300 mt-0.5 font-bold">Fully Paid</p>
+              ) : (
+                <p className="text-[8px] text-amber-300/70 mt-0.5">Pending Payment</p>
+              )}
             </div>
 
             {/* Total Sent */}
-            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Total Sent</p>
-              <p className="font-black text-red-400 text-lg">£{(vendorPayments + refundsToClient).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-              {refundsToClient > 0 && <p className="text-[8px] text-red-300 mt-0.5">Includes £{refundsToClient.toFixed(2)} Refund to Client</p>}
+            <div 
+              className="bg-white/5 rounded-xl p-3 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
+              onClick={() => setShowVendorTransactions(true)}
+            >
+              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1 flex items-center justify-between">Total Sent <ArrowUpRight className="w-3 h-3 text-red-400 opacity-50" /></p>
+              <p className="font-black text-red-400 text-lg">£{totalSent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              {refundsFromVendor > 0 && <p className="text-[8px] text-red-300 mt-0.5">After £{refundsFromVendor.toFixed(2)} refunded by vendor</p>}
             </div>
 
             {/* Discounts */}
@@ -163,8 +193,11 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
             </div>
 
             {/* Net Profit — colour-coded */}
-            <div className={`rounded-xl p-3 border ${netProfit >= 0 ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-red-500/20 border-red-500/30'}`}>
-              <p className="text-[9px] text-emerald-100 font-bold uppercase mb-1">Net Profit</p>
+            <div 
+              className={`rounded-xl p-3 border cursor-pointer hover:bg-emerald-500/30 transition-colors ${netProfit >= 0 ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-red-500/20 border-red-500/30'}`}
+              onClick={() => setShowProfitLedger(true)}
+            >
+              <p className="text-[9px] text-emerald-100 font-bold uppercase mb-1 flex items-center justify-between">Net Profit <PieChart className="w-3 h-3 text-emerald-100 opacity-50" /></p>
               <p className={`font-black text-xl ${netProfit >= 0 ? 'text-white' : 'text-red-300'}`}>
                 {netProfit < 0 ? '-' : ''}£{Math.abs(netProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
@@ -304,6 +337,30 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
           </div>
         )}
       </div>
+      {/* Modals */}
+      <AnimatePresence>
+        {showVendorTransactions && (
+          <VendorTransactionsModal 
+            isOpen={showVendorTransactions}
+            onClose={() => setShowVendorTransactions(false)}
+            booking={booking}
+          />
+        )}
+        {showClientTransactions && (
+          <ClientTransactionsModal 
+            isOpen={showClientTransactions}
+            onClose={() => setShowClientTransactions(false)}
+            booking={booking}
+          />
+        )}
+        {showProfitLedger && (
+          <ProfitLedgerModal 
+            isOpen={showProfitLedger}
+            onClose={() => setShowProfitLedger(false)}
+            booking={booking}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

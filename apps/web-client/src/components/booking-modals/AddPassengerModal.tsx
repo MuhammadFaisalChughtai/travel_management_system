@@ -36,8 +36,8 @@ export function AddPassengerModal({
         const mappedData = { ...initialData };
         // Format dates correctly for inputs
         ['date', 'issueDate', 'checkIn', 'checkOut', 'dob', 'expiryDate', 'departureDate'].forEach(field => {
-          if (mappedData[field]) {
-            try { mappedData[field] = new Date(mappedData[field]).toISOString().split('T')[0]; } catch(e) {}
+          if ((mappedData as any)[field]) {
+            try { (mappedData as any)[field] = new Date((mappedData as any)[field]).toISOString().split('T')[0]; } catch(e) {}
           }
         });
         setForm(mappedData);

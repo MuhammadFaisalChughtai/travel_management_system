@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { HotelSearch } from './pages/HotelSearch';
@@ -59,6 +60,7 @@ function Hero() {
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" toastOptions={{ className: 'text-sm font-semibold rounded-xl shadow-lg border border-slate-100', success: { iconTheme: { primary: '#10b981', secondary: 'white' } }, error: { iconTheme: { primary: '#ef4444', secondary: 'white' } } }} />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Hero />} />

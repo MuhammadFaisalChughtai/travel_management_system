@@ -1,13 +1,14 @@
-import { Users, Edit, Trash2, Edit2 } from 'lucide-react';
+import { Users, Edit, Trash2 } from 'lucide-react';
 import type { Passenger } from '../../types/booking';
 
 interface PassengersSectionProps {
   onAdd?: () => void;
   passengers: Passenger[];
-  onEdit?: (passenger: Passenger) => void;
+  onEdit?: (item: any) => void;
+  onDelete?: (item: any) => void;
 }
 
-export function PassengersSection({ passengers, onEdit }: PassengersSectionProps) {
+export function PassengersSection({ passengers, onEdit, onDelete }: PassengersSectionProps) {
   return (
     <div className="flex flex-col gap-4">
       {passengers.length === 0 ? (
@@ -50,7 +51,7 @@ export function PassengersSection({ passengers, onEdit }: PassengersSectionProps
                         <button onClick={() => onEdit?.(p)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                        <button onClick={() => onDelete?.(p)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

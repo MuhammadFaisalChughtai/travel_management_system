@@ -8,6 +8,7 @@ interface AddAccommodationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (stay: Partial<Accommodation>) => void;
+  initialData?: Partial<Accommodation>;
 }
 
 export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }: AddAccommodationModalProps) {
@@ -25,7 +26,9 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
     hotelConfirmationNumber: '',
     hotelAddress: '',
     lastCancellationDate: '',
-    issueDate: ''
+    issueDate: '',
+    otherCurrency: '',
+    conversionRate: ''
   });
 
   
@@ -36,8 +39,8 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
         const mappedData = { ...initialData };
         // Format dates correctly for inputs
         ['date', 'issueDate', 'checkIn', 'checkOut', 'dob', 'expiryDate', 'departureDate'].forEach(field => {
-          if (mappedData[field]) {
-            try { mappedData[field] = new Date(mappedData[field]).toISOString().split('T')[0]; } catch(e) {}
+          if ((mappedData as any)[field]) {
+            try { (mappedData as any)[field] = new Date((mappedData as any)[field]).toISOString().split('T')[0]; } catch(e) {}
           }
         });
         setForm(mappedData);
@@ -119,7 +122,7 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
 
           <div className="space-y-4">
             <h4 className="text-[11px] font-extrabold text-indigo-900 tracking-wide uppercase border-b border-indigo-100 pb-1">Financial & References</h4>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">System Res. Number</label>
                 <input type="text" value={form.reservationNumber || ''} onChange={e => setForm({...form, reservationNumber: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
@@ -131,6 +134,14 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Currency</label>
                 <input type="text" value={form.currency || 'GBP'} onChange={e => setForm({...form, currency: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Other Currency</label>
+                <input type="text" value={form.otherCurrency || ''} onChange={e => setForm({...form, otherCurrency: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Conv. Rate</label>
+                <input type="number" step="0.0001" value={form.conversionRate || ''} onChange={e => setForm({...form, conversionRate: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
               </div>
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Total Price</label>
@@ -162,7 +173,7 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
             
             <div className="flex gap-3">
               <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
-              <button onClick={() => { onSubmit(form as any); onClose(); }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
+              <button onClick={() => { onSubmit({ ...form, price: parseFloat(form.price as any) || 0 } as any); onClose(); }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
                 {initialData ? 'Update' : 'Save'}
               </button>
             </div>

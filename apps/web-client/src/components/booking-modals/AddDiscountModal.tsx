@@ -26,12 +26,11 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
   if (booking?.visaServices?.length) availableCategories.push('Visa');
   if (booking?.additionalServices?.length) availableCategories.push('Additional Service');
 
-  let availableItems: any[] = [];
-  if (form.vendorCategory === 'Flight') availableItems = (booking?.flightServices || []).filter(f => f.pnr && f.pnr.trim() !== '');
-  else if (form.vendorCategory === 'Accommodation') availableItems = booking?.accommodations || [];
-  else if (form.vendorCategory === 'Transportation') availableItems = booking?.transportServices || [];
-  else if (form.vendorCategory === 'Visa') availableItems = booking?.visaServices || [];
-  else if (form.vendorCategory === 'Additional Service') availableItems = booking?.additionalServices || [];
+  let availableItems: any[] = (form.vendorCategory as string) === 'Flight' ? (booking?.flightServices || []).filter(f => f.pnr && f.pnr.trim() !== '') :
+                (form.vendorCategory as string) === 'Accommodation' ? booking?.accommodations || [] :
+                (form.vendorCategory as string) === 'Transportation' ? booking?.transportServices || [] :
+                (form.vendorCategory as string) === 'Visa' ? booking?.visaServices || [] :
+                (form.vendorCategory as string) === 'Additional Service' ? booking?.additionalServices || [] : [];
 
   const previousDiscounts = booking?.discounts?.filter(d => d.serviceName === form.serviceName).reduce((acc, d) => acc + (parseFloat(d.amount) || 0), 0) || 0;
   

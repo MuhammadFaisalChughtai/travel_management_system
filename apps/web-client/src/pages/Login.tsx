@@ -4,6 +4,7 @@ import { Mail, Lock, ArrowRight, Navigation2, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../api/axios';
 import { useAuthStore } from '../store/authStore';
+import { TechbarredLogo } from '../components/TechbarredLogo';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -169,6 +170,9 @@ export function Login() {
             </button>
           </div>
         </form>
+        <div className="mt-8 pt-6 border-t border-slate-100">
+          <TechbarredLogo />
+        </div>
       </motion.div>
     </div>
   );

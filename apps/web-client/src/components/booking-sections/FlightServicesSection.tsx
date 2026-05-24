@@ -3,12 +3,13 @@ import type { FlightService } from '../../types/booking';
 
 interface FlightServicesSectionProps {
   onAdd?: () => void;
-  onEdit?: (item: FlightService) => void;
+  onEdit?: (item: any) => void;
+  onDelete?: (item: any) => void;
   flights: FlightService[];
   
 }
 
-export function FlightServicesSection({ flights, onEdit}: FlightServicesSectionProps) {
+export function FlightServicesSection({ flights, onEdit, onDelete}: FlightServicesSectionProps) {
   return (
     <div className="flex flex-col gap-4">
       {flights.length === 0 ? (
@@ -63,7 +64,7 @@ export function FlightServicesSection({ flights, onEdit}: FlightServicesSectionP
                         <button onClick={() => onEdit?.(f)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                        <button onClick={() => onDelete?.(f)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

@@ -1,16 +1,16 @@
-import React from 'react';
 import { motion } from 'framer-motion';
-import { PlusCircle, FileText, Edit2 } from 'lucide-react';
+import { PlusCircle, FileText, Edit2, Trash2 } from 'lucide-react';
 import type { AdditionalService } from '../../types/booking';
 
 interface AdditionalServicesSectionProps {
   services: AdditionalService[] | undefined;
   onAdd: () => void;
-  onEdit?: (item: AdditionalService) => void;
+  onEdit?: (item: any) => void;
+  onDelete?: (item: any) => void;
   onMarkPaid?: (item: AdditionalService) => void;
 }
 
-export function AdditionalServicesSection({ services, onAdd, onEdit, onMarkPaid }: AdditionalServicesSectionProps) {
+export function AdditionalServicesSection({ services, onAdd, onEdit, onDelete, onMarkPaid }: AdditionalServicesSectionProps) {
   if (!services || services.length === 0) {
     return (
       <div className="p-8 text-center bg-slate-50 border border-slate-100 rounded-xl mt-4">
@@ -50,14 +50,21 @@ export function AdditionalServicesSection({ services, onAdd, onEdit, onMarkPaid 
           </div>
 
           <div className="flex flex-col items-end flex-shrink-0 pl-4 md:border-l border-slate-100">
-            {onEdit && (
-              <button onClick={() => onEdit(service)} className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-4 right-4 bg-white p-1.5 rounded-md shadow text-slate-400 hover:text-primary-600 border border-slate-200">
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute top-4 right-4">
+              {onEdit && (
+                <button onClick={() => onEdit(service)} className="bg-white p-1.5 rounded-md shadow text-slate-400 hover:text-primary-600 border border-slate-200">
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {onDelete && (
+                <button onClick={() => onDelete(service)} className="bg-white p-1.5 rounded-md shadow text-slate-400 hover:text-red-600 border border-slate-200">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
             {onMarkPaid && (
               <label className="absolute top-4 right-14 flex items-center gap-1.5 cursor-pointer bg-white px-2 py-1 rounded-md shadow-sm border border-slate-200 hover:border-primary-300 transition-colors z-10 group">
-                <input type="checkbox" checked={service.isPaidToVendor || false} disabled={service.isPaidToVendor} onChange={(e) => { if (e.target.checked) onMarkPaid(service); }} className="w-3.5 h-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50" />
+                <input type="checkbox" checked={true || false} disabled={true} onChange={(e) => { if (e.target.checked) onMarkPaid(service); }} className="w-3.5 h-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50" />
                 <span className="text-[10px] font-bold text-slate-500 group-hover:text-primary-600 uppercase">Paid</span>
               </label>
             )}

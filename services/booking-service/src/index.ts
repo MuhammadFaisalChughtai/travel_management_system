@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
+import { requirePermission } from './middleware/rbac';
+import { Permission } from './types/rbac';
 
 dotenv.config();
 
@@ -72,7 +74,7 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // Create Booking (Company Admin or Agent can book)
-app.post('/', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/', requireGatewayHeaders, requirePermission(Permission.CREATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const parsedData = createBookingSchema.parse(req.body);
     
@@ -248,7 +250,7 @@ const patchBookingSchema = z.object({
   date: z.string().optional()
 });
 
-app.patch('/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.patch('/:id', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const parsedData = patchBookingSchema.parse(req.body);
@@ -308,7 +310,7 @@ const addPassengerSchema = z.object({
   role: z.string().nullable().optional().default('Family Member')
 });
 
-app.post('/:id/passengers', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/passengers', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const parsedData = addPassengerSchema.parse(req.body);
@@ -363,7 +365,7 @@ const addPaymentSchema = z.object({
   notes: z.string().nullable().optional()
 });
 
-app.post('/:id/payments', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const parsedData = addPaymentSchema.parse(req.body);
@@ -436,7 +438,7 @@ const addVendorPaymentSchema = z.object({
   remainingDue: z.number().optional()
 });
 
-app.post('/:id/vendor-payments', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const parsedData = addVendorPaymentSchema.parse(req.body);
@@ -509,7 +511,7 @@ const addAccommodationSchema = z.object({
   lastCancellationDate: z.string().nullable().optional()
 });
 
-app.post('/:id/accommodations', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/accommodations', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const parsedData = addAccommodationSchema.parse(req.body);
@@ -579,7 +581,7 @@ app.post('/:id/accommodations', requireGatewayHeaders, authorizeRoles('COMPANY_A
 });
 
 // Add Flight Service
-app.post('/:id/flight-services', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/flight-services', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const tenantIdNumeric = parseInt(req.tenantId!);
@@ -631,7 +633,7 @@ app.post('/:id/flight-services', requireGatewayHeaders, authorizeRoles('COMPANY_
 });
 
 // Add Transport Service
-app.post('/:id/transport-services', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/transport-services', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const tenantIdNumeric = parseInt(req.tenantId!);
@@ -681,7 +683,7 @@ app.post('/:id/transport-services', requireGatewayHeaders, authorizeRoles('COMPA
 });
 
 // Add Visa Service
-app.post('/:id/visa-services', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/visa-services', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const tenantIdNumeric = parseInt(req.tenantId!);
@@ -728,7 +730,7 @@ app.post('/:id/visa-services', requireGatewayHeaders, authorizeRoles('COMPANY_AD
 });
 
 // Add Discount to Booking
-app.post('/:id/discounts', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/discounts', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const tenantIdNumeric = parseInt(req.tenantId!);
@@ -764,7 +766,7 @@ app.post('/:id/discounts', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN'
 });
 
 // Add Refund to Booking
-app.post('/:id/refunds', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/refunds', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const tenantIdNumeric = parseInt(req.tenantId!);
@@ -801,7 +803,7 @@ app.post('/:id/refunds', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 
 });
 
 // Add Additional Service
-app.post('/:id/additional-services', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req: CustomRequest, res: Response) => {
+app.post('/:id/additional-services', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
     const tenantIdNumeric = parseInt(req.tenantId!);
@@ -849,7 +851,7 @@ app.post('/:id/additional-services', requireGatewayHeaders, authorizeRoles('COMP
 // --- EDIT (PATCH) ENDPOINTS ---
 
 // Edit Accommodation
-app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req, res) => {
+app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
@@ -900,7 +902,7 @@ app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, authorizeRole
 });
 
 // Edit Flight
-app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req, res) => {
+app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
@@ -950,7 +952,7 @@ app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, authorizeRol
 });
 
 // Edit Transport
-app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req, res) => {
+app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
@@ -998,7 +1000,7 @@ app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, authorize
 });
 
 // Edit Visa
-app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req, res) => {
+app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
@@ -1043,7 +1045,7 @@ app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, authorizeRoles
 });
 
 // Edit Additional Service
-app.patch('/:id/additional-services/:serviceId', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req, res) => {
+app.patch('/:id/additional-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
@@ -1079,28 +1081,91 @@ app.patch('/:id/additional-services/:serviceId', requireGatewayHeaders, authoriz
 });
 
 // Edit Passenger
-app.patch('/:id/passengers/:passengerId', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'ADMIN', 'AGENT'), async (req, res) => {
+app.patch('/:id/passengers/:passengerId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
   try {
     const passengerId = parseInt(req.params.passengerId);
     const parsedData = req.body;
     
-    const updated = await (prisma as any).passenger.update({
+    const updated = await prisma.bookingCustomer.update({
       where: { id: passengerId },
       data: {
-        type: parsedData.type,
+        ageCategory: parsedData.type || parsedData.ageCategory,
         title: parsedData.title,
         firstName: parsedData.firstName,
         lastName: parsedData.lastName,
-        dob: parsedData.dob ? new Date(parsedData.dob) : null,
         passportNumber: parsedData.passportNumber,
-        passportExpiry: parsedData.passportExpiry ? new Date(parsedData.passportExpiry) : null,
-        gender: parsedData.gender || null,
+        passportExpiryDate: parsedData.passportExpiry ? new Date(parsedData.passportExpiry) : null,
         role: parsedData.role || null
       }
     });
     res.json({ passenger: updated });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+// PATCH /:id/payments/:serviceId
+app.patch('/:id/payments/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+  try {
+    const updated = await prisma.bookingPayment.update({
+      where: { id: parseInt(req.params.serviceId) },
+      data: req.body
+    });
+    res.json({ payment: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to update payment', message: err.message });
+  }
+});
+
+// PATCH /:id/vendor-payments/:serviceId
+app.patch('/:id/vendor-payments/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+  try {
+    const updated = await prisma.vendorPayment.update({
+      where: { id: parseInt(req.params.serviceId) },
+      data: req.body
+    });
+    res.json({ vendorPayment: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to update vendor payment', message: err.message });
+  }
+});
+
+// Generic Delete Route
+app.delete('/:bookingId/services/:serviceType/:id', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
+  try {
+    const bookingId = parseInt(req.params.bookingId);
+    const serviceId = parseInt(req.params.id);
+    const { serviceType } = req.params;
+    const tenantIdNumeric = parseInt(req.tenantId!);
+
+    // Strict Permission check for financial deletions
+    if (['payment', 'vendor-payment'].includes(serviceType)) {
+      const userRole = req.headers['x-user-role'] as string;
+      if (!req.isPlatformAdmin && userRole !== 'MAIN_COMPANY_ADMIN' && userRole !== 'ADMIN') {
+        return res.status(403).json({ error: 'Forbidden', message: 'You lack the DELETE_TRANSACTION permission required to delete financial records.' });
+      }
+    }
+
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) return res.status(404).json({ error: 'Not Found' });
+    if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) return res.status(403).json({ error: 'Forbidden' });
+
+    switch(serviceType) {
+      case 'accommodation': await prisma.accommodationService.delete({ where: { id: serviceId } }); break;
+      case 'flight': await prisma.flightService.delete({ where: { id: serviceId } }); break;
+      case 'transport': await prisma.transportService.delete({ where: { id: serviceId } }); break;
+      case 'visa': await prisma.visaService.delete({ where: { id: serviceId } }); break;
+      case 'additional': await prisma.additionalService.delete({ where: { id: serviceId } }); break;
+      case 'passenger': await prisma.bookingCustomer.delete({ where: { id: serviceId } }); break;
+      case 'payment': await prisma.bookingPayment.delete({ where: { id: serviceId } }); break;
+      case 'vendor-payment': await prisma.vendorPayment.delete({ where: { id: serviceId } }); break;
+      default: return res.status(400).json({ error: 'Invalid service type' });
+    }
+
+    res.status(200).json({ message: 'Deleted successfully' });
+  } catch(error) {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

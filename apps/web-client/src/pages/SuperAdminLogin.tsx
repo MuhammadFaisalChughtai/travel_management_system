@@ -4,6 +4,7 @@ import { Shield, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../api/axios';
 import { useAuthStore } from '../store/authStore';
+import { TechbarredLogo } from '../components/TechbarredLogo';
 
 export function SuperAdminLogin() {
   const [email, setEmail] = useState('');
@@ -158,6 +159,9 @@ export function SuperAdminLogin() {
             </button>
           </div>
         </form>
+        <div className="mt-8 pt-6 border-t border-slate-100/10">
+          <TechbarredLogo className="[&_span]:text-slate-300 [&>div>span]:text-white [&>div>span>span]:bg-white" />
+        </div>
       </motion.div>
     </div>
   );

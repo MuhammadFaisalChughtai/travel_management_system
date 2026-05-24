@@ -24,17 +24,22 @@ import {
   Mail,
   Phone,
   Globe,
-  Building2,
   MapPin,
   Lock,
   Unlock,
   AlertCircle,
-  Filter
+  Filter,
+  UserCog,
+  Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../api/axios';
+import { TechbarredLogo } from '../components/TechbarredLogo';
+import { VendorsPage } from './VendorsPage';
+import { TeamManagement } from './TeamManagement';
+import { FinancePage } from './FinancePage';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -58,14 +63,14 @@ import {
 } from 'recharts';
 import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { AgentsPage } from './AgentsPage';
-import { VendorsPage } from './VendorsPage';
 
-const navItemsList = [
+const SIDEBAR_ITEMS = [
   { id: 'overview', icon: Home, label: 'Overview' },
   { id: 'bookings', icon: Calendar, label: 'My Bookings' },
   { id: 'agents', icon: Users, label: 'Agents' },
-  { id: 'vendors', icon: Building2, label: 'Vendors' },
-  { id: 'payments', icon: CreditCard, label: 'Payments' },
+  { id: 'vendors', icon: UserCog, label: 'Vendors Registry' },
+  { id: 'payments', icon: CreditCard, label: 'Finance & Payments' },
+  { id: 'team', icon: Shield, label: 'Team & Permissions' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -85,7 +90,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   // Sidebar navigation tab state
-  const [sidebarTab, setSidebarTab] = useState<'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'settings'>('overview');
+  const [sidebarTab, setSidebarTab] = useState<'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings'>('overview');
 
   // Overview sub-tab state (Overview Analytics vs Agent Analytics)
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'agents'>('overview');
@@ -476,23 +481,6 @@ export function Dashboard() {
     };
   }, [bookings]);
 
-  const allPayments = useMemo(() => {
-    const list: any[] = [];
-    bookings.forEach(b => {
-      if (b.payments) {
-        b.payments.forEach((p: any) => {
-          list.push({
-            ...p,
-            bookingRef: b.bookingReference,
-            bookingId: b.id,
-            agentName: b.agentName
-          });
-        });
-      }
-    });
-    return list.sort((a, b) => new Date(b.paidOn).getTime() - new Date(a.paidOn).getTime());
-  }, [bookings]);
-
   if (!user) return null;
 
   return (
@@ -512,24 +500,30 @@ export function Dashboard() {
           </div>
           
           <nav className="space-y-1.5">
-            {navItemsList.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setSidebarTab(item.id as any)}
-                className={`flex items-center gap-3 w-full px-4 py-3 rounded-2xl transition-all duration-200 text-left font-semibold text-xs ${
-                  sidebarTab === item.id 
-                    ? 'bg-primary-500 text-white shadow-md shadow-primary-500/25' 
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <item.icon className="h-4.5 w-4.5" />
-                {item.label}
-              </button>
-            ))}
+            {SIDEBAR_ITEMS.map((item) => {
+              // Hide Team & Permissions from Agents
+              if (item.id === 'team' && user?.role === 'AGENT') return null;
+
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setSidebarTab(item.id as any)}
+                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-2xl transition-all duration-200 text-left font-semibold text-xs ${
+                    sidebarTab === item.id 
+                      ? 'bg-primary-500 text-white shadow-md shadow-primary-500/25' 
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className="h-4.5 w-4.5" />
+                  {item.label}
+                </button>
+              );
+            })}
           </nav>
         </div>
         
-        <div className="p-6 border-t border-slate-100">
+        <div className="p-6 border-t border-slate-100 flex flex-col gap-6">
           <button 
             onClick={handleLogout}
             className="flex items-center gap-3 text-red-500 hover:bg-red-50/80 w-full px-4 py-3 rounded-2xl font-semibold transition-all duration-200 text-xs text-left"
@@ -543,17 +537,21 @@ export function Dashboard() {
       {/* Main Content Pane */}
       <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6">
         
-        {/* TAB: AGENTS */}
         {sidebarTab === 'agents' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <AgentsPage />
           </div>
         )}
 
-        {/* TAB: VENDORS */}
         {sidebarTab === 'vendors' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <VendorsPage />
+          </div>
+        )}
+
+        {sidebarTab === 'team' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <TeamManagement />
           </div>
         )}
 
@@ -1454,64 +1452,7 @@ export function Dashboard() {
 
         {/* TAB 3: PAYMENTS TRANSACTIONS LIST */}
         {sidebarTab === 'payments' && (
-          <div className="space-y-5">
-            <div>
-              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Payments registry ledger</h1>
-              <p className="text-slate-500 text-xs mt-0.5">Comprehensive chronological registry of all incoming corporate payment operations.</p>
-            </div>
-
-            {loading ? (
-              <div className="flex justify-center p-12 bg-white rounded-3xl border border-slate-100">
-                <Loader2 className="h-6 w-6 text-primary-500 animate-spin" />
-              </div>
-            ) : allPayments.length === 0 ? (
-              <div className="bg-white p-8 text-center border border-slate-100 rounded-3xl text-slate-400 text-xs">
-                No payment transactions recorded inside the database workspace ledger.
-              </div>
-            ) : (
-              <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase border-b border-slate-100">
-                        <th className="py-3 px-5">Transaction ID</th>
-                        <th className="py-3 px-5">Booking Ref</th>
-                        <th className="py-3 px-5">Amount Settled</th>
-                        <th className="py-3 px-5">Method</th>
-                        <th className="py-3 px-5">Type</th>
-                        <th className="py-3 px-5">Date Paid</th>
-                        <th className="py-3 px-5">Notes / Description</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                      {allPayments.map((p) => (
-                        <tr 
-                          key={p.id} 
-                          className="hover:bg-slate-50/40 transition-colors cursor-pointer"
-                          onClick={() => {
-                            setSelectedBookingId(p.bookingId);
-                            setIsDetailsModalOpen(true);
-                          }}
-                        >
-                          <td className="py-3.5 px-5 font-mono text-slate-400">TXN-{p.id}</td>
-                          <td className="py-3.5 px-5 font-black text-slate-900 hover:text-primary-600 transition-colors">{p.bookingRef}</td>
-                          <td className="py-3.5 px-5 font-black text-emerald-600">£{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3.5 px-5">{p.paymentMethod}</td>
-                          <td className="py-3.5 px-5">
-                            <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold text-[9px]">
-                              {p.paymentType.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-5 font-mono text-slate-400">{new Date(p.paidOn).toLocaleDateString()}</td>
-                          <td className="py-3.5 px-5 italic text-slate-400 max-w-xs truncate">{p.notes || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          <FinancePage bookings={bookings} onRefresh={fetchBookings} />
         )}
 
         {/* TAB 4: COMPANY SETTINGS */}
@@ -1713,6 +1654,11 @@ export function Dashboard() {
         onClose={() => setIsDetailsModalOpen(false)}
         onUpdate={fetchBookings}
       />
+
+      {/* Background Watermark Logo */}
+      <div className="fixed bottom-6 right-8 pointer-events-none z-0 opacity-40 mix-blend-multiply">
+        <TechbarredLogo />
+      </div>
 
     </div>
   );

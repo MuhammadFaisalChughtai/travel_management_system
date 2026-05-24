@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { BookingDetail } from '../../types/booking';
 import { Edit2, Save, X } from 'lucide-react';
 import { api } from '../../api/axios';

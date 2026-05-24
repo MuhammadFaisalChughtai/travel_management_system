@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { useEffect, useState } from 'react';
 import { X, Plane, Users, Hotel, Car, FileText, Calculator, Plus, Loader2, RefreshCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -67,6 +68,18 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const [showLogRefund, setShowLogRefund] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
+  
+  const handleDeleteService = async (serviceType: string, id: number) => {
+    if (!window.confirm("Are you sure you want to delete this? This action cannot be undone.")) return;
+    try {
+      await api.delete(`/bookings/${bookingId}/services/${serviceType}/${id}`);
+      import('react-hot-toast').then(m => m.default.success('Deleted successfully'));
+      onUpdate?.();
+    } catch (err: any) {
+      import('react-hot-toast').then(m => m.default.error(err?.response?.data?.error || 'Failed to delete'));
+    }
+  };
+
   const handleGenerateInvoice = async () => {
     if (!booking) return;
     setIsGeneratingPDF(true);
@@ -105,7 +118,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to save transaction.';
       console.error('Transaction error:', err?.response?.data || err);
-      alert(`Transaction Error: ${msg}`);
+      toast.error(`Transaction Error: ${msg}`);
     }
   };
 
@@ -123,7 +136,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to save discount.';
       console.error('Discount error:', err?.response?.data || err);
-      alert(`Discount Error: ${msg}`);
+      toast.error(`Discount Error: ${msg}`);
     }
   };
 
@@ -142,7 +155,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to log refund.';
       console.error('Refund error:', err?.response?.data || err);
-      alert(`Refund Error: ${msg}`);
+      toast.error(`Refund Error: ${msg}`);
     }
   };
 
@@ -154,7 +167,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save passenger.';
       console.error('Passenger error:', err?.response?.data || err);
-      alert(`Passenger Error: ${msg}`);
+      toast.error(`Passenger Error: ${msg}`);
     }
   };
 
@@ -166,7 +179,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save flight.';
       console.error('Flight error:', err?.response?.data || err);
-      alert(`Flight Error: ${msg}`);
+      toast.error(`Flight Error: ${msg}`);
     }
   };
 
@@ -178,7 +191,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save accommodation.';
       console.error('Hotel error:', err?.response?.data || err);
-      alert(`Hotel Error: ${msg}`);
+      toast.error(`Hotel Error: ${msg}`);
     }
   };
 
@@ -190,7 +203,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save transport.';
       console.error('Transport error:', err?.response?.data || err);
-      alert(`Transport Error: ${msg}`);
+      toast.error(`Transport Error: ${msg}`);
     }
   };
 
@@ -202,7 +215,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save visa.';
       console.error('Visa error:', err?.response?.data || err);
-      alert(`Visa Error: ${msg}`);
+      toast.error(`Visa Error: ${msg}`);
     }
   };
 
@@ -214,7 +227,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save additional service.';
       console.error('Additional service error:', err?.response?.data || err);
-      alert(`Service Error: ${msg}`);
+      toast.error(`Service Error: ${msg}`);
     }
   };
 
@@ -229,7 +242,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || `Failed to update ${field}.`;
       console.error(`Update ${field} error:`, err?.response?.data || err);
-      alert(`Update Error: ${msg}`);
+      toast.error(`Update Error: ${msg}`);
     }
   };
 
@@ -310,7 +323,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
               <p className="font-bold">{error}</p>
             </div>
           ) : booking ? (
-            <div className="relative z-10 max-w-4xl mx-auto space-y-2">
+            <div className="relative z-10 max-w-6xl mx-auto space-y-4">
               
               <AccordionSection 
                 title="Financial Dashboard & Ledger" 
@@ -332,8 +345,8 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                 }
               >
                 <div className="space-y-4">
-                  <SummaryLedgerSection booking={booking} onUpdate={handleUpdateCoreField} />
-                  <TransactionsSection booking={booking} onAddDiscount={() => setShowAddDiscount(true)} onLogRefund={() => setShowLogRefund(true)} />
+                  <SummaryLedgerSection booking={booking || undefined} onUpdate={handleUpdateCoreField} />
+                  <TransactionsSection booking={booking || undefined} onAddDiscount={() => setShowAddDiscount(true)} onLogRefund={() => setShowLogRefund(true)} />
                 </div>
               </AccordionSection>
 
@@ -348,7 +361,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                   </button>
                 }
               >
-                <PassengersSection passengers={booking.customers} onAdd={() => setShowAddPassenger(true)} />
+                <PassengersSection passengers={booking.customers} onAdd={() => setShowAddPassenger(true)} onEdit={(p) => setEditingPassenger(p)} onDelete={(s: any) => handleDeleteService('passenger', s.id)} />
               </AccordionSection>
 
               <AccordionSection 
@@ -376,7 +389,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                   </button>
                 }
               >
-                <StaysSection stays={booking.accommodations} onAdd={() => setShowAddHotel(true)} />
+                <StaysSection stays={booking.accommodations} onAdd={() => setShowAddHotel(true)} onDelete={(s: any) => handleDeleteService('accommodation', s.id)} />
               </AccordionSection>
 
               <AccordionSection 
@@ -418,7 +431,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                   </button>
                 }
               >
-                <AdditionalServicesSection services={booking.additionalServices} onEdit={setEditingAdditionalService} onAdd={() => setShowAddAdditionalService(true)} />
+                <AdditionalServicesSection services={booking.additionalServices} onEdit={setEditingAdditionalService} onAdd={() => setShowAddAdditionalService(true)} onDelete={(s: any) => handleDeleteService('additional', s.id)} />
               </AccordionSection>
 
             </div>
@@ -447,7 +460,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         {(showAddHotel || !!editingAccommodation) && (
           <AddAccommodationModal 
             isOpen={showAddHotel || !!editingAccommodation} 
-            onClose={() => { setShowAddAccommodation(false); setEditingAccommodation(null); }} 
+            onClose={() => { setShowAddHotel(false); setEditingAccommodation(null); }} 
             onSubmit={handleSaveAccommodation}
             initialData={editingAccommodation}
           />
@@ -479,7 +492,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         )}
         {showLogTransaction && (
           <LogTransactionModal 
-            booking={booking}
+            booking={booking!}
             isOpen={showLogTransaction} 
             onClose={() => setShowLogTransaction(false)} 
             onSubmit={handleSaveTransaction}
@@ -487,7 +500,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         )}
         {showAddDiscount && (
           <AddDiscountModal 
-            booking={booking}
+            booking={booking!}
             isOpen={showAddDiscount} 
             onClose={() => setShowAddDiscount(false)} 
             onSubmit={handleSaveDiscount}
@@ -495,7 +508,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         )}
         {showLogRefund && (
           <LogRefundModal 
-            booking={booking}
+            booking={booking!}
             isOpen={showLogRefund} 
             onClose={() => setShowLogRefund(false)} 
             onSubmit={handleSaveRefund}
@@ -504,7 +517,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
       </AnimatePresence>
 
       {/* Hidden Invoice Template for PDF Generation */}
-      {booking && <InvoiceTemplate booking={booking} />}
+      {booking && <InvoiceTemplate booking={booking!} />}
 
     </div>
   );

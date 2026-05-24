@@ -55,8 +55,8 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
         const mappedData = { ...initialData };
         // Format dates correctly for inputs
         ['date', 'issueDate', 'checkIn', 'checkOut', 'dob', 'expiryDate', 'departureDate'].forEach(field => {
-          if (mappedData[field]) {
-            try { mappedData[field] = new Date(mappedData[field]).toISOString().split('T')[0]; } catch(e) {}
+          if ((mappedData as any)[field]) {
+            try { (mappedData as any)[field] = new Date((mappedData as any)[field]).toISOString().split('T')[0]; } catch(e) {}
           }
         });
         setForm(mappedData);
@@ -95,7 +95,7 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
           <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
             <div className="space-y-4">
               <h4 className="text-[11px] font-extrabold text-indigo-900 tracking-wide uppercase border-b border-indigo-100 pb-1">Core Flight Details</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Airline / Provider</label>
                   <VendorSelect category="airline" value={form.airline || ''} onChange={val => setForm({...form, airline: val})} />
@@ -129,7 +129,7 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
 
             <div className="space-y-4">
               <h4 className="text-[11px] font-extrabold text-indigo-900 tracking-wide uppercase border-b border-indigo-100 pb-1">Luggage & Class</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Flight Class</label>
                   <select value={form.flightClass || 'Economy'} onChange={e => setForm({...form, flightClass: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700">
@@ -156,7 +156,7 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
 
             <div className="space-y-4">
               <h4 className="text-[11px] font-extrabold text-indigo-900 tracking-wide uppercase border-b border-indigo-100 pb-1">Financial & References</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">PNR Reference</label>
                   <input type="text" value={form.pnr || ''} onChange={e => setForm({...form, pnr: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={6} />

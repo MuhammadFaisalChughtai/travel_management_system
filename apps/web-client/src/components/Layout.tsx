@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Navigation2, Hotel, Plane, User, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
+import { TechbarredLogo } from './TechbarredLogo';
 
 export function Layout() {
   const location = useLocation();
@@ -82,8 +83,9 @@ export function Layout() {
 
       {!isDashboard && (
         <footer className="bg-white border-t py-12 mt-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-slate-500 text-sm">
-            <p>&copy; 2026 Wanderlust Travel Platform. All rights reserved.</p>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center justify-center gap-6">
+            <p className="text-slate-500 text-sm">&copy; 2026 Wanderlust Travel Platform. All rights reserved.</p>
+            <TechbarredLogo />
           </div>
         </footer>
       )}

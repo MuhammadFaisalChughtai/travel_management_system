@@ -3,12 +3,13 @@ import type { TransportService } from '../../types/booking';
 
 interface TransportServicesSectionProps {
   onAdd?: () => void;
-  onEdit?: (item: TransportService) => void;
+  onEdit?: (item: any) => void;
+  onDelete?: (item: any) => void;
   transports: TransportService[];
   
 }
 
-export function TransportServicesSection({ transports, onEdit}: TransportServicesSectionProps) {
+export function TransportServicesSection({ transports, onEdit, onDelete}: TransportServicesSectionProps) {
   return (
     <div className="flex flex-col gap-4">
       {transports.length === 0 ? (
@@ -54,7 +55,7 @@ export function TransportServicesSection({ transports, onEdit}: TransportService
                         <button onClick={() => onEdit?.(t)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                        <button onClick={() => onDelete?.(t)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

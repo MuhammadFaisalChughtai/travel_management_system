@@ -1,4 +1,4 @@
-import { Users, Edit, Trash2 } from 'lucide-react';
+import { Users, Edit, Trash2, AlertCircle } from 'lucide-react';
 import type { Passenger } from '../../types/booking';
 
 interface PassengersSectionProps {
@@ -9,6 +9,19 @@ interface PassengersSectionProps {
 }
 
 export function PassengersSection({ passengers, onEdit, onDelete }: PassengersSectionProps) {
+  const isExpiringSoon = (expiryStr: string | null | undefined) => {
+    if (!expiryStr) return false;
+    const expiry = new Date(expiryStr);
+    const sixMonthsFromNow = new Date();
+    sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+    return expiry < sixMonthsFromNow && expiry > new Date();
+  };
+  const isExpired = (expiryStr: string | null | undefined) => {
+    if (!expiryStr) return false;
+    const expiry = new Date(expiryStr);
+    return expiry < new Date();
+  };
+
   return (
     <div className="flex flex-col gap-4">
       {passengers.length === 0 ? (
@@ -33,7 +46,12 @@ export function PassengersSection({ passengers, onEdit, onDelete }: PassengersSe
                 {passengers.map((p, i) => (
                   <tr key={p.id || i} className="hover:bg-indigo-50/30 transition-colors group">
                     <td className="py-3 px-4 font-black text-slate-800">
-                      {p.title} {p.firstName} {p.lastName}
+                      <div className="flex flex-col gap-1 items-start">
+                        <span>{p.title} {p.firstName} {p.lastName}</span>
+                        {i === 0 && (
+                          <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider border border-emerald-100/50 flex items-center gap-1"><Users className="w-2.5 h-2.5" /> Lead Passenger</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className="bg-primary-50 text-primary-600 px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-wide">
@@ -41,7 +59,19 @@ export function PassengersSection({ passengers, onEdit, onDelete }: PassengersSe
                       </span>
                     </td>
                     <td className="py-3 px-4 font-mono text-slate-600">
-                      {p.passportNumber || '—'}
+                      <div className="flex flex-col gap-1">
+                        <span>{p.passportNumber || '—'}</span>
+                        {p.passportExpiryDate && (
+                          <div className="flex flex-col gap-0.5 mt-0.5">
+                            <span className="text-[9px] font-bold text-slate-400 font-sans tracking-wide">EXP: {new Date(p.passportExpiryDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                            {isExpired(p.passportExpiryDate) ? (
+                              <span className="flex items-center gap-1 w-max text-[8px] font-black text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded uppercase font-sans"><AlertCircle className="w-2.5 h-2.5" /> Expired</span>
+                            ) : isExpiringSoon(p.passportExpiryDate) ? (
+                              <span className="flex items-center gap-1 w-max text-[8px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded uppercase font-sans"><AlertCircle className="w-2.5 h-2.5" /> {'<'} 6 Months</span>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-slate-500 font-medium">
                       {p.email || p.phoneNumber || '—'}

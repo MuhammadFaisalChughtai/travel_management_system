@@ -131,7 +131,7 @@ const updateTenantSchema = z.object({
 });
 
 // Middleware to authorize Platform Super Admins downstream
-const requirePlatformAdmin = (req: Request, res: Response, next: any) => {
+const requirePlatformAdmin = (req: any, res: Response, next: any) => {
   const isPlatformAdmin = req.headers['x-is-platform-admin'] === 'true' || req.headers['X-Is-Platform-Admin'] === 'true';
   const role = req.headers['x-user-role'] || req.headers['X-User-Role'];
   
@@ -142,12 +142,12 @@ const requirePlatformAdmin = (req: Request, res: Response, next: any) => {
 };
 
 // Health Check
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (req: any, res: Response) => {
   res.status(200).json({ status: 'UP', service: 'Auth Service' });
 });
 
 // File Upload Route
-app.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+app.post('/upload', upload.single('file'), async (req: any, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -172,7 +172,7 @@ app.post('/upload', upload.single('file'), async (req: Request, res: Response) =
 });
 
 // Register User (Tenant Specific)
-app.post('/register', async (req: Request, res: Response) => {
+app.post('/register', async (req: any, res: Response) => {
   try {
     const parsedData = registerSchema.parse(req.body);
     const tenantId = parsedData.tenantId || 1; // Default tenant
@@ -217,7 +217,7 @@ app.post('/register', async (req: Request, res: Response) => {
 });
 
 // Register SaaS Super Admin (Platform Level)
-app.post('/super-admin/register', async (req: Request, res: Response) => {
+app.post('/super-admin/register', async (req: any, res: Response) => {
   try {
     const parsedData = registerSchema.parse(req.body);
     
@@ -254,7 +254,7 @@ app.post('/super-admin/register', async (req: Request, res: Response) => {
 });
 
 // Login (Handles both Platform Admins and Tenant Users)
-app.post('/login', async (req: Request, res: Response) => {
+app.post('/login', async (req: any, res: Response) => {
   try {
     const parsedData = loginSchema.parse(req.body);
     
@@ -345,7 +345,7 @@ app.post('/login', async (req: Request, res: Response) => {
 });
 
 // Verify Token Route
-app.post('/verify-token', (req: Request, res: Response) => {
+app.post('/verify-token', (req: any, res: Response) => {
   const token = req.body.token || req.headers.authorization?.split(' ')[1];
   
   if (!token) {
@@ -361,7 +361,7 @@ app.post('/verify-token', (req: Request, res: Response) => {
 });
 
 // Tenant Management routes (Platform Admin only)
-app.get('/tenants', requirePlatformAdmin, async (req: Request, res: Response) => {
+app.get('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
   try {
     const tenants = await prisma.tenant.findMany({
       include: {
@@ -377,7 +377,7 @@ app.get('/tenants', requirePlatformAdmin, async (req: Request, res: Response) =>
   }
 });
 
-app.post('/tenants', requirePlatformAdmin, async (req: Request, res: Response) => {
+app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
   try {
     const parsedData = createTenantSchema.parse(req.body);
     
@@ -460,7 +460,7 @@ app.post('/tenants', requirePlatformAdmin, async (req: Request, res: Response) =
   }
 });
 
-app.put('/tenants/:id', requirePlatformAdmin, async (req: Request, res: Response) => {
+app.put('/tenants/:id', requirePlatformAdmin, async (req: any, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const parsedData = updateTenantSchema.parse(req.body);
@@ -497,7 +497,7 @@ app.put('/tenants/:id', requirePlatformAdmin, async (req: Request, res: Response
 // ─── AGENT MANAGEMENT ROUTES ─────────────────────────────────────────────────
 
 // Helper: require tenant context (from gateway headers)
-const requireTenantContext = (req: Request, res: Response, next: any) => {
+const requireTenantContext = (req: any, res: Response, next: any) => {
   const tenantId = req.headers['x-tenant-id'];
   if (!tenantId || tenantId === 'platform') {
     return res.status(400).json({ error: 'Bad Request', message: 'Tenant context required' });
@@ -506,7 +506,7 @@ const requireTenantContext = (req: Request, res: Response, next: any) => {
 };
 
 // GET /agents — list all agents for current tenant
-app.get('/agents', requireTenantContext, async (req: Request, res: Response) => {
+app.get('/agents', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const agents = await (prisma as any).agent.findMany({
@@ -522,7 +522,7 @@ app.get('/agents', requireTenantContext, async (req: Request, res: Response) => 
 });
 
 // GET /agents/by-name/:name — find agent by name (used by booking module)
-app.get('/agents/by-name/:name', requireTenantContext, async (req: Request, res: Response) => {
+app.get('/agents/by-name/:name', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const name = decodeURIComponent(req.params.name);
@@ -539,7 +539,7 @@ app.get('/agents/by-name/:name', requireTenantContext, async (req: Request, res:
 });
 
 // GET /agents/:id — get single agent with margin segments
-app.get('/agents/:id', requireTenantContext, async (req: Request, res: Response) => {
+app.get('/agents/:id', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);
@@ -561,7 +561,7 @@ app.get('/agents/:id', requireTenantContext, async (req: Request, res: Response)
 // TEAM MANAGEMENT ROUTES (USER CRUD)
 // ==========================================
 
-app.get('/users', requireTenantContext, async (req: Request, res: Response) => {
+app.get('/users', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
     const users = await prisma.user.findMany({
@@ -587,7 +587,7 @@ app.get('/users', requireTenantContext, async (req: Request, res: Response) => {
   }
 });
 
-app.post('/users', requireTenantContext, async (req: Request, res: Response) => {
+app.post('/users', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
     const { name, email, password, roleName } = req.body;
@@ -643,7 +643,7 @@ app.post('/users', requireTenantContext, async (req: Request, res: Response) => 
   }
 });
 
-app.patch('/users/:id', requireTenantContext, async (req: Request, res: Response) => {
+app.patch('/users/:id', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
     const userId = parseInt(req.params.id);
@@ -689,7 +689,7 @@ app.patch('/users/:id', requireTenantContext, async (req: Request, res: Response
   }
 });
 
-app.delete('/users/:id', requireTenantContext, async (req: Request, res: Response) => {
+app.delete('/users/:id', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
     const userId = parseInt(req.params.id);
@@ -706,7 +706,7 @@ app.delete('/users/:id', requireTenantContext, async (req: Request, res: Respons
 });
 
 
-app.post('/agents', requireTenantContext, async (req: Request, res: Response) => {
+app.post('/agents', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const { name, email, phoneNumber, gdsSystem, client, pcc, jobStatus } = req.body;
@@ -733,7 +733,7 @@ app.post('/agents', requireTenantContext, async (req: Request, res: Response) =>
 });
 
 // PATCH /agents/:id — update agent profile
-app.patch('/agents/:id', requireTenantContext, async (req: Request, res: Response) => {
+app.patch('/agents/:id', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);
@@ -763,7 +763,7 @@ app.patch('/agents/:id', requireTenantContext, async (req: Request, res: Respons
 });
 
 // POST /agents/:id/margin-segments — replace all margin segments for an agent
-app.post('/agents/:id/margin-segments', requireTenantContext, async (req: Request, res: Response) => {
+app.post('/agents/:id/margin-segments', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);
@@ -802,7 +802,7 @@ app.post('/agents/:id/margin-segments', requireTenantContext, async (req: Reques
 });
 
 // DELETE /agents/:id — delete agent
-app.delete('/agents/:id', requireTenantContext, async (req: Request, res: Response) => {
+app.delete('/agents/:id', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);
@@ -819,7 +819,7 @@ app.delete('/agents/:id', requireTenantContext, async (req: Request, res: Respon
 // ==================== VENDOR ROUTES ====================
 
 // GET /vendors — get all vendors for a tenant
-app.get('/vendors', requireTenantContext, async (req: Request, res: Response) => {
+app.get('/vendors', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const vendors = await (prisma as any).vendor.findMany({
@@ -834,7 +834,7 @@ app.get('/vendors', requireTenantContext, async (req: Request, res: Response) =>
 });
 
 // GET /vendors/by-name/:name
-app.get('/vendors/by-name/:name', requireTenantContext, async (req: Request, res: Response) => {
+app.get('/vendors/by-name/:name', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const name = req.params.name;
@@ -849,7 +849,7 @@ app.get('/vendors/by-name/:name', requireTenantContext, async (req: Request, res
 });
 
 // POST /vendors — create vendor
-app.post('/vendors', requireTenantContext, async (req: Request, res: Response) => {
+app.post('/vendors', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const { name, phoneNumber, email, website, vendorType, creditBalance } = req.body;
@@ -874,7 +874,7 @@ app.post('/vendors', requireTenantContext, async (req: Request, res: Response) =
 });
 
 // PATCH /vendors/:id — update vendor
-app.patch('/vendors/:id', requireTenantContext, async (req: Request, res: Response) => {
+app.patch('/vendors/:id', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);
@@ -902,7 +902,7 @@ app.patch('/vendors/:id', requireTenantContext, async (req: Request, res: Respon
 });
 
 // DELETE /vendors/:id — delete vendor
-app.delete('/vendors/:id', requireTenantContext, async (req: Request, res: Response) => {
+app.delete('/vendors/:id', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);

@@ -9,9 +9,10 @@ interface AddVisaModalProps {
   onClose: () => void;
   onSubmit: (visa: Partial<VisaService>) => void;
   initialData?: VisaService | null;
+  passengers?: any[];
 }
 
-export function AddVisaModal({ isOpen, onClose, onSubmit, initialData }: AddVisaModalProps) {
+export function AddVisaModal({ isOpen, onClose, onSubmit, initialData, passengers }: AddVisaModalProps) {
   const [form, setForm] = useState<Partial<VisaService>>({
     vendorName: '',
     passportNumber: '',
@@ -19,6 +20,8 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData }: AddVisa
     visaNumber: '',
     issueDate: '',
     expiryDate: '',
+    qty: 1,
+    unitPrice: '',
     price: '',
     currency: 'GBP',
     otherCurrency: '',
@@ -48,6 +51,26 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData }: AddVisa
     }
   }, [isOpen, initialData]);
 
+
+  const [tagInput, setTagInput] = useState('');
+  const tags = (form.passportNumber || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+
+  const handleAddTag = (val: string) => {
+    if (!val.trim()) return;
+    const newTags = [...tags, val.trim()];
+    const newQty = newTags.length > 0 ? newTags.length : 1;
+    const u = parseFloat(String(form.unitPrice || 0)) || 0;
+    setForm({ ...form, passportNumber: newTags.join(', '), qty: newQty, price: (newQty * u).toString() });
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (idx: number) => {
+    const newTags = tags.filter((_, i) => i !== idx);
+    const newQty = newTags.length > 0 ? newTags.length : 1;
+    const u = parseFloat(String(form.unitPrice || 0)) || 0;
+    setForm({ ...form, passportNumber: newTags.join(', '), qty: newQty, price: (newQty * u).toString() });
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -70,9 +93,37 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData }: AddVisa
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Provider</label>
               <VendorSelect category="visa" value={form.vendorName || ''} onChange={val => setForm({...form, vendorName: val})} />
             </div>
-            <div>
-              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Passport Number</label>
-              <input type="text" value={form.passportNumber || ''} onChange={e => setForm({...form, passportNumber: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" />
+            <div className="col-span-1 md:col-span-2">
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Passengers / Passport Numbers</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {tags.map((tag, idx) => (
+                  <span key={idx} className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1.5 border border-indigo-100">
+                    {tag}
+                    <button type="button" onClick={() => handleRemoveTag(idx)} className="hover:text-indigo-900 focus:outline-none bg-indigo-200/50 rounded-full p-0.5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={tagInput} 
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(tagInput); } }}
+                  list="passenger-suggestions"
+                  placeholder="Type a name/passport and hit Enter..."
+                  className="flex-1 border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" 
+                />
+                <button type="button" onClick={() => handleAddTag(tagInput)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-[11px] font-bold shadow-sm transition-all uppercase tracking-wide">
+                  Add
+                </button>
+              </div>
+              <datalist id="passenger-suggestions">
+                {passengers?.map((p, i) => (
+                  <option key={`p-${i}`} value={`${p.firstName} ${p.lastName} ${p.passportNumber ? `(${p.passportNumber})` : ''}`} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Visa Type</label>
@@ -131,7 +182,16 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData }: AddVisa
             
             <div className="flex gap-3">
               <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
-              <button onClick={() => { onSubmit(form as any); onClose(); }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
+                            <button onClick={() => {
+                const payload = { ...form } as any;
+                if (payload.price) payload.price = parseFloat(payload.price);
+                if (payload.qty) payload.qty = parseInt(payload.qty, 10);
+                if (payload.conversionRate) payload.conversionRate = parseFloat(payload.conversionRate);
+                if (payload.refundAmount) payload.refundAmount = parseFloat(payload.refundAmount);
+                if (payload.fineAmount) payload.fineAmount = parseFloat(payload.fineAmount);
+                onSubmit(payload);
+                onClose();
+              }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
                 {initialData ? 'Update' : 'Save'}
               </button>
             </div>

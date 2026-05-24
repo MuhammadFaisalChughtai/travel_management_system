@@ -25,7 +25,7 @@ model Booking {
   remainingAmount     Decimal   @default(0.00) @db.Decimal(10, 2)
   status              String    @default("confirmed") @db.VarChar(50)
   paymentStatus       String    @default("unpaid") @db.VarChar(50)
-  lockedStatus        String    @default("unlocked") @db.VarChar(50)
+  isLocked            Boolean   @default(false)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -143,6 +143,8 @@ model FlightService {
   arrivedAt         String    @db.VarChar(255)
   departTime        String?   @db.VarChar(50)
   arrivalTime       String?   @db.VarChar(50)
+  qty               Int       @default(1)
+  unitPrice         Decimal   @default(0.00) @db.Decimal(10, 2)
   price             Decimal   @default(0.00) @db.Decimal(10, 2)
   currency          String?   @db.VarChar(10)
   otherCurrency     String?   @db.VarChar(10)
@@ -192,11 +194,13 @@ model VisaService {
   tenantId          Int
   bookingId         Int
   vendorName        String    @db.VarChar(255)
-  passportNumber    String    @db.VarChar(100)
+  passportNumber    String    @db.Text
   visaType          String    @db.VarChar(100)
   visaNumber        String?   @db.VarChar(100)
   issueDate         DateTime? @db.Date
   expiryDate        DateTime? @db.Date
+  qty               Int       @default(1)
+  unitPrice         Decimal   @default(0.00) @db.Decimal(10, 2)
   price             Decimal   @default(0.00) @db.Decimal(10, 2)
   currency          String?   @db.VarChar(10)
   otherCurrency     String?   @db.VarChar(10)

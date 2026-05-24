@@ -18,7 +18,6 @@ import {
   Compass,
   Users,
   Award,
-
   CheckCircle,
   Building,
   Mail,
@@ -27,11 +26,14 @@ import {
   MapPin,
   Lock,
   Unlock,
-  AlertCircle,
-  Filter,
+  
+  Filter, Hash,
   UserCog,
-  Shield
+  Shield,
+  Search,
+  User
 } from 'lucide-react';
+import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -72,15 +74,6 @@ const SIDEBAR_ITEMS = [
   { id: 'payments', icon: CreditCard, label: 'Finance & Payments' },
   { id: 'team', icon: Shield, label: 'Team & Permissions' },
   { id: 'settings', icon: Settings, label: 'Settings' },
-];
-
-const AVAILABLE_AGENTS = [
-  'Sarah Jenkins',
-  'Michael Chang',
-  'Emily Watson',
-  'Alex Rodriguez',
-  'David Miller',
-  'System / Auto'
 ];
 
 export function Dashboard() {
@@ -148,15 +141,15 @@ export function Dashboard() {
     customerName: '',
     customerEmail: '',
     status: 'Any',
-    lockedStatus: 'Any',
+    isLocked: 'Any',
     paymentStatus: 'Any',
     customerPhone: '',
     createdAtStart: '',
     createdAtEnd: ''
   };
   const [filters, setFilters] = useState(defaultFilters);
-  const [activeFilterTab, setActiveFilterTab] = useState('general');
-  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [activeSearchModal, setActiveSearchModal] = useState<string | null>(null);
+  const userRole = localStorage.getItem('userRole') || '';
 
   const fetchBookings = async () => {
     try {
@@ -176,10 +169,18 @@ export function Dashboard() {
     }
   };
 
-  const handleFilterSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    fetchBookings();
+  const toggleLock = async (e: React.MouseEvent, bookingId: number, currentLock: boolean) => {
+    e.stopPropagation();
+    try {
+      await api.patch(`/bookings/${bookingId}`, { isLocked: !currentLock });
+      fetchBookings();
+      import('react-hot-toast').then(m => m.default.success(currentLock ? 'Booking unlocked' : 'Booking locked'));
+    } catch (err) {
+      import('react-hot-toast').then(m => m.default.error('Failed to update lock status'));
+    }
   };
+
+
 
   const performClearFilters = async () => {
     setFilters(defaultFilters);
@@ -1052,15 +1053,20 @@ export function Dashboard() {
                   <div className="overflow-x-auto text-[10px]">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="py-2.5 px-3">Rank</th>
-                          <th className="py-2.5 px-3">Agent Name</th>
-                          <th className="py-2.5 px-3 text-center">Bookings</th>
-                          <th className="py-2.5 px-3 text-right">Average Order (AOV)</th>
-                          <th className="py-2.5 px-3 text-right">Total Revenue</th>
-                          <th className="py-2.5 px-3 text-right">Growth Rate</th>
-                        </tr>
-                      </thead>
+                      <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase border-b border-slate-100">
+                        <th className="py-3 px-5">Invoice Reference</th>
+                        <th className="py-3 px-5">Departure Date</th>
+                        <th className="py-3 px-5">Assigned Agent</th>
+                        <th className="py-3 px-5 text-right">Invoice Price</th>
+                        <th className="py-3 px-5 text-right">Remaining</th>
+                        <th className="py-3 px-5 text-right">Total Sent</th>
+                        <th className="py-3 px-5 text-right">Agent Margin</th>
+                        <th className="py-3 px-5 text-right">Total Profit</th>
+                        <th className="py-3 px-5 text-center">Lock Status</th>
+                        <th className="py-3 px-5 text-center">Payment Badge</th>
+                        <th className="py-3 px-5 text-center">Actions</th>
+                      </tr>
+                    </thead>
                       <tbody className="divide-y divide-slate-50">
                         {agentsAnalytics.performanceList.map((agent, index) => (
                           <tr key={agent.name} className="hover:bg-slate-50/50">
@@ -1188,12 +1194,7 @@ export function Dashboard() {
                 <p className="text-slate-500 text-xs mt-0.5">Manage package bookings, invoices, lock statuses and financial records.</p>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setShowFilterModal(true)}
-                  className="flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
-                >
-                  <Filter className="h-4 w-4" /> Filters
-                </button>
+                
                 <button 
                   onClick={handleOpenCreateModal}
                   className="flex items-center gap-1.5 bg-primary-600 text-white hover:bg-primary-500 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all"
@@ -1206,157 +1207,47 @@ export function Dashboard() {
             {/* Main Layout for Filters and Table */}
             <div className="flex flex-col gap-5">
               
-              {/* --- ADVANCED FILTERS MODAL --- */}
-              {showFilterModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                  <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh]">
-                    <div className="bg-slate-900 text-white px-4 py-3 font-bold text-[12px] tracking-wide flex justify-between items-center shrink-0">
-                      <span>Advanced Filters</span>
-                      <div className="flex gap-4 items-center">
-                        <div className="flex gap-2 text-[10px]">
-                          <button onClick={() => setActiveFilterTab('general')} className={`px-3 py-1 rounded transition-colors ${activeFilterTab === 'general' ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>General</button>
-                          <button onClick={() => setActiveFilterTab('customer')} className={`px-3 py-1 rounded transition-colors ${activeFilterTab === 'customer' ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>Customer</button>
-                          <button onClick={() => setActiveFilterTab('dates')} className={`px-3 py-1 rounded transition-colors ${activeFilterTab === 'dates' ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>Dates</button>
-                          <button onClick={() => setActiveFilterTab('status')} className={`px-3 py-1 rounded transition-colors ${activeFilterTab === 'status' ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>Status</button>
-                        </div>
-                        <button onClick={() => setShowFilterModal(false)} className="text-white/60 hover:text-white transition-colors">
-                          <X className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-6 bg-slate-50 text-[10px] text-slate-500 font-bold uppercase tracking-wide overflow-y-auto">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {activeFilterTab === 'general' && (
-                      <>
-                        <div>
-                          <label className="block mb-1">ID</label>
-                          <div className="flex gap-2">
-                            <select className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold bg-white"><option>Equals</option></select>
-                            <input type="text" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.id} onChange={e => setFilters({...filters, id: e.target.value})} />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block mb-1">BOOKING REFERENCE</label>
-                          <div className="flex gap-2">
-                            <select className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold bg-white"><option>Contains</option></select>
-                            <input type="text" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.bookingReference} onChange={e => setFilters({...filters, bookingReference: e.target.value})} />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block mb-1">AGENT</label>
-                          <select className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700 bg-white"
-                            value={filters.agentName} onChange={e => setFilters({...filters, agentName: e.target.value})}>
-                            <option value="Any">Any</option>
-                            {AVAILABLE_AGENTS.map(a => <option key={a} value={a}>{a}</option>)}
-                          </select>
-                        </div>
-                      </>
-                    )}
-
-                    {activeFilterTab === 'customer' && (
-                      <>
-                        <div>
-                          <label className="block mb-1">CUSTOMER NAME CONTAINS</label>
-                          <input type="text" className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                            value={filters.customerName} onChange={e => setFilters({...filters, customerName: e.target.value})} />
-                        </div>
-                        <div>
-                          <label className="block mb-1">CUSTOMER EMAIL CONTAINS</label>
-                          <input type="text" className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                            value={filters.customerEmail} onChange={e => setFilters({...filters, customerEmail: e.target.value})} />
-                        </div>
-                        <div>
-                          <label className="block mb-1">CUSTOMER PHONE NUMBER</label>
-                          <div className="flex gap-2">
-                            <select className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold bg-white"><option>Contains</option></select>
-                            <input type="text" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.customerPhone} onChange={e => setFilters({...filters, customerPhone: e.target.value})} />
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {activeFilterTab === 'dates' && (
-                      <>
-                        <div>
-                          <label className="block mb-1">DATE RANGE</label>
-                          <div className="flex gap-2">
-                            <input type="date" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} />
-                            <input type="date" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block mb-1">DEPARTURE DATE RANGE</label>
-                          <div className="flex gap-2">
-                            <input type="date" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.departureDateStart} onChange={e => setFilters({...filters, departureDateStart: e.target.value})} />
-                            <input type="date" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.departureDateEnd} onChange={e => setFilters({...filters, departureDateEnd: e.target.value})} />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block mb-1">CREATED AT RANGE</label>
-                          <div className="flex gap-2">
-                            <input type="date" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.createdAtStart} onChange={e => setFilters({...filters, createdAtStart: e.target.value})} />
-                            <input type="date" className="w-1/2 border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700" 
-                              value={filters.createdAtEnd} onChange={e => setFilters({...filters, createdAtEnd: e.target.value})} />
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {activeFilterTab === 'status' && (
-                      <>
-                        <div>
-                          <label className="block mb-1">STATUS</label>
-                          <select className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700 bg-white"
-                            value={filters.status} onChange={e => setFilters({...filters, status: e.target.value})}>
-                            <option value="Any">Any</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="cancelled">Cancelled</option>
-                            <option value="pending">Pending</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block mb-1">LOCKED STATUS</label>
-                          <select className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700 bg-white"
-                            value={filters.lockedStatus} onChange={e => setFilters({...filters, lockedStatus: e.target.value})}>
-                            <option value="Any">Any</option>
-                            <option value="locked">Locked</option>
-                            <option value="unlocked">Unlocked</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block mb-1">PAYMENT STATUS</label>
-                          <select className="w-full border border-slate-200 rounded px-2 py-1.5 outline-none font-semibold text-slate-700 bg-white"
-                            value={filters.paymentStatus} onChange={e => setFilters({...filters, paymentStatus: e.target.value})}>
-                            <option value="Any">Any</option>
-                            <option value="paid">Paid</option>
-                            <option value="partially_paid">Partially Paid</option>
-                            <option value="unpaid">Unpaid</option>
-                          </select>
-                        </div>
-                      </>
-                    )}
+              {/* Modal-Driven Search & Filter Bar */}
+              <div className="bg-white px-6 py-4 flex items-center justify-between gap-4 border-b border-slate-100 rounded-t-3xl shadow-sm">
+                <div className="flex flex-wrap items-center gap-3 w-full">
+                  <div className="flex items-center gap-2 text-slate-500 font-bold text-[10px] mr-2 uppercase tracking-wider">
+                    <Filter className="w-3.5 h-3.5 text-primary-500" /> Filters:
                   </div>
-                </div>
-                <div className="bg-white p-4 flex gap-2 border-t border-slate-200 shrink-0">
-                    <button onClick={() => { handleFilterSubmit(); setShowFilterModal(false); }} className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded font-bold text-[11px] shadow-sm transition-colors capitalize">
-                      Apply Filters
+                  <button onClick={() => setActiveSearchModal('ref')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.bookingReference ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
+                    <Hash className="w-3.5 h-3.5 inline mr-1.5" /> PNR / Ref: {filters.bookingReference || 'All'}
+                  </button>
+                  <button onClick={() => setActiveSearchModal('customer')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.customerName || filters.customerPhone || filters.customerEmail ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
+                    <User className="w-3.5 h-3.5 inline mr-1.5" /> Customer: {filters.customerName || filters.customerPhone || filters.customerEmail || 'All'}
+                  </button>
+                  <button onClick={() => setActiveSearchModal('agent')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.agentName !== 'Any' ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
+                    <Users className="w-3.5 h-3.5 inline mr-1.5" /> Agent: {filters.agentName}
+                  </button>
+                  <button onClick={() => setActiveSearchModal('departure')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.departureDateStart || filters.departureDateEnd ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
+                    <Calendar className="w-3.5 h-3.5 inline mr-1.5" /> Departure
+                  </button>
+                  <button onClick={() => setActiveSearchModal('created')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.dateStart || filters.dateEnd ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
+                    <Calendar className="w-3.5 h-3.5 inline mr-1.5" /> Created At
+                  </button>
+                  <button onClick={() => setActiveSearchModal('payment')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.paymentStatus !== 'Any' ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
+                    <CreditCard className="w-3.5 h-3.5 inline mr-1.5" /> Status: {filters.paymentStatus.replace('_', ' ').toUpperCase()}
+                  </button>
+                  
+                  {Object.values(filters).some(v => v && v !== 'Any') && (
+                    <button onClick={() => { performClearFilters(); }} className="ml-auto text-rose-500 hover:text-rose-600 text-[10px] uppercase tracking-wide font-black underline transition-colors">
+                      Clear All
                     </button>
-                    <button onClick={() => { performClearFilters(); setShowFilterModal(false); }} className="bg-white border border-primary-600 text-primary-600 hover:bg-primary-50 px-5 py-2.5 rounded font-bold text-[11px] transition-colors capitalize">
-                      Clear Filters
-                    </button>
-                  </div>
+                  )}
                 </div>
               </div>
-            )}
-
+              
+              {/* Search Modals */}
+              <BookingRefSearchModal isOpen={activeSearchModal === 'ref'} onClose={() => setActiveSearchModal(null)} currentValue={filters.bookingReference} onApply={(val: any) => { setFilters({...filters, bookingReference: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
+              <CustomerSearchModal isOpen={activeSearchModal === 'customer'} onClose={() => setActiveSearchModal(null)} currentValue={filters.customerName} onApply={(val: any) => { setFilters({...filters, customerName: val, customerPhone: val, customerEmail: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
+              <AgentSearchModal isOpen={activeSearchModal === 'agent'} onClose={() => setActiveSearchModal(null)} agents={dbAgents} currentValue={filters.agentName} onApply={(val: any) => { setFilters({...filters, agentName: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
+              <DateRangeSearchModal title="Departure Date Range" isOpen={activeSearchModal === 'departure'} onClose={() => setActiveSearchModal(null)} currentValue={{start: filters.departureDateStart, end: filters.departureDateEnd}} onApply={(val: any) => { setFilters({...filters, departureDateStart: val.start, departureDateEnd: val.end}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
+              <DateRangeSearchModal title="Creation Date Range" isOpen={activeSearchModal === 'created'} onClose={() => setActiveSearchModal(null)} currentValue={{start: filters.dateStart, end: filters.dateEnd}} onApply={(val: any) => { setFilters({...filters, dateStart: val.start, dateEnd: val.end}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
+              <PaymentStatusSearchModal isOpen={activeSearchModal === 'payment'} onClose={() => setActiveSearchModal(null)} currentValue={filters.paymentStatus} onApply={(val: any) => { setFilters({...filters, paymentStatus: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
+              
               {/* Main List Section */}
               <div className="flex-1 w-full min-w-0">
                 {/* Bookings Table List */}
@@ -1365,14 +1256,17 @@ export function Dashboard() {
                 <Loader2 className="h-6 w-6 text-primary-500 animate-spin" />
               </div>
             ) : bookings.length === 0 ? (
-              <div className="bg-white p-12 text-center border border-slate-100 rounded-3xl">
-                <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 text-xs font-semibold">No bookings match the search criteria.</p>
+              <div className="bg-white p-16 text-center border border-slate-100 rounded-3xl flex flex-col items-center justify-center min-h-[400px]">
+                <div className="bg-slate-50 w-24 h-24 rounded-full flex items-center justify-center mb-6">
+                  <Search className="w-10 h-10 text-slate-300" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800 mb-2">No records found</h3>
+                <p className="text-slate-500 text-sm font-medium max-w-sm mb-6">We couldn't find any bookings matching your current search criteria. Please try adjusting your filters.</p>
                 <button 
                   onClick={performClearFilters}
-                  className="mt-3 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-colors"
+                  className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
                 >
-                  Clear Filters
+                  <X className="w-4 h-4" /> Clear All Filters
                 </button>
               </div>
             ) : (
@@ -1382,18 +1276,44 @@ export function Dashboard() {
                     <thead>
                       <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase border-b border-slate-100">
                         <th className="py-3 px-5">Invoice Reference</th>
-                        <th className="py-3 px-5">Creation Date</th>
                         <th className="py-3 px-5">Departure Date</th>
                         <th className="py-3 px-5">Assigned Agent</th>
                         <th className="py-3 px-5 text-right">Invoice Price</th>
-                        <th className="py-3 px-5 text-right">Total Paid</th>
+                        <th className="py-3 px-5 text-right">Remaining</th>
+                        <th className="py-3 px-5 text-right">Total Sent</th>
+                        <th className="py-3 px-5 text-right">Agent Margin</th>
+                        <th className="py-3 px-5 text-right">Total Profit</th>
                         <th className="py-3 px-5 text-center">Lock Status</th>
                         <th className="py-3 px-5 text-center">Payment Badge</th>
                         <th className="py-3 px-5 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                      {bookings.map((b) => (
+                      {bookings.map((b) => {
+                        const bookingTotal = Number(b.totalPrice) || 0;
+                        const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+                        const vendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+                        const totalDiscounts = b.discounts?.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0) || 0;
+                        const refundsToClient = b.refunds?.filter((r: any) => r.direction === 'Refund to Client').reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0) || 0;
+                        const refundsFromVendor = b.refunds?.filter((r: any) => r.direction === 'Refund from Vendor').reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0) || 0;
+
+                        const totalReceived = clientPayments - refundsToClient;
+                        const totalSent = vendorPayments - refundsFromVendor;
+                        const remainingAmount = bookingTotal - totalReceived;
+                        
+                        const netProfit = (totalReceived - totalSent) + totalDiscounts;
+
+                        const bookingAgent = dbAgents.find(a => a.name === b.agentName);
+                        let marginPercentage = 0;
+                        if (bookingAgent && (bookingAgent as any).marginSegments && (bookingAgent as any).marginSegments.length > 0) {
+                          const match = (bookingAgent as any).marginSegments.find((s: any) => 
+                            bookingTotal >= Number(s.minAmount) && (!s.maxAmount || bookingTotal <= Number(s.maxAmount))
+                          );
+                          if (match) marginPercentage = Number(match.marginPercent);
+                        }
+                        const agentMargin = (netProfit * marginPercentage) / 100;
+
+                        return (
                         <tr 
                           key={b.id} 
                           className="hover:bg-slate-50/40 transition-colors cursor-pointer"
@@ -1403,18 +1323,23 @@ export function Dashboard() {
                           }}
                         >
                           <td className="py-3.5 px-5 font-black text-slate-900">{b.bookingReference}</td>
-                          <td className="py-3.5 px-5 font-mono text-slate-400">{new Date(b.date).toLocaleDateString()}</td>
                           <td className="py-3.5 px-5 font-mono text-slate-500">{b.departureDate ? new Date(b.departureDate).toLocaleDateString() : 'N/A'}</td>
                           <td className="py-3.5 px-5 font-bold text-slate-700">{b.agentName || 'System'}</td>
                           <td className="py-3.5 px-5 text-right font-black text-slate-900">£{Number(b.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3.5 px-5 text-right font-bold text-emerald-600">£{Number(b.paidAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3.5 px-5 text-center">
-                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                              b.lockedStatus === 'locked' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
-                            }`}>
-                              {b.lockedStatus === 'locked' ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                              {b.lockedStatus.toUpperCase()}
-                            </span>
+                          <td className="py-3.5 px-5 text-right font-bold text-amber-500">£{remainingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-5 text-right font-bold text-rose-500">£{totalSent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-5 text-right font-bold text-blue-500">£{agentMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-5 text-right font-black text-emerald-600">£{netProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-5 text-center" onClick={e => e.stopPropagation()}>
+                            <button 
+                              onClick={(e) => toggleLock(e, b.id, b.isLocked)}
+                              disabled={userRole === 'AGENT'}
+                              className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+                                b.isLocked ? 'bg-rose-50 text-rose-600 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                              } ${userRole === 'AGENT' ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                              {b.isLocked ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                              {b.isLocked ? 'LOCKED' : 'UNLOCKED'}
+                            </button>
                           </td>
                           <td className="py-3.5 px-5 text-center">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
@@ -1439,7 +1364,8 @@ export function Dashboard() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      );
+                      })}
                     </tbody>
                   </table>
                 </div>

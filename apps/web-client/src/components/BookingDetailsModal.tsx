@@ -24,6 +24,7 @@ import { AddAdditionalServiceModal } from './booking-modals/AddAdditionalService
 import { LogTransactionModal } from './booking-modals/LogTransactionModal';
 import { AddDiscountModal } from './booking-modals/AddDiscountModal';
 import { LogRefundModal } from './booking-modals/LogRefundModal';
+import { DeleteConfirmationModal } from './booking-modals/DeleteConfirmationModal';
 import { InvoiceTemplate } from './invoice/InvoiceTemplate';
 import { generateInvoicePDF } from '../utils/pdfGenerator';
 
@@ -67,16 +68,23 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const [showAddDiscount, setShowAddDiscount] = useState(false);
   const [showLogRefund, setShowLogRefund] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [deleteConfig, setDeleteConfig] = useState<{isOpen: boolean, serviceType: string, id: number} | null>(null);
 
-  
   const handleDeleteService = async (serviceType: string, id: number) => {
-    if (!window.confirm("Are you sure you want to delete this? This action cannot be undone.")) return;
+    setDeleteConfig({ isOpen: true, serviceType, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfig) return;
     try {
-      await api.delete(`/bookings/${bookingId}/services/${serviceType}/${id}`);
+      await api.delete(`/bookings/${bookingId}/services/${deleteConfig.serviceType}/${deleteConfig.id}`);
       import('react-hot-toast').then(m => m.default.success('Deleted successfully'));
+      await fetchDetails();
       onUpdate?.();
     } catch (err: any) {
       import('react-hot-toast').then(m => m.default.error(err?.response?.data?.error || 'Failed to delete'));
+    } finally {
+      setDeleteConfig(null);
     }
   };
 
@@ -441,6 +449,12 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
 
       {/* Nested Popup Modals - Rendered at z-[70] internally */}
       <AnimatePresence>
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={!!deleteConfig?.isOpen}
+          onClose={() => setDeleteConfig(null)}
+          onConfirm={confirmDelete}
+        />
         {(showAddPassenger || !!editingPassenger) && (
           <AddPassengerModal 
             isOpen={showAddPassenger || !!editingPassenger} 
@@ -480,6 +494,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
             onClose={() => { setShowAddVisa(false); setEditingVisa(null); }} 
             onSubmit={handleSaveVisa}
             initialData={editingVisa}
+            passengers={booking?.customers || []}
           />
         )}
         {(showAddAdditionalService || !!editingAdditionalService) && (

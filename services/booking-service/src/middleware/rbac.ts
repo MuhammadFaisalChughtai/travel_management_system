@@ -20,7 +20,7 @@ const RolePermissions: Record<Role, Permission[]> = {
     Permission.CREATE_VENDOR, Permission.READ_VENDOR, Permission.UPDATE_VENDOR, Permission.DELETE_VENDOR,
     Permission.READ_DASHBOARD,
     Permission.CREATE_USER, Permission.READ_USER, Permission.UPDATE_USER, Permission.DELETE_USER,
-    Permission.READ_TRANSACTION
+    Permission.CREATE_TRANSACTION, Permission.READ_TRANSACTION, Permission.UPDATE_TRANSACTION, Permission.DELETE_TRANSACTION
   ],
   [Role.MAIN_COMPANY_ADMIN]: [
     ...Object.values(Permission) 

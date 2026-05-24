@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { requirePermission } from './middleware/rbac';
-import { Permission } from './types/rbac';
+import { Permission, Role } from './types/rbac';
 
 dotenv.config();
 
@@ -119,7 +119,7 @@ app.get('/my-bookings', requireGatewayHeaders, async (req: CustomRequest, res: R
     const {
       id, dateStart, dateEnd, departureDateStart, departureDateEnd,
       bookingReference, agentName, customerName, customerEmail,
-      customerPhone, status, lockedStatus, paymentStatus,
+      customerPhone, status, isLocked, paymentStatus,
       createdAtStart, createdAtEnd, tenantId
     } = req.query;
 
@@ -137,8 +137,8 @@ app.get('/my-bookings', requireGatewayHeaders, async (req: CustomRequest, res: R
     if (status && status !== 'Any') {
       whereClause.status = status as string;
     }
-    if (lockedStatus && lockedStatus !== 'Any') {
-      whereClause.lockedStatus = lockedStatus as string;
+    if (isLocked !== undefined && isLocked !== 'Any') {
+      whereClause.isLocked = isLocked === 'true';
     }
     if (paymentStatus && paymentStatus !== 'Any') {
       whereClause.paymentStatus = paymentStatus as string;
@@ -186,6 +186,12 @@ app.get('/my-bookings', requireGatewayHeaders, async (req: CustomRequest, res: R
 
     const bookings = await prisma.booking.findMany({
       where: whereClause,
+      include: {
+        payments: true,
+        vendorPayments: true,
+        refunds: true,
+        discounts: true
+      },
       orderBy: { date: 'desc' }
     });
 
@@ -205,16 +211,16 @@ app.get('/:id', requireGatewayHeaders, async (req: CustomRequest, res: Response)
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        customers: true,
+        customers: { orderBy: { id: 'asc' } },
         payments: { orderBy: { paidOn: 'desc' } },
-        vendorPayments: true,
-        accommodations: true,
-        flightServices: true,
-        transportServices: true,
-        visaServices: true,
+        vendorPayments: { orderBy: { id: 'asc' } },
+        accommodations: { orderBy: { id: 'asc' } },
+        flightServices: { orderBy: { id: 'asc' } },
+        transportServices: { orderBy: { id: 'asc' } },
+        visaServices: { orderBy: { id: 'asc' } },
         discounts: { orderBy: { date: 'desc' } },
         refunds: { orderBy: { date: 'desc' } },
-        additionalServices: true
+        additionalServices: { orderBy: { id: 'asc' } }
       }
     });
 
@@ -225,6 +231,10 @@ app.get('/:id', requireGatewayHeaders, async (req: CustomRequest, res: Response)
     // Enforce Tenant isolation (unless platform admin)
     if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied to this booking workspace' });
+    }
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
     res.status(200).json({ booking });
@@ -244,7 +254,7 @@ const patchBookingSchema = z.object({
   remainingAmount: z.number().optional(),
   status: z.string().optional(),
   paymentStatus: z.string().optional(),
-  lockedStatus: z.string().optional(),
+  isLocked: z.boolean().optional(),
   departureDate: z.string().optional(),
   agentName: z.string().optional(),
   date: z.string().optional()
@@ -268,6 +278,14 @@ app.patch('/:id', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOO
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied to this booking workspace' });
     }
 
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
+    }
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked and cannot be edited by agents.' });
+    }
+
     const updatedBooking = await prisma.booking.update({
       where: { id: bookingId },
       data: {
@@ -279,7 +297,7 @@ app.patch('/:id', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOO
         remainingAmount: parsedData.remainingAmount !== undefined ? parsedData.remainingAmount : undefined,
         status: parsedData.status || undefined,
         paymentStatus: parsedData.paymentStatus || undefined,
-        lockedStatus: parsedData.lockedStatus || undefined,
+        isLocked: parsedData.isLocked !== undefined ? parsedData.isLocked : undefined,
         departureDate: parsedData.departureDate ? new Date(parsedData.departureDate) : undefined,
         agentName: parsedData.agentName || undefined,
         date: parsedData.date ? new Date(parsedData.date) : undefined
@@ -326,6 +344,10 @@ app.post('/:id/passengers', requireGatewayHeaders, requirePermission(Permission.
 
     if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
     const passenger = await prisma.bookingCustomer.create({
@@ -381,6 +403,10 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
 
     if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
     const payment = await prisma.bookingPayment.create({
@@ -456,6 +482,10 @@ app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permis
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
     }
 
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
+    }
+
     const remainingDue = parsedData.remainingDue !== undefined 
       ? parsedData.remainingDue 
       : (parsedData.amount - parsedData.totalPaid);
@@ -527,6 +557,10 @@ app.post('/:id/accommodations', requireGatewayHeaders, requirePermission(Permiss
 
     if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
     const accommodation = await prisma.accommodationService.create({
@@ -746,6 +780,10 @@ app.post('/:id/discounts', requireGatewayHeaders, requirePermission(Permission.C
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
     }
 
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
+    }
+
     const discount = await (prisma as any).bookingDiscount.create({
       data: {
         tenantId: tenantIdNumeric,
@@ -780,6 +818,10 @@ app.post('/:id/refunds', requireGatewayHeaders, requirePermission(Permission.CRE
     if (!booking) return res.status(404).json({ error: 'Not Found', message: 'Booking does not exist' });
     if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
     const refund = await (prisma as any).bookingRefund.create({
@@ -817,6 +859,10 @@ app.post('/:id/additional-services', requireGatewayHeaders, requirePermission(Pe
     if (!booking) return res.status(404).json({ error: 'Not Found', message: 'Booking does not exist' });
     if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
     const additionalService = await (prisma as any).additionalService.create({
@@ -1094,7 +1140,7 @@ app.patch('/:id/passengers/:passengerId', requireGatewayHeaders, requirePermissi
         firstName: parsedData.firstName,
         lastName: parsedData.lastName,
         passportNumber: parsedData.passportNumber,
-        passportExpiryDate: parsedData.passportExpiry ? new Date(parsedData.passportExpiry) : null,
+        passportExpiryDate: parsedData.passportExpiryDate ? new Date(parsedData.passportExpiryDate) : null,
         role: parsedData.role || null
       }
     });
@@ -1107,7 +1153,7 @@ app.patch('/:id/passengers/:passengerId', requireGatewayHeaders, requirePermissi
 
 
 // PATCH /:id/payments/:serviceId
-app.patch('/:id/payments/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+app.patch('/:id/payments/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_TRANSACTION), async (req, res) => {
   try {
     const updated = await prisma.bookingPayment.update({
       where: { id: parseInt(req.params.serviceId) },
@@ -1120,7 +1166,7 @@ app.patch('/:id/payments/:serviceId', requireGatewayHeaders, requirePermission(P
 });
 
 // PATCH /:id/vendor-payments/:serviceId
-app.patch('/:id/vendor-payments/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+app.patch('/:id/vendor-payments/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_TRANSACTION), async (req, res) => {
   try {
     const updated = await prisma.vendorPayment.update({
       where: { id: parseInt(req.params.serviceId) },
@@ -1140,17 +1186,21 @@ app.delete('/:bookingId/services/:serviceType/:id', requireGatewayHeaders, requi
     const { serviceType } = req.params;
     const tenantIdNumeric = parseInt(req.tenantId!);
 
-    // Strict Permission check for financial deletions
-    if (['payment', 'vendor-payment'].includes(serviceType)) {
-      const userRole = req.headers['x-user-role'] as string;
-      if (!req.isPlatformAdmin && userRole !== 'MAIN_COMPANY_ADMIN' && userRole !== 'ADMIN') {
-        return res.status(403).json({ error: 'Forbidden', message: 'You lack the DELETE_TRANSACTION permission required to delete financial records.' });
-      }
-    }
-
     const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
     if (!booking) return res.status(404).json({ error: 'Not Found' });
     if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) return res.status(403).json({ error: 'Forbidden' });
+
+    if (booking.isLocked && req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
+    }
+
+    // Strict Permission check for financial deletions
+    if (['payment', 'vendor-payment'].includes(serviceType)) {
+      const userRole = req.headers['x-user-role'] as string;
+      if (!req.isPlatformAdmin && userRole !== Role.MAIN_COMPANY_ADMIN && userRole !== Role.COMPANY_ADMIN && userRole !== Role.ADMIN) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You lack the DELETE_TRANSACTION permission required to delete financial records.' });
+      }
+    }
 
     switch(serviceType) {
       case 'accommodation': await prisma.accommodationService.delete({ where: { id: serviceId } }); break;

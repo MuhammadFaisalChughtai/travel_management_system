@@ -10,9 +10,10 @@ interface AddTransportModalProps {
   onSubmit: (transport: Partial<TransportService>) => void;
   initialData?: TransportService | null;
   flights: FlightService[];
+  accommodations?: any[];
 }
 
-export function AddTransportModal({ isOpen, onClose, onSubmit, flights, initialData }: AddTransportModalProps) {
+export function AddTransportModal({ isOpen, onClose, onSubmit, flights, accommodations, initialData }: AddTransportModalProps) {
   const [form, setForm] = useState<Partial<TransportService>>({
     vendorName: '',
     vehicleType: '',
@@ -79,6 +80,37 @@ export function AddTransportModal({ isOpen, onClose, onSubmit, flights, initialD
     }
   }, [isOpen, initialData]);
 
+  
+  const handlePickupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    let newForm = { ...form, departureDestination: val };
+    
+    const matchedFlight = flights.find(f => `${f.arrivedAt} (Arrival Flight ${f.flightNo})` === val);
+    if (matchedFlight) {
+      newForm.flightNo = matchedFlight.flightNo || form.flightNo;
+      newForm.date = matchedFlight.date ? new Date(matchedFlight.date).toISOString().split('T')[0] : form.date;
+      newForm.departureTime = matchedFlight.arrivalTime || form.departureTime;
+      // Extract just the destination part for the actual value if desired, or keep the whole string. 
+      // User might prefer keeping the whole string so they see what they selected.
+    }
+    
+    setForm(newForm);
+  };
+
+  const handleDropoffChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    let newForm = { ...form, arrivalDestination: val };
+    
+    const matchedFlight = flights.find(f => `${f.departedFrom} (Departure Flight ${f.flightNo})` === val);
+    if (matchedFlight) {
+      newForm.flightNo = matchedFlight.flightNo || form.flightNo;
+      newForm.date = matchedFlight.date ? new Date(matchedFlight.date).toISOString().split('T')[0] : form.date;
+      newForm.arrivalTime = matchedFlight.departTime || form.arrivalTime;
+    }
+    
+    setForm(newForm);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -121,11 +153,27 @@ export function AddTransportModal({ isOpen, onClose, onSubmit, flights, initialD
             </div>
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">From (Pick-up)</label>
-              <input type="text" value={form.departureDestination} onChange={e => setForm({...form, departureDestination: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+              <input type="text" list="pickup-flights" value={form.departureDestination} onChange={handlePickupChange} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" placeholder="Type any location, flight, or hotel..." />
+              <datalist id="pickup-flights">
+                {flights?.map((f, i) => (
+                  <option key={`pickup-${f.id || i}`} value={`${f.arrivedAt} (Arrival Flight ${f.flightNo})`} />
+                ))}
+                {accommodations?.map((h, i) => (
+                  <option key={`pickup-hotel-${h.id || i}`} value={`${h.hotelName} (Hotel/Accommodation)`} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">To (Drop-off)</label>
-              <input type="text" value={form.arrivalDestination} onChange={e => setForm({...form, arrivalDestination: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+              <input type="text" list="dropoff-flights" value={form.arrivalDestination} onChange={handleDropoffChange} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" placeholder="Type any location, flight, or hotel..." />
+              <datalist id="dropoff-flights">
+                {flights?.map((f, i) => (
+                  <option key={`dropoff-${f.id || i}`} value={`${f.departedFrom} (Departure Flight ${f.flightNo})`} />
+                ))}
+                {accommodations?.map((h, i) => (
+                  <option key={`dropoff-hotel-${h.id || i}`} value={`${h.hotelName} (Hotel/Accommodation)`} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Linked Flight No.</label>
@@ -146,6 +194,18 @@ export function AddTransportModal({ isOpen, onClose, onSubmit, flights, initialD
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Price</label>
               <input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Currency</label>
+              <input type="text" value={form.currency || 'GBP'} onChange={e => setForm({...form, currency: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Other Currency</label>
+              <input type="text" value={form.otherCurrency || ''} onChange={e => setForm({...form, otherCurrency: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Conversion Rate</label>
+              <input type="number" step="0.0001" value={form.conversionRate || ''} onChange={e => setForm({...form, conversionRate: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
             </div>
           </div>
         </div>
@@ -172,7 +232,16 @@ export function AddTransportModal({ isOpen, onClose, onSubmit, flights, initialD
             
             <div className="flex gap-3">
               <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
-              <button onClick={() => { onSubmit(form as any); onClose(); }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
+                            <button onClick={() => {
+                const payload = { ...form } as any;
+                if (payload.price) payload.price = parseFloat(payload.price);
+                if (payload.qty) payload.qty = parseInt(payload.qty, 10);
+                if (payload.conversionRate) payload.conversionRate = parseFloat(payload.conversionRate);
+                if (payload.refundAmount) payload.refundAmount = parseFloat(payload.refundAmount);
+                if (payload.fineAmount) payload.fineAmount = parseFloat(payload.fineAmount);
+                onSubmit(payload);
+                onClose();
+              }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
                 {initialData ? 'Update' : 'Save'}
               </button>
             </div>

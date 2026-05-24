@@ -199,7 +199,16 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
             
             <div className="flex gap-3">
               <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
-              <button onClick={() => { onSubmit(form as any); onClose(); }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
+                            <button onClick={() => {
+                const payload = { ...form } as any;
+                if (payload.price) payload.price = parseFloat(payload.price);
+                if (payload.qty) payload.qty = parseInt(payload.qty, 10);
+                if (payload.conversionRate) payload.conversionRate = parseFloat(payload.conversionRate);
+                if (payload.refundAmount) payload.refundAmount = parseFloat(payload.refundAmount);
+                if (payload.fineAmount) payload.fineAmount = parseFloat(payload.fineAmount);
+                onSubmit(payload);
+                onClose();
+              }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">
                 {initialData ? 'Update' : 'Save'}
               </button>
             </div>

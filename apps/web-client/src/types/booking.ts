@@ -143,6 +143,8 @@ export interface VisaService {
   visaNumber: string | null;
   issueDate: string | null;
   expiryDate: string | null;
+  qty?: number;
+  unitPrice?: string;
   price: string;
   currency: string | null;
   otherCurrency: string | null;
@@ -177,7 +179,7 @@ export interface BookingDetail {
   remainingAmount: string;
   status: string;
   paymentStatus: string;
-  lockedStatus: string;
+  isLocked: boolean;
   customers: Passenger[];
   payments: Payment[];
   vendorPayments: VendorPayment[];

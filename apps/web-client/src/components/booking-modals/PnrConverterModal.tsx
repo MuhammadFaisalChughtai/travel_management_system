@@ -13,19 +13,24 @@ export function PnrConverterModal({ isOpen, onClose, onSave }: PnrConverterModal
 
   const parsePNR = () => {
     if (!pnrText.trim()) return;
-    const airlineMatch = pnrText.match(/(emirates|qatar|british airways|lufthansa|delta|united)/i);
-    const flightNoMatch = pnrText.match(/([A-Z]{2}\s?\d{3,4})/i);
-    const dateMatch = pnrText.match(/(\d{2}[A-Z]{3})/i);
-    const airportMatch = pnrText.match(/([A-Z]{3})\s*(?:TO|-)?\s*([A-Z]{3})/);
-    const pnrRefMatch = pnrText.match(/([A-Z0-9]{6})/);
+    
+    const cleanText = pnrText.replace(/\//g, ' ');
+    const pnrRefMatch = cleanText.match(/\b([A-Z0-9]{6})\b/i);
+    const flightNoMatch = pnrText.match(/\b([A-Z]{2})\s+(\d{1,4})\b/i);
+    const routeMatch = pnrText.match(/\b(\d{2}[A-Z]{3})\s+([A-Z]{6})\b/i);
+    const fallbackRouteMatch = !routeMatch ? pnrText.match(/\b([A-Z]{3})\s*(?:TO|-)\s*([A-Z]{3})\b/i) : null;
+    const timeMatch = pnrText.match(/\b(\d{4})\s+(\d{4})\b/);
+    const fallbackDateMatch = !routeMatch ? pnrText.match(/(\d{2}[A-Z]{3})/i) : null;
 
     const extracted = {
-      airline: airlineMatch ? airlineMatch[0].toUpperCase() : undefined,
-      flightNo: flightNoMatch ? flightNoMatch[0] : undefined,
-      date: dateMatch ? dateMatch[0] : undefined,
-      departedFrom: airportMatch ? airportMatch[1] : undefined,
-      arrivedAt: airportMatch ? airportMatch[2] : undefined,
-      pnr: pnrRefMatch ? pnrRefMatch[0] : undefined
+      airline: flightNoMatch ? flightNoMatch[1].toUpperCase() : undefined,
+      flightNo: flightNoMatch ? `${flightNoMatch[1].toUpperCase()}${flightNoMatch[2]}` : undefined,
+      date: routeMatch ? routeMatch[1] : (fallbackDateMatch ? fallbackDateMatch[1] : undefined),
+      departedFrom: routeMatch ? routeMatch[2].substring(0, 3).toUpperCase() : (fallbackRouteMatch ? fallbackRouteMatch[1].toUpperCase() : undefined),
+      arrivedAt: routeMatch ? routeMatch[2].substring(3, 6).toUpperCase() : (fallbackRouteMatch ? fallbackRouteMatch[2].toUpperCase() : undefined),
+      departTime: timeMatch ? `${timeMatch[1].substring(0,2)}:${timeMatch[1].substring(2,4)}` : undefined,
+      arrivalTime: timeMatch ? `${timeMatch[2].substring(0,2)}:${timeMatch[2].substring(2,4)}` : undefined,
+      pnr: pnrRefMatch ? pnrRefMatch[1].toUpperCase() : undefined
     };
 
     onSave(extracted);

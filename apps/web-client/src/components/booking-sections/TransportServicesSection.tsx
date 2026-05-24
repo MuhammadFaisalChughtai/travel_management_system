@@ -38,10 +38,17 @@ export function TransportServicesSection({ transports, onEdit, onDelete}: Transp
                       <div className="text-slate-500 font-semibold">{t.vehicleType}</div>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-bold text-slate-700 flex items-center gap-1.5">
-                        <span>{t.departureDestination}</span>
-                        <span className="text-slate-300">→</span>
-                        <span>{t.arrivalDestination}</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                          <span>{t.departureDestination}</span>
+                          <span className="text-slate-300">→</span>
+                          <span>{t.arrivalDestination}</span>
+                        </div>
+                        {t.flightNo && (
+                          <div className="text-[9px] font-bold text-indigo-500 uppercase tracking-wide bg-indigo-50 px-1.5 py-0.5 rounded w-max">
+                            Linked Flight: {t.flightNo}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-4 font-semibold text-slate-600">

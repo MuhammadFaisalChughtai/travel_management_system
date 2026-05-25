@@ -1,6 +1,3 @@
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-
 export const generateInvoicePDF = async (elementId: string, filename: string = 'invoice.pdf') => {
   const element = document.getElementById(elementId);
   if (!element) {
@@ -9,48 +6,52 @@ export const generateInvoicePDF = async (elementId: string, filename: string = '
   }
 
   try {
-    // Temporarily make the element visible for rendering if it was hidden
-    const originalDisplay = element.style.display;
-    element.style.display = 'block';
+    // Create print-specific styles dynamically
+    const style = document.createElement('style');
+    style.id = 'print-invoice-style';
+    style.innerHTML = `
+      @media print {
+        body * {
+          visibility: hidden !important;
+        }
+        #${elementId}, #${elementId} * {
+          visibility: visible !important;
+        }
+        #${elementId} {
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          margin: 0 !important;
+          padding: 20mm !important;
+          width: 100% !important;
+          z-index: 999999 !important;
+          opacity: 1 !important;
+        }
+        @page {
+          margin: 0;
+          size: A4 portrait;
+        }
+      }
+    `;
+    document.head.appendChild(style);
 
-    const canvas = await html2canvas(element, {
-      scale: 2, // Higher scale for better resolution
-      useCORS: true,
-      logging: false,
-    });
+    // Save current document title to restore later
+    const originalTitle = document.title;
+    // Set title to filename so the default save name in print dialog matches
+    document.title = filename.replace('.pdf', '');
 
-    element.style.display = originalDisplay;
+    // Trigger native browser print dialog
+    window.print();
 
-    const imgData = canvas.toDataURL('image/png');
-    
-    // A4 size in mm
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
+    // Cleanup
+    document.title = originalTitle;
+    setTimeout(() => {
+      const styleNode = document.getElementById('print-invoice-style');
+      if (styleNode) {
+        document.head.removeChild(styleNode);
+      }
+    }, 1000);
 
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-    // Add image to PDF
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    
-    // If the content is taller than an A4 page, we might need multiple pages.
-    // For simplicity, assuming html2canvas renders the whole thing and we scale it down.
-    // If it's too long, it might scale too much. A better approach for multi-page
-    // is to slice the canvas, but let's start with a single scaled page.
-    let heightLeft = pdfHeight - pdf.internal.pageSize.getHeight();
-    let position = 0;
-
-    while (heightLeft > 0) {
-      position = heightLeft - pdfHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pdf.internal.pageSize.getHeight();
-    }
-
-    pdf.save(filename);
   } catch (error) {
     console.error('Error generating PDF:', error);
   }

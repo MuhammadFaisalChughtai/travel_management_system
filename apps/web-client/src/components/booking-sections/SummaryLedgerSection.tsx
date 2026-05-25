@@ -52,7 +52,7 @@ export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSection
     <div className="grid grid-cols-1 gap-6">
       <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-white shadow-sm p-4">
         <h4 className="text-[10px] font-extrabold text-indigo-900 tracking-wide uppercase mb-3">Core Information</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* Booking Ref (Not Editable) */}
           <div>
             <p className="text-[9px] text-slate-400 font-bold uppercase mb-1">Booking Ref</p>
@@ -95,6 +95,25 @@ export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSection
               <div className="flex items-center gap-1.5 group cursor-pointer w-fit mt-1" onClick={() => handleEdit('date', booking.date.split('T')[0])}>
                 <p className="font-semibold text-slate-600">
                   {new Date(booking.date).toLocaleDateString()}
+                </p>
+                <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            )}
+          </div>
+
+          {/* Departure Date */}
+          <div>
+            <p className="text-[9px] text-slate-400 font-bold uppercase mb-1">Departure Date</p>
+            {editingField === 'departureDate' ? (
+              <div className="flex items-center gap-1 mt-1">
+                <input type="date" value={editValue} onChange={(e) => setEditValue(e.target.value)} className="text-[10px] border border-slate-200 rounded px-1 py-0.5 outline-none font-semibold text-slate-600" />
+                <button onClick={() => handleSave('departureDate')} disabled={loading} className="text-green-600 hover:text-green-700"><Save className="w-3.5 h-3.5" /></button>
+                <button onClick={cancelEdit} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 group cursor-pointer w-fit mt-1" onClick={() => handleEdit('departureDate', booking.departureDate ? booking.departureDate.split('T')[0] : '')}>
+                <p className="font-semibold text-slate-600">
+                  {booking.departureDate ? new Date(booking.departureDate).toLocaleDateString() : 'N/A'}
                 </p>
                 <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>

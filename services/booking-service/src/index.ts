@@ -114,6 +114,46 @@ app.post('/', requireGatewayHeaders, requirePermission(Permission.CREATE_BOOKING
 });
 
 // Get User Bookings (With Tenant Isolation and Filtering)
+app.get('/search', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const q = (req.query.q as string) || '';
+    if (!q) {
+      return res.status(200).json({ bookings: [] });
+    }
+    
+    const tenantId = parseInt(req.tenantId!);
+    const limit = 10;
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        tenantId,
+        OR: [
+          { bookingReference: { contains: q, mode: 'insensitive' } },
+          { flightServices: { some: { pnr: { contains: q, mode: 'insensitive' } } } },
+          { agentName: { contains: q, mode: 'insensitive' } },
+          { customers: { some: { firstName: { contains: q, mode: 'insensitive' } } } },
+          { customers: { some: { lastName: { contains: q, mode: 'insensitive' } } } }
+        ]
+      },
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        bookingReference: true,
+        agentName: true,
+        totalPrice: true,
+        flightServices: { select: { pnr: true } },
+        customers: { select: { firstName: true, lastName: true }, take: 1 }
+      }
+    });
+
+    res.status(200).json({ bookings });
+  } catch (error: any) {
+    console.error('Search bookings error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error.message, stack: error.stack });
+  }
+});
+
 app.get('/my-bookings', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
   try {
     const {
@@ -203,6 +243,84 @@ app.get('/my-bookings', requireGatewayHeaders, async (req: CustomRequest, res: R
 });
 
 // Get Single Booking Detail (With Tenant Isolation)
+// ---------------------------------------------------------
+// Service Catalog Endpoints
+// ---------------------------------------------------------
+
+// GET /catalog
+app.get('/catalog', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const { serviceType } = req.query;
+    const filter: any = { isActive: true, tenantId: parseInt(req.tenantId as string) || 1 };
+    if (serviceType) filter.serviceType = String(serviceType);
+
+    const items = await prisma.serviceCatalog.findMany({
+      where: filter,
+      orderBy: { name: 'asc' }
+    });
+
+    res.json(items);
+  } catch (error) {
+    console.error('Fetch catalog error:', error);
+    res.status(500).json({ error: 'Failed to fetch catalog' });
+  }
+});
+
+// POST /catalog (Admin Only)
+app.post('/catalog', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    const item = await prisma.serviceCatalog.create({
+      data: {
+        tenantId: parseInt(req.tenantId as string) || 1,
+        serviceType: req.body.serviceType,
+        name: req.body.name,
+        unitPrice: req.body.unitPrice,
+        currency: req.body.currency,
+        metadata: req.body.metadata || {}
+      }
+    });
+    res.status(201).json(item);
+  } catch (error) {
+    console.error('Create catalog item error:', error);
+    res.status(500).json({ error: 'Failed to create catalog item' });
+  }
+});
+
+// PUT /catalog/:id (Admin Only)
+app.patch('/catalog/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    const item = await prisma.serviceCatalog.update({
+      where: { id: parseInt(req.params.id) },
+      data: {
+        serviceType: req.body.serviceType,
+        name: req.body.name,
+        unitPrice: req.body.unitPrice,
+        currency: req.body.currency,
+        isActive: req.body.isActive,
+        metadata: req.body.metadata
+      }
+    });
+    res.json(item);
+  } catch (error) {
+    console.error('Update catalog item error:', error);
+    res.status(500).json({ error: 'Failed to update catalog item' });
+  }
+});
+
+// DELETE /catalog/:id (Admin Only)
+app.delete('/catalog/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    await prisma.serviceCatalog.delete({
+      where: { id: parseInt(req.params.id) }
+    });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete catalog item error:', error);
+    res.status(500).json({ error: 'Failed to delete catalog item' });
+  }
+});
+
+
 app.get('/:id', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
   try {
     const bookingId = parseInt(req.params.id);
@@ -236,6 +354,28 @@ app.get('/:id', requireGatewayHeaders, async (req: CustomRequest, res: Response)
     if (booking.isLocked && req.userRole === Role.AGENT) {
       return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
+
+    const vendorPayments = booking.payments.filter(p => p.paymentType === 'Sent to Vendor');
+    booking.flightServices.forEach(s => {
+      const matchString = `Flight: ${s.vendorName || 'Unknown'} - ${s.flightNo || 'No Flight No'} (${s.pnr})`;
+      if (!s.isPaidToVendor && vendorPayments.some(p => p.notes?.includes(matchString))) s.isPaidToVendor = true;
+    });
+    booking.accommodations.forEach(s => {
+      const matchString = `Hotel ${s.hotelName}`;
+      if (!s.isPaidToVendor && vendorPayments.some(p => p.notes?.includes(matchString))) s.isPaidToVendor = true;
+    });
+    booking.transportServices.forEach(s => {
+      const matchString = `Transport ${s.vehicleType}`;
+      if (!s.isPaidToVendor && vendorPayments.some(p => p.notes?.includes(matchString))) s.isPaidToVendor = true;
+    });
+    booking.visaServices.forEach(s => {
+      const matchString = `Visa ${s.visaType}`;
+      if (!s.isPaidToVendor && vendorPayments.some(p => p.notes?.includes(matchString))) s.isPaidToVendor = true;
+    });
+    booking.additionalServices.forEach(s => {
+      const matchString = `Service ${s.serviceName}`;
+      if (!s.isPaidToVendor && vendorPayments.some(p => p.notes?.includes(matchString))) s.isPaidToVendor = true;
+    });
 
     res.status(200).json({ booking });
   } catch (error) {
@@ -384,7 +524,8 @@ const addPaymentSchema = z.object({
   paymentMethod: z.string().min(1),
   paymentType: z.string().min(1),
   paidOn: z.string(),
-  notes: z.string().nullable().optional()
+  notes: z.string().nullable().optional(),
+  cardCharges: z.number().optional()
 });
 
 app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
@@ -409,6 +550,13 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
       return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
+    let finalNotes = parsedData.notes || '';
+    if (parsedData.cardCharges && parsedData.cardCharges > 0) {
+      finalNotes = finalNotes 
+        ? `${finalNotes}\n(Includes Credit Card Charge: £${parsedData.cardCharges.toFixed(2)})`
+        : `(Includes Credit Card Charge: £${parsedData.cardCharges.toFixed(2)})`;
+    }
+
     const payment = await prisma.bookingPayment.create({
       data: {
         tenantId: tenantIdNumeric,
@@ -417,9 +565,73 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
         paymentMethod: parsedData.paymentMethod,
         paymentType: parsedData.paymentType,
         paidOn: new Date(parsedData.paidOn),
-        notes: parsedData.notes || null
+        notes: finalNotes || null
       }
     });
+
+    // --- LEDGER INTEGRATION (DOUBLE ENTRY) ---
+    const customerName = booking.agentName || 'Direct Client';
+    let customerAccount = await prisma.ledgerAccount.findFirst({
+      where: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+    });
+    if (!customerAccount) {
+      customerAccount = await prisma.ledgerAccount.create({
+        data: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+      });
+    }
+
+    // 1. Main Payment Transaction (Credit Customer Receivable)
+    const mainTx = await prisma.ledgerTransaction.create({
+      data: {
+        tenantId: tenantIdNumeric,
+        transactionDate: new Date(parsedData.paidOn),
+        referenceNumber: booking.bookingReference,
+        description: `Client Payment via ${parsedData.paymentMethod}. ${parsedData.notes || ''}`,
+        type: 'PAYMENT'
+      }
+    });
+
+    await prisma.ledgerEntry.create({
+      data: {
+        transactionId: mainTx.id,
+        accountId: customerAccount.id,
+        debitAmount: 0,
+        creditAmount: parsedData.amount
+      }
+    });
+
+    await prisma.ledgerAccount.update({
+      where: { id: customerAccount.id },
+      data: { balance: { decrement: parsedData.amount } }
+    });
+
+    // 2. Separate Transaction for Credit Card Charges (Debit Customer Receivable)
+    if (parsedData.cardCharges && parsedData.cardCharges > 0) {
+      const feeTx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          transactionDate: new Date(parsedData.paidOn),
+          referenceNumber: booking.bookingReference,
+          description: `Credit Card Processing Fee`,
+          type: 'FEE'
+        }
+      });
+
+      await prisma.ledgerEntry.create({
+        data: {
+          transactionId: feeTx.id,
+          accountId: customerAccount.id,
+          debitAmount: parsedData.cardCharges,
+          creditAmount: 0
+        }
+      });
+
+      await prisma.ledgerAccount.update({
+        where: { id: customerAccount.id },
+        data: { balance: { increment: parsedData.cardCharges } }
+      });
+    }
+    // ------------------------------------------
 
     // Automatically recalculate booking paid & remaining amounts
     const allPayments = await prisma.bookingPayment.findMany({
@@ -427,11 +639,15 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
     });
     
     const totalPaid = allPayments.reduce((acc, p) => acc + Number(p.amount), 0);
-    const remaining = Number(booking.totalPrice) + Number(booking.cardPaymentCharges) + Number(booking.cancellationCharges) - totalPaid - Number(booking.refundAmount);
+    
+    // Add new card charges to existing
+    const newCardCharges = Number(booking.cardPaymentCharges) + (parsedData.cardCharges || 0);
+    const remaining = Number(booking.totalPrice) + newCardCharges + Number(booking.cancellationCharges) - totalPaid - Number(booking.refundAmount);
 
     await prisma.booking.update({
       where: { id: bookingId },
       data: {
+        cardPaymentCharges: newCardCharges,
         paidAmount: totalPaid,
         remainingAmount: remaining >= 0 ? remaining : 0,
         paymentStatus: remaining <= 0 ? 'paid' : (totalPaid > 0 ? 'partially_paid' : 'unpaid')
@@ -490,6 +706,7 @@ app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permis
       ? parsedData.remainingDue 
       : (parsedData.amount - parsedData.totalPaid);
 
+    // 1. Create Vendor Payment
     const vendorPayment = await prisma.vendorPayment.create({
       data: {
         tenantId: tenantIdNumeric,
@@ -508,7 +725,105 @@ app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permis
       }
     });
 
-    res.status(201).json({ message: 'Vendor payment registered successfully', vendorPayment });
+    // 2. Ledger Integration
+    let vendorAccount = await prisma.ledgerAccount.findFirst({
+      where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: parsedData.vendorName }
+    });
+    if (!vendorAccount) {
+      vendorAccount = await prisma.ledgerAccount.create({
+        data: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: parsedData.vendorName }
+      });
+    }
+
+    const tx = await prisma.ledgerTransaction.create({
+      data: {
+        tenantId: tenantIdNumeric,
+        transactionDate: parsedData.paidOn ? new Date(parsedData.paidOn) : new Date(),
+        referenceNumber: booking.bookingReference,
+        description: `Vendor Payment to ${parsedData.vendorName}. ${parsedData.notes || ''}`,
+        type: 'PAYMENT'
+      }
+    });
+
+    await prisma.ledgerEntry.create({
+      data: {
+        transactionId: tx.id,
+        accountId: vendorAccount.id,
+        debitAmount: parsedData.amount,
+        creditAmount: 0
+      }
+    });
+    await prisma.ledgerAccount.update({
+      where: { id: vendorAccount.id },
+      data: { balance: { decrement: parsedData.amount } }
+    });
+
+    // 3. FIFO Service Allocation for THIS booking and vendor
+    const fetchServices = async (model: any, type: string) => {
+      const svcs = await model.findMany({
+        where: { tenantId: tenantIdNumeric, bookingId, vendorName: parsedData.vendorName, isPaidToVendor: false },
+        orderBy: { createdAt: 'asc' }
+      });
+      return svcs.map((s: any) => ({ ...s, serviceType: type }));
+    };
+
+    const flights = await fetchServices(prisma.flightService, 'FLIGHT');
+    const hotels = await fetchServices(prisma.accommodationService, 'HOTEL');
+    const transports = await fetchServices(prisma.transportService, 'TRANSPORT');
+    const visas = await fetchServices(prisma.visaService, 'VISA');
+    const additionals = await fetchServices(prisma.additionalService, 'ADDITIONAL');
+
+    let allUnpaid = [...flights, ...hotels, ...transports, ...visas, ...additionals].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    const allocations = [];
+    let remainingAmountToAllocate = parseFloat(parsedData.amount as any);
+
+    for (const service of allUnpaid) {
+      if (remainingAmountToAllocate <= 0) break;
+
+      const previousAllocations = await prisma.bookingAllocation.aggregate({
+        where: { tenantId: tenantIdNumeric, serviceType: service.serviceType, serviceId: service.id },
+        _sum: { allocatedAmount: true }
+      });
+      
+      const totalCost = parseFloat(service.price) || 0;
+      const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
+      const serviceRemainingDue = totalCost - alreadyAllocated;
+
+      if (serviceRemainingDue > 0) {
+        const allocateAmt = Math.min(serviceRemainingDue, remainingAmountToAllocate);
+        
+        allocations.push({
+          tenantId: tenantIdNumeric,
+          transactionId: tx.id,
+          bookingId: bookingId,
+          serviceType: service.serviceType,
+          serviceId: service.id,
+          allocatedAmount: allocateAmt
+        });
+
+        remainingAmountToAllocate -= allocateAmt;
+
+        if (allocateAmt >= serviceRemainingDue) {
+          const updateData = { isPaidToVendor: true };
+          switch(service.serviceType) {
+            case 'FLIGHT': await prisma.flightService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'HOTEL': await prisma.accommodationService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'TRANSPORT': await prisma.transportService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'VISA': await prisma.visaService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'ADDITIONAL': await prisma.additionalService.update({ where: { id: service.id }, data: updateData }); break;
+          }
+        }
+      }
+    }
+
+    if (allocations.length > 0) {
+      await prisma.bookingAllocation.createMany({ data: allocations });
+    }
+
+    res.status(201).json({ message: 'Vendor payment registered successfully', vendorPayment, allocationsCount: allocations.length });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       const messages = error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ');
@@ -796,6 +1111,35 @@ app.post('/:id/discounts', requireGatewayHeaders, requirePermission(Permission.C
       }
     });
 
+    // Ledger Integration
+    const customerName = booking.agentName || 'Direct Client';
+    let customerAccount = await prisma.ledgerAccount.findFirst({
+      where: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+    });
+    if (!customerAccount) {
+      customerAccount = await prisma.ledgerAccount.create({
+        data: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+      });
+    }
+
+    const tx = await prisma.ledgerTransaction.create({
+      data: {
+        tenantId: tenantIdNumeric,
+        transactionDate: new Date(date),
+        referenceNumber: booking.bookingReference,
+        description: `Discount applied to ${vendorCategory} - ${serviceName || ''}. ${notes || ''}`,
+        type: 'DISCOUNT'
+      }
+    });
+
+    await prisma.ledgerEntry.create({
+      data: { transactionId: tx.id, accountId: customerAccount.id, debitAmount: 0, creditAmount: parseFloat(amount) }
+    });
+    await prisma.ledgerAccount.update({
+      where: { id: customerAccount.id },
+      data: { balance: { decrement: parseFloat(amount) } }
+    });
+
     res.status(201).json({ message: 'Discount added successfully', discount });
   } catch (error) {
     console.error('Add Discount Error:', error);
@@ -836,6 +1180,52 @@ app.post('/:id/refunds', requireGatewayHeaders, requirePermission(Permission.CRE
         date: new Date(date)
       }
     });
+
+    // Ledger Integration
+    const tx = await prisma.ledgerTransaction.create({
+      data: {
+        tenantId: tenantIdNumeric,
+        transactionDate: new Date(date),
+        referenceNumber: booking.bookingReference,
+        description: `${direction} for ${vendorCategory} - ${serviceName || ''}. ${notes || ''}`,
+        type: 'REFUND'
+      }
+    });
+
+    if (direction === 'Refund to Client') {
+      const customerName = booking.agentName || 'Direct Client';
+      let customerAccount = await prisma.ledgerAccount.findFirst({
+        where: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+      });
+      if (!customerAccount) {
+        customerAccount = await prisma.ledgerAccount.create({
+          data: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+        });
+      }
+      await prisma.ledgerEntry.create({
+        data: { transactionId: tx.id, accountId: customerAccount.id, debitAmount: parseFloat(amount), creditAmount: 0 }
+      });
+      await prisma.ledgerAccount.update({
+        where: { id: customerAccount.id },
+        data: { balance: { increment: parseFloat(amount) } }
+      });
+    } else {
+      let vendorAccount = await prisma.ledgerAccount.findFirst({
+        where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorCategory }
+      });
+      if (!vendorAccount) {
+        vendorAccount = await prisma.ledgerAccount.create({
+          data: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorCategory }
+        });
+      }
+      await prisma.ledgerEntry.create({
+        data: { transactionId: tx.id, accountId: vendorAccount.id, debitAmount: 0, creditAmount: parseFloat(amount) }
+      });
+      await prisma.ledgerAccount.update({
+        where: { id: vendorAccount.id },
+        data: { balance: { increment: parseFloat(amount) } }
+      });
+    }
 
     res.status(201).json({ message: 'Refund logged successfully', refund });
   } catch (error) {
@@ -902,25 +1292,14 @@ app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, requirePermis
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-    if (parsedData.paidToVendor || parsedData.isPaidToVendor) {
-      await (prisma as any).bookingPayment.create({
-        data: {
-          tenantId: parseInt((req as any).tenantId),
-          bookingId: parseInt(req.params.id),
-          amount: parseFloat(parsedData.price) || 0,
-          paymentMethod: 'system_auto',
-          paymentType: 'Sent to Vendor',
-          paidOn: new Date(),
-          notes: `Auto-logged vendor payment for ${parsedData.hotelName || "Accommodation"}`
-        }
-      });
-    }
+
     
     const updated = await (prisma as any).accommodationService.update({
       where: { id: serviceId },
       data: {
         vendorName: parsedData.vendorName,
         hotelName: parsedData.hotelName,
+        city: parsedData.city || null,
         roomType: parsedData.roomType || null,
         checkInDate: parsedData.checkInDate ? new Date(parsedData.checkInDate) : null,
         checkOutDate: parsedData.checkOutDate ? new Date(parsedData.checkOutDate) : null,
@@ -953,19 +1332,7 @@ app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, requirePermi
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-    if (parsedData.paidToVendor || parsedData.isPaidToVendor) {
-      await (prisma as any).bookingPayment.create({
-        data: {
-          tenantId: parseInt((req as any).tenantId),
-          bookingId: parseInt(req.params.id),
-          amount: parseFloat(parsedData.price) || 0,
-          paymentMethod: 'system_auto',
-          paymentType: 'Sent to Vendor',
-          paidOn: new Date(),
-          notes: `Auto-logged vendor payment for Flight (${parsedData.flightNo || "Unknown"})`
-        }
-      });
-    }
+
 
     const updated = await (prisma as any).flightService.update({
       where: { id: serviceId },
@@ -1003,19 +1370,7 @@ app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, requirePe
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-    if (parsedData.paidToVendor || parsedData.isPaidToVendor) {
-      await (prisma as any).bookingPayment.create({
-        data: {
-          tenantId: parseInt((req as any).tenantId),
-          bookingId: parseInt(req.params.id),
-          amount: parseFloat(parsedData.price) || 0,
-          paymentMethod: 'system_auto',
-          paymentType: 'Sent to Vendor',
-          paidOn: new Date(),
-          notes: `Auto-logged vendor payment for Transport (${parsedData.vehicleType || "Vehicle"})`
-        }
-      });
-    }
+
 
     const updated = await (prisma as any).transportService.update({
       where: { id: serviceId },
@@ -1051,19 +1406,7 @@ app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, requirePermiss
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-    if (parsedData.paidToVendor || parsedData.isPaidToVendor) {
-      await (prisma as any).bookingPayment.create({
-        data: {
-          tenantId: parseInt((req as any).tenantId),
-          bookingId: parseInt(req.params.id),
-          amount: parseFloat(parsedData.price) || 0,
-          paymentMethod: 'system_auto',
-          paymentType: 'Sent to Vendor',
-          paidOn: new Date(),
-          notes: `Auto-logged vendor payment for Visa (${parsedData.visaType || "Application"})`
-        }
-      });
-    }
+
 
     const updated = await (prisma as any).visaService.update({
       where: { id: serviceId },
@@ -1096,19 +1439,7 @@ app.patch('/:id/additional-services/:serviceId', requireGatewayHeaders, requireP
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-    if (parsedData.paidToVendor || parsedData.isPaidToVendor) {
-      await (prisma as any).bookingPayment.create({
-        data: {
-          tenantId: parseInt((req as any).tenantId),
-          bookingId: parseInt(req.params.id),
-          amount: parseFloat(parsedData.charges) || 0,
-          paymentMethod: 'system_auto',
-          paymentType: 'Sent to Vendor',
-          paidOn: new Date(),
-          notes: `Auto-logged vendor payment for ${parsedData.serviceName}`
-        }
-      });
-    }
+
 
     const updated = await (prisma as any).additionalService.update({
       where: { id: serviceId },
@@ -1141,6 +1472,8 @@ app.patch('/:id/passengers/:passengerId', requireGatewayHeaders, requirePermissi
         lastName: parsedData.lastName,
         passportNumber: parsedData.passportNumber,
         passportExpiryDate: parsedData.passportExpiryDate ? new Date(parsedData.passportExpiryDate) : null,
+        email: parsedData.email || null,
+        phoneNumber: parsedData.phoneNumber || null,
         role: parsedData.role || null
       }
     });
@@ -1220,6 +1553,212 @@ app.delete('/:bookingId/services/:serviceType/:id', requireGatewayHeaders, requi
   }
 });
 
+
+
+// ─── LEDGER & FINANCE SYSTEM ───────────────────────────────────────────────────
+
+app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { vendorName, amount, paymentMethod, paidOn, notes } = req.body;
+    let remainingAmount = parseFloat(amount);
+
+    if (!vendorName || isNaN(remainingAmount) || remainingAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid input' });
+    }
+
+    // 1. Create the main LedgerTransaction (The global payment)
+    const transaction = await prisma.ledgerTransaction.create({
+      data: {
+        tenantId,
+        transactionDate: paidOn ? new Date(paidOn) : new Date(),
+        description: `Bulk payment to vendor ${vendorName}. ${notes || ''}`,
+        type: 'PAYMENT'
+      }
+    });
+
+    // Find or create Vendor LedgerAccount
+    let account = await prisma.ledgerAccount.findFirst({
+      where: { tenantId, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+    });
+    if (!account) {
+      account = await prisma.ledgerAccount.create({
+        data: { tenantId, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+      });
+    }
+
+    // 2. Fetch all unpaid services for this vendor
+    const fetchServices = async (model: any, type: string) => {
+      const svcs = await model.findMany({
+        where: { tenantId, vendorName, isPaidToVendor: false },
+        orderBy: { createdAt: 'asc' },
+        include: { booking: true }
+      });
+      return svcs.map((s: any) => ({ ...s, serviceType: type }));
+    };
+
+    const flights = await fetchServices(prisma.flightService, 'FLIGHT');
+    const hotels = await fetchServices(prisma.accommodationService, 'HOTEL');
+    const transports = await fetchServices(prisma.transportService, 'TRANSPORT');
+    const visas = await fetchServices(prisma.visaService, 'VISA');
+    const additionals = await fetchServices(prisma.additionalService, 'ADDITIONAL');
+
+    let allUnpaid = [...flights, ...hotels, ...transports, ...visas, ...additionals].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    // 3. FIFO Allocation
+    const allocations = [];
+    for (const service of allUnpaid) {
+      if (remainingAmount <= 0) break;
+
+      // Find previously allocated amounts for this service
+      const previousAllocations = await prisma.bookingAllocation.aggregate({
+        where: { tenantId, serviceType: service.serviceType, serviceId: service.id },
+        _sum: { allocatedAmount: true }
+      });
+      
+      const totalCost = parseFloat(service.price) || 0;
+      const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
+      const serviceRemainingDue = totalCost - alreadyAllocated;
+
+      if (serviceRemainingDue > 0) {
+        const allocateAmt = Math.min(serviceRemainingDue, remainingAmount);
+        
+        allocations.push({
+          tenantId,
+          transactionId: transaction.id,
+          bookingId: service.bookingId,
+          serviceType: service.serviceType,
+          serviceId: service.id,
+          allocatedAmount: allocateAmt
+        });
+
+        remainingAmount -= allocateAmt;
+
+        // If fully paid by this allocation, mark the service as paid
+        if (allocateAmt >= serviceRemainingDue) {
+          const updateData = { isPaidToVendor: true };
+          switch(service.serviceType) {
+            case 'FLIGHT': await prisma.flightService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'HOTEL': await prisma.accommodationService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'TRANSPORT': await prisma.transportService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'VISA': await prisma.visaService.update({ where: { id: service.id }, data: updateData }); break;
+            case 'ADDITIONAL': await prisma.additionalService.update({ where: { id: service.id }, data: updateData }); break;
+          }
+        }
+      }
+    }
+
+    // Save allocations
+    if (allocations.length > 0) {
+      await prisma.bookingAllocation.createMany({ data: allocations });
+    }
+
+    // 4. Ledger Entry (Double Entry)
+    // Debit Vendor Payable Account (Reducing liability)
+    await prisma.ledgerEntry.create({
+      data: {
+        transactionId: transaction.id,
+        accountId: account.id,
+        debitAmount: parseFloat(amount),
+        creditAmount: 0
+      }
+    });
+
+    // Update account balance (Liability decreases with Debit)
+    await prisma.ledgerAccount.update({
+      where: { id: account.id },
+      data: { balance: { decrement: parseFloat(amount) } }
+    });
+
+    res.status(200).json({ 
+      message: 'Payment logged and allocated via FIFO', 
+      transaction, 
+      allocationsCount: allocations.length,
+      overpaymentCredit: remainingAmount > 0 ? remainingAmount : 0
+    });
+
+  } catch (error) {
+    console.error('Vendor Bulk Payment Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.READ_TRANSACTION), async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { dateStart, dateEnd, vendorName, agentName, reference } = req.query;
+
+    const whereTransaction: any = { tenantId };
+    
+    if (dateStart && dateEnd) {
+      whereTransaction.transactionDate = {
+        gte: new Date(dateStart as string),
+        lte: new Date(dateEnd as string)
+      };
+    } else if (dateStart) {
+      whereTransaction.transactionDate = { gte: new Date(dateStart as string) };
+    } else if (dateEnd) {
+      whereTransaction.transactionDate = { lte: new Date(dateEnd as string) };
+    }
+
+    if (reference) {
+      whereTransaction.OR = [
+        { referenceNumber: { contains: reference as string, mode: 'insensitive' } },
+        { description: { contains: reference as string, mode: 'insensitive' } }
+      ];
+    }
+
+    // Advanced filtering by looking at the associated LedgerEntries or Allocations
+    if (vendorName) {
+      // Find transactions that have an entry tied to this vendor's account
+      whereTransaction.entries = {
+        some: {
+          account: {
+            entityName: { contains: vendorName as string, mode: 'insensitive' }
+          }
+        }
+      };
+    }
+
+    if (agentName) {
+      // Find transactions allocated to bookings assigned to this agent
+      // Note: we can't easily traverse deep to bookings here without a custom join, 
+      // but if we store agent name in description or if it's a specific ledger type, we can filter.
+      // For now, search description as a fallback since Agent Name is usually appended to notes
+      if (!whereTransaction.OR) {
+        whereTransaction.OR = [];
+      }
+      whereTransaction.OR.push({ description: { contains: agentName as string, mode: 'insensitive' } });
+    }
+
+    const transactions = await prisma.ledgerTransaction.findMany({
+      where: whereTransaction,
+      include: {
+        entries: {
+          include: { account: true }
+        },
+        allocations: {
+          include: {
+            transaction: true
+          }
+        }
+      },
+      orderBy: { transactionDate: 'desc' }
+    });
+
+    // Also fetch all accounts for closing balances
+    const accounts = await prisma.ledgerAccount.findMany({
+      where: { tenantId }
+    });
+
+    res.status(200).json({ transactions, accounts });
+  } catch (error) {
+    console.error('Ledger Report Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Booking Service is running on port ${PORT}`);

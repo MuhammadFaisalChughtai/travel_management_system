@@ -15,7 +15,7 @@ export interface Payment {
   id: number;
   amount: string;
   paymentMethod: string;
-  paymentType: 'Received from Client' | 'Sent to Vendor';
+  paymentType: 'Received from Client' | 'Sent to Vendor' | 'Margin Paid to Agent' | string;
   paidOn: string;
   notes: string | null;
 }
@@ -58,6 +58,7 @@ export interface Accommodation {
   id: number;
   vendorName: string;
   hotelName: string;
+  city?: string | null;
   roomType: string | null;
   checkInDate: string | null;
   checkOutDate: string | null;
@@ -94,6 +95,8 @@ export interface FlightService {
   arrivedAt: string;
   departTime: string | null;
   arrivalTime: string | null;
+  qty?: number;
+  unitPrice?: string;
   price: string;
   currency: string | null;
   otherCurrency?: string | null;
@@ -125,6 +128,8 @@ export interface TransportService {
   departureTime: string | null;
   arrivalTime: string | null;
   flightNo: string | null;
+  qty?: number;
+  unitPrice?: string;
   price: string;
   currency: string | null;
   otherCurrency: string | null;

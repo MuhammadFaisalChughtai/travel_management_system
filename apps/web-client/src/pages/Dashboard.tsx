@@ -31,7 +31,8 @@ import {
   UserCog,
   Shield,
   Search,
-  User
+  User,
+  Tag
 } from 'lucide-react';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -42,6 +43,7 @@ import { TechbarredLogo } from '../components/TechbarredLogo';
 import { VendorsPage } from './VendorsPage';
 import { TeamManagement } from './TeamManagement';
 import { FinancePage } from './FinancePage';
+import { ServiceCatalogPage } from './ServiceCatalogPage';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -72,6 +74,7 @@ const SIDEBAR_ITEMS = [
   { id: 'agents', icon: Users, label: 'Agents' },
   { id: 'vendors', icon: UserCog, label: 'Vendors Registry' },
   { id: 'payments', icon: CreditCard, label: 'Finance & Payments' },
+  { id: 'catalog', icon: Tag, label: 'Service Catalog', adminOnly: true },
   { id: 'team', icon: Shield, label: 'Team & Permissions' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
@@ -83,7 +86,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   // Sidebar navigation tab state
-  const [sidebarTab, setSidebarTab] = useState<'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings'>('overview');
+  const [sidebarTab, setSidebarTab] = useState<'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog'>('overview');
 
   // Overview sub-tab state (Overview Analytics vs Agent Analytics)
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'agents'>('overview');
@@ -208,7 +211,7 @@ export function Dashboard() {
       return;
     }
     fetchBookings();
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, filters]);
 
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,7 +506,7 @@ export function Dashboard() {
           <nav className="space-y-1.5">
             {SIDEBAR_ITEMS.map((item) => {
               // Hide Team & Permissions from Agents
-              if (item.id === 'team' && user?.role === 'AGENT') return null;
+              if ((item.id === 'team' || item.adminOnly) && user?.role === 'AGENT') return null;
 
               const Icon = item.icon;
               return (
@@ -560,10 +563,10 @@ export function Dashboard() {
         {sidebarTab === 'overview' && (
           <>
             {/* Navigation & Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Sales & Operations Intelligence</h1>
-                <p className="text-slate-500 mt-1">Real-time ledger analytics, bookings statistics, and multi-agent performance.</p>
+                <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Sales & Operations Intelligence</h1>
+                <p className="text-slate-500 text-xs mt-0.5">Real-time ledger analytics, bookings statistics, and multi-agent performance.</p>
               </div>
               
               <div className="flex items-center gap-3">
@@ -1241,12 +1244,12 @@ export function Dashboard() {
               </div>
               
               {/* Search Modals */}
-              <BookingRefSearchModal isOpen={activeSearchModal === 'ref'} onClose={() => setActiveSearchModal(null)} currentValue={filters.bookingReference} onApply={(val: any) => { setFilters({...filters, bookingReference: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
-              <CustomerSearchModal isOpen={activeSearchModal === 'customer'} onClose={() => setActiveSearchModal(null)} currentValue={filters.customerName} onApply={(val: any) => { setFilters({...filters, customerName: val, customerPhone: val, customerEmail: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
-              <AgentSearchModal isOpen={activeSearchModal === 'agent'} onClose={() => setActiveSearchModal(null)} agents={dbAgents} currentValue={filters.agentName} onApply={(val: any) => { setFilters({...filters, agentName: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
-              <DateRangeSearchModal title="Departure Date Range" isOpen={activeSearchModal === 'departure'} onClose={() => setActiveSearchModal(null)} currentValue={{start: filters.departureDateStart, end: filters.departureDateEnd}} onApply={(val: any) => { setFilters({...filters, departureDateStart: val.start, departureDateEnd: val.end}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
-              <DateRangeSearchModal title="Creation Date Range" isOpen={activeSearchModal === 'created'} onClose={() => setActiveSearchModal(null)} currentValue={{start: filters.dateStart, end: filters.dateEnd}} onApply={(val: any) => { setFilters({...filters, dateStart: val.start, dateEnd: val.end}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
-              <PaymentStatusSearchModal isOpen={activeSearchModal === 'payment'} onClose={() => setActiveSearchModal(null)} currentValue={filters.paymentStatus} onApply={(val: any) => { setFilters({...filters, paymentStatus: val}); setActiveSearchModal(null); setTimeout(fetchBookings, 0); }} />
+              <BookingRefSearchModal isOpen={activeSearchModal === 'ref'} onClose={() => setActiveSearchModal(null)} currentValue={filters.bookingReference} onApply={(val: any, close: boolean) => { setFilters({...filters, bookingReference: val}); if (close) setActiveSearchModal(null); }} />
+              <CustomerSearchModal isOpen={activeSearchModal === 'customer'} onClose={() => setActiveSearchModal(null)} currentValue={filters.customerName} onApply={(val: any, close: boolean) => { setFilters({...filters, customerName: val, customerPhone: val, customerEmail: val}); if (close) setActiveSearchModal(null); }} />
+              <AgentSearchModal isOpen={activeSearchModal === 'agent'} onClose={() => setActiveSearchModal(null)} agents={dbAgents} currentValue={filters.agentName} onApply={(val: any, close: boolean) => { setFilters({...filters, agentName: val}); if (close) setActiveSearchModal(null); }} />
+              <DateRangeSearchModal title="Departure Date Range" isOpen={activeSearchModal === 'departure'} onClose={() => setActiveSearchModal(null)} currentValue={{start: filters.departureDateStart, end: filters.departureDateEnd}} onApply={(val: any, close: boolean) => { setFilters({...filters, departureDateStart: val.start, departureDateEnd: val.end}); if (close) setActiveSearchModal(null); }} />
+              <DateRangeSearchModal title="Creation Date Range" isOpen={activeSearchModal === 'created'} onClose={() => setActiveSearchModal(null)} currentValue={{start: filters.dateStart, end: filters.dateEnd}} onApply={(val: any, close: boolean) => { setFilters({...filters, dateStart: val.start, dateEnd: val.end}); if (close) setActiveSearchModal(null); }} />
+              <PaymentStatusSearchModal isOpen={activeSearchModal === 'payment'} onClose={() => setActiveSearchModal(null)} currentValue={filters.paymentStatus} onApply={(val: any, close: boolean) => { setFilters({...filters, paymentStatus: val}); if (close) setActiveSearchModal(null); }} />
               
               {/* Main List Section */}
               <div className="flex-1 w-full min-w-0">
@@ -1299,7 +1302,7 @@ export function Dashboard() {
 
                         const totalReceived = clientPayments - refundsToClient;
                         const totalSent = vendorPayments - refundsFromVendor;
-                        const remainingAmount = bookingTotal - totalReceived;
+                        const remainingAmount = Math.max(0, bookingTotal - clientPayments);
                         
                         const netProfit = (totalReceived - totalSent) + totalDiscounts;
 
@@ -1382,6 +1385,10 @@ export function Dashboard() {
         )}
 
         {/* TAB 4: COMPANY SETTINGS */}
+                {sidebarTab === 'catalog' && (
+          <ServiceCatalogPage />
+        )}
+
         {sidebarTab === 'settings' && (
           <div className="space-y-6 max-w-3xl">
             <div>

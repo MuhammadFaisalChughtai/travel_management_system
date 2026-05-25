@@ -11,10 +11,12 @@ interface AddDiscountModalProps {
 }
 
 export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDiscountModalProps) {
-  const [form, setForm] = useState<Partial<Discount>>({
+  const [form, setForm] = useState<Partial<Discount> & { paymentMethod?: string; ccCharges?: string }>({
     vendorCategory: 'Hotel',
     serviceName: '',
     amount: '',
+    paymentMethod: 'Bank Transfer',
+    ccCharges: '',
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
@@ -65,18 +67,22 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
 
             <div className="md:col-span-2">
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Specific Service</label>
-              <select value={form.serviceName || ''} onChange={e => setForm({...form, serviceName: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700">
-                <option value="">Select a specific service (Optional)</option>
-                {availableItems.map(item => {
-                  let val = '';
-                  if (form.vendorCategory === 'Flight') val = `Flight: ${item.airline || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
-                  else if (form.vendorCategory === 'Accommodation') val = `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})`;
-                  else if (form.vendorCategory === 'Transportation') val = `Transport: ${item.vehicleType} (${item.date || 'No Date'})`;
-                  else if (form.vendorCategory === 'Visa') val = `Visa: ${item.country} (${item.type || ''})`;
-                  else val = `Service: ${item.serviceName || 'Unknown'} (£${item.charges || 0})`;
-                  return <option key={item.id} value={val}>{val}</option>;
-                })}
-              </select>
+              {form.vendorCategory === 'Other' ? (
+                <input type="text" value={form.serviceName || ''} onChange={e => setForm({...form, serviceName: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700" placeholder="Type specific service..." />
+              ) : (
+                <select value={form.serviceName || ''} onChange={e => setForm({...form, serviceName: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700">
+                  <option value="">Select a specific service (Optional)</option>
+                  {availableItems.map(item => {
+                    let val = '';
+                    if (form.vendorCategory === 'Flight') val = `Flight: ${item.airline || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
+                    else if (form.vendorCategory === 'Accommodation') val = `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})`;
+                    else if (form.vendorCategory === 'Transportation') val = `Transport: ${item.vehicleType} (${item.date || 'No Date'})`;
+                    else if (form.vendorCategory === 'Visa') val = `Visa: ${item.country} (${item.type || ''})`;
+                    else val = `Service: ${item.serviceName || 'Unknown'} (£${item.charges || 0})`;
+                    return <option key={item.id} value={val}>{val}</option>;
+                  })}
+                </select>
+              )}
               {previousDiscounts > 0 && form.serviceName && (
                 <div className="mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold rounded-lg flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -92,6 +98,27 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
                 <input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
               </div>
             </div>
+
+            <div>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Method</label>
+              <select value={form.paymentMethod as any} onChange={e => setForm({...form, paymentMethod: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700">
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Cash">Cash</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {form.paymentMethod === 'Credit Card' && (
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Credit Card Charges</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                  <input type="number" value={(form as any).ccCharges} onChange={e => setForm({...form, ccCharges: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Date</label>

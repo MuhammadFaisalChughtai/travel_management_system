@@ -3,6 +3,7 @@ import { X, FileText } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { VisaService } from '../../types/booking';
 import { VendorSelect } from '../shared/VendorSelect';
+import { api as axios } from '../../api/axios';
 
 interface AddVisaModalProps {
   isOpen: boolean;
@@ -73,6 +74,35 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData, passenger
 
   if (!isOpen) return null;
 
+  const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [selectedCatalogId, setSelectedCatalogId] = useState<string>('custom');
+
+  useEffect(() => {
+    if (isOpen) {
+      axios.get('/catalog').then(res => {
+        setCatalogItems(res.data.filter((item: any) => item.serviceType === 'VISA'));
+      }).catch(console.error);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (selectedCatalogId !== 'custom') {
+      const item = catalogItems.find(i => i.id.toString() === selectedCatalogId);
+      if (item) {
+        const u = Number(item.unitPrice);
+        setForm(prev => ({
+          ...prev,
+          vendorName: item.metadata?.vendorName || prev.vendorName,
+          unitPrice: u.toString(),
+          price: ((prev.qty || 1) * u).toString(),
+          currency: item.currency || 'GBP',
+          visaType: item.name
+        }));
+      }
+    }
+  }, [selectedCatalogId, catalogItems]);
+
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
@@ -89,6 +119,15 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData, passenger
 
         <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="col-span-1 md:col-span-2 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50 mb-2">
+              <label className="block text-[10px] font-extrabold text-indigo-800 mb-1.5 uppercase tracking-wide">Service Catalog Selection</label>
+              <select value={selectedCatalogId} onChange={e => setSelectedCatalogId(e.target.value)} className="w-full border border-indigo-200 bg-white rounded-lg px-3 py-2 text-sm font-bold text-indigo-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm">
+                <option value="custom">Custom / Not Listed (Manual Entry)</option>
+                {catalogItems.map(item => (
+                  <option key={item.id} value={item.id.toString()}>{item.name} - {item.currency} {item.unitPrice}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Provider</label>
               <VendorSelect category="visa" value={form.vendorName || ''} onChange={val => setForm({...form, vendorName: val})} />
@@ -142,7 +181,19 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData, passenger
               <input type="date" value={form.expiryDate || ''} onChange={e => setForm({...form, expiryDate: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
             </div>
             <div>
-              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Price</label>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Quantity (Passengers)</label>
+              <input type="number" min="1" value={form.qty || 1} onChange={e => {
+                const newQty = parseInt(e.target.value) || 1;
+                const u = parseFloat(String(form.unitPrice || 0)) || 0;
+                setForm({...form, qty: newQty, price: (newQty * u).toString()});
+              }} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Unit Price</label>
+              <input type="number" value={form.unitPrice || ''} onChange={e => setForm({...form, unitPrice: e.target.value, price: (parseFloat(e.target.value || '0') * (form.qty || 1)).toString()})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Total Price</label>
               <input type="number" value={form.price || ''} onChange={e => setForm({...form, price: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
             </div>
             <div>
@@ -176,7 +227,7 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData, passenger
                 {initialData?.isPaidToVendor && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">(Already Paid)</span>}
               </span>
             </label>
-            <p className="text-[10px] text-slate-500 mt-1 ml-6">Check this if you have already transferred the money for this service to the vendor. It will automatically log a transaction.</p>
+            <p className="text-[10px] text-slate-500 mt-1 ml-6">Check this to manually mark as paid if you have already transferred the money to the vendor. (To log a formal transaction, use the Log Transaction button).</p>
           </div>
           <div className="bg-slate-50/50 p-5 border-t border-slate-200 flex justify-end items-center backdrop-blur-md">
             
@@ -184,11 +235,11 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData, passenger
               <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
                             <button onClick={() => {
                 const payload = { ...form } as any;
-                if (payload.price) payload.price = parseFloat(payload.price);
-                if (payload.qty) payload.qty = parseInt(payload.qty, 10);
-                if (payload.conversionRate) payload.conversionRate = parseFloat(payload.conversionRate);
-                if (payload.refundAmount) payload.refundAmount = parseFloat(payload.refundAmount);
-                if (payload.fineAmount) payload.fineAmount = parseFloat(payload.fineAmount);
+                payload.price = payload.price ? parseFloat(payload.price) : undefined;
+                payload.qty = payload.qty ? parseInt(payload.qty, 10) : undefined;
+                payload.conversionRate = payload.conversionRate ? parseFloat(payload.conversionRate) : undefined;
+                payload.refundAmount = payload.refundAmount ? parseFloat(payload.refundAmount) : undefined;
+                payload.fineAmount = payload.fineAmount ? parseFloat(payload.fineAmount) : undefined;
                 onSubmit(payload);
                 onClose();
               }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">

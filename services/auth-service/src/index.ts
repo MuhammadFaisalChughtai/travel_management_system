@@ -194,12 +194,22 @@ app.post('/register', async (req: any, res: Response) => {
       create: { name: 'Default Tenant', status: 'active' }
     });
 
+    let role = await prisma.role.findFirst({
+      where: { name: 'MAIN_COMPANY_ADMIN', tenantId: tenant.id }
+    });
+    if (!role) {
+      role = await prisma.role.create({
+        data: { name: 'MAIN_COMPANY_ADMIN', tenantId: tenant.id }
+      });
+    }
+
     const newUser = await prisma.user.create({
       data: {
         email: parsedData.email,
         name: parsedData.name,
         encryptedPassword: hashedPassword,
-        tenantId: tenant.id
+        tenantId: tenant.id,
+        roleId: role.id
       }
     });
 
@@ -377,6 +387,7 @@ app.get('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
   }
 });
 
+
 app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
   try {
     const parsedData = createTenantSchema.parse(req.body);
@@ -502,8 +513,23 @@ const requireTenantContext = (req: any, res: Response, next: any) => {
   if (!tenantId || tenantId === 'platform') {
     return res.status(400).json({ error: 'Bad Request', message: 'Tenant context required' });
   }
+  req.tenantId = tenantId;
   next();
 };
+
+app.get('/tenants/profile', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const tenant = await (prisma as any).tenant.findUnique({
+      where: { id: tenantId }
+    });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    res.status(200).json({ tenant });
+  } catch (error) {
+    console.error('Fetch Tenant Profile Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // GET /agents — list all agents for current tenant
 app.get('/agents', requireTenantContext, async (req: any, res: Response) => {

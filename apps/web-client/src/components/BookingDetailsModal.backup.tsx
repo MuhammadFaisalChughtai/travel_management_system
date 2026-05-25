@@ -55,6 +55,7 @@ interface Accommodation {
   id: number;
   vendorName: string;
   hotelName: string;
+  city?: string | null;
   roomType: string | null;
   checkInDate: string | null;
   checkOutDate: string | null;

@@ -51,6 +51,7 @@ interface Accommodation {
   id: number;
   vendorName: string;
   hotelName: string;
+  city?: string | null;
   roomType: string | null;
   checkInDate: string | null;
   checkOutDate: string | null;
@@ -980,6 +981,7 @@ export function BookingDetailsPage() {
                         <option>Instalment</option>
                         <option>Full Payment</option>
                         <option>Security Deposit</option>
+                        <option>Margin Paid to Agent</option>
                       </select>
                     </div>
                   </div>

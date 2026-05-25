@@ -25,7 +25,8 @@ import { LogTransactionModal } from './booking-modals/LogTransactionModal';
 import { AddDiscountModal } from './booking-modals/AddDiscountModal';
 import { LogRefundModal } from './booking-modals/LogRefundModal';
 import { DeleteConfirmationModal } from './booking-modals/DeleteConfirmationModal';
-import { InvoiceTemplate } from './invoice/InvoiceTemplate';
+import { InvoiceTemplate } from './documents/InvoiceTemplate';
+import { VoucherTemplate } from './documents/VoucherTemplate';
 import { generateInvoicePDF } from '../utils/pdfGenerator';
 
 interface BookingDetailsModalProps {
@@ -68,6 +69,8 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const [showAddDiscount, setShowAddDiscount] = useState(false);
   const [showLogRefund, setShowLogRefund] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingHotelVoucher, setIsGeneratingHotelVoucher] = useState(false);
+  const [isGeneratingTransportVoucher, setIsGeneratingTransportVoucher] = useState(false);
   const [deleteConfig, setDeleteConfig] = useState<{isOpen: boolean, serviceType: string, id: number} | null>(null);
 
   const handleDeleteService = async (serviceType: string, id: number) => {
@@ -77,12 +80,23 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const confirmDelete = async () => {
     if (!deleteConfig) return;
     try {
-      await api.delete(`/bookings/${bookingId}/services/${deleteConfig.serviceType}/${deleteConfig.id}`);
+      const typeMap: any = {
+        'passenger': 'passengers',
+        'flight': 'flight-services',
+        'accommodation': 'accommodations',
+        'transport': 'transport-services',
+        'visa': 'visa-services',
+        'additional': 'additional-services'
+      };
+      const endpoint = typeMap[deleteConfig.serviceType];
+      if (!endpoint) throw new Error("Invalid service type");
+      
+      await api.delete(`/bookings/${bookingId}/${endpoint}/${deleteConfig.id}`);
       import('react-hot-toast').then(m => m.default.success('Deleted successfully'));
       await fetchDetails();
       onUpdate?.();
     } catch (err: any) {
-      import('react-hot-toast').then(m => m.default.error(err?.response?.data?.error || 'Failed to delete'));
+      import('react-hot-toast').then(m => m.default.error(err?.response?.data?.error || err?.message || 'Failed to delete'));
     } finally {
       setDeleteConfig(null);
     }
@@ -95,6 +109,26 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
       await generateInvoicePDF('invoice-template', `Invoice_${booking.bookingReference}.pdf`);
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleGenerateHotelVoucher = async () => {
+    if (!booking || !booking.accommodations || booking.accommodations.length === 0) return;
+    setIsGeneratingHotelVoucher(true);
+    try {
+      await generateInvoicePDF('hotel-voucher-template', `HotelVoucher_${booking.bookingReference}.pdf`);
+    } finally {
+      setIsGeneratingHotelVoucher(false);
+    }
+  };
+
+  const handleGenerateTransportVoucher = async () => {
+    if (!booking || !booking.transportServices || booking.transportServices.length === 0) return;
+    setIsGeneratingTransportVoucher(true);
+    try {
+      await generateInvoicePDF('transport-voucher-template', `TransportVoucher_${booking.bookingReference}.pdf`);
+    } finally {
+      setIsGeneratingTransportVoucher(false);
     }
   };
 
@@ -119,9 +153,23 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         amount: parseFloat(data.amount),
         paymentMethod: data.paymentMethod,
         paymentType: data.paymentType,
-        paidOn: data.paidOn,
+        paidOn: data.paidOn || data.date,
         notes: data.notes || null
       });
+
+      if (data.paymentType === 'Sent to Vendor' && data.serviceId && data.serviceCategory && data.serviceCategory !== 'Other') {
+        // The service's isPaidToVendor status is now dynamically calculated by the backend 
+        // based on the presence of this transaction. No need to patch the service directly.
+      }
+      if (data.paymentMethod === 'Credit Card' && data.ccCharges && parseFloat(data.ccCharges) > 0) {
+        await api.post(`/bookings/${bookingId}/payments`, {
+          amount: parseFloat(data.ccCharges),
+          paymentMethod: 'System Generated',
+          paymentType: 'Credit Card Charges',
+          paidOn: data.paidOn || data.date,
+          notes: `Credit card charges for ${data.paymentType}${data.serviceName ? ` (${data.serviceName})` : ''}`
+        });
+      }
       fetchDetails();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to save transaction.';
@@ -140,6 +188,15 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         notes: data.notes || null,
         date: data.date
       });
+      if (data.paymentMethod === 'Credit Card' && data.ccCharges && parseFloat(data.ccCharges) > 0) {
+        await api.post(`/bookings/${bookingId}/payments`, {
+          amount: parseFloat(data.ccCharges),
+          paymentMethod: 'System Generated',
+          paymentType: 'Credit Card Charges',
+          paidOn: data.date,
+          notes: `Credit card charges for discount applied${data.serviceName ? ` to ${data.serviceName}` : ''}`
+        });
+      }
       fetchDetails();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to save discount.';
@@ -159,6 +216,15 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         notes: data.notes || null,
         date: data.date
       });
+      if (data.paymentMethod === 'Credit Card' && data.ccCharges && parseFloat(data.ccCharges) > 0) {
+        await api.post(`/bookings/${bookingId}/payments`, {
+          amount: parseFloat(data.ccCharges),
+          paymentMethod: 'System Generated',
+          paymentType: 'Credit Card Charges',
+          paidOn: data.date,
+          notes: `Credit card charges for ${data.direction}${data.serviceName ? ` on ${data.serviceName}` : ''}`
+        });
+      }
       fetchDetails();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to log refund.';
@@ -300,6 +366,26 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
             <p className="text-indigo-200 text-xs mt-1 font-medium">Complete overview and administration</p>
           </div>
           <div className="relative z-10 flex items-center gap-4">
+            {booking && booking.accommodations && booking.accommodations.length > 0 && (
+              <button 
+                onClick={handleGenerateHotelVoucher} 
+                disabled={isGeneratingHotelVoucher}
+                className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
+              >
+                {isGeneratingHotelVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                {isGeneratingHotelVoucher ? 'Generating...' : 'Hotel Voucher'}
+              </button>
+            )}
+            {booking && booking.transportServices && booking.transportServices.length > 0 && (
+              <button 
+                onClick={handleGenerateTransportVoucher} 
+                disabled={isGeneratingTransportVoucher}
+                className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
+              >
+                {isGeneratingTransportVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                {isGeneratingTransportVoucher ? 'Generating...' : 'Transport Voucher'}
+              </button>
+            )}
             {booking && (
               <button 
                 onClick={handleGenerateInvoice} 
@@ -383,7 +469,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                   </button>
                 }
               >
-                <FlightServicesSection flights={booking.flightServices} onEdit={setEditingFlight} onAdd={() => setShowAddFlight(true)} />
+                <FlightServicesSection flights={booking.flightServices} onEdit={setEditingFlight} onAdd={() => setShowAddFlight(true)} onDelete={(s: any) => handleDeleteService('flight', s.id)} />
               </AccordionSection>
 
               <AccordionSection 
@@ -397,7 +483,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                   </button>
                 }
               >
-                <StaysSection stays={booking.accommodations} onAdd={() => setShowAddHotel(true)} onDelete={(s: any) => handleDeleteService('accommodation', s.id)} />
+                <StaysSection stays={booking.accommodations} onAdd={() => setShowAddHotel(true)} onEdit={(s: any) => setEditingAccommodation(s)} onDelete={(s: any) => handleDeleteService('accommodation', s.id)} />
               </AccordionSection>
 
               <AccordionSection 
@@ -411,7 +497,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                   </button>
                 }
               >
-                <TransportServicesSection transports={booking.transportServices} onEdit={setEditingTransport} onAdd={() => setShowAddTransport(true)} />
+                <TransportServicesSection transports={booking.transportServices} onEdit={setEditingTransport} onAdd={() => setShowAddTransport(true)} onDelete={(s: any) => handleDeleteService('transport', s.id)} />
               </AccordionSection>
 
               <AccordionSection 
@@ -425,7 +511,7 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
                   </button>
                 }
               >
-                <VisaServicesSection visas={booking.visaServices} onEdit={setEditingVisa} onAdd={() => setShowAddVisa(true)} />
+                <VisaServicesSection visas={booking.visaServices} onEdit={setEditingVisa} onAdd={() => setShowAddVisa(true)} onDelete={(s: any) => handleDeleteService('visa', s.id)} />
               </AccordionSection>
 
               <AccordionSection 
@@ -531,8 +617,24 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         )}
       </AnimatePresence>
 
-      {/* Hidden Invoice Template for PDF Generation */}
-      {booking && <InvoiceTemplate booking={booking!} />}
+      {/* Hidden Templates for PDF Generation */}
+      {booking && (
+        <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }}>
+          <div id="invoice-template">
+            <InvoiceTemplate booking={booking} companyInfo={{ name: 'TravelBooker Workspace', location: 'London, UK', phone: '+44 20 7946 0958', email: 'operations@travelbooker.co.uk' }} />
+          </div>
+          {booking.accommodations && booking.accommodations.length > 0 && (
+            <div id="hotel-voucher-template">
+              <VoucherTemplate booking={booking} type="hotel" companyInfo={{ name: 'TravelBooker Workspace', phone: '+44 20 7946 0958', email: 'operations@travelbooker.co.uk' }} />
+            </div>
+          )}
+          {booking.transportServices && booking.transportServices.length > 0 && (
+            <div id="transport-voucher-template">
+              <VoucherTemplate booking={booking} type="transport" companyInfo={{ name: 'TravelBooker Workspace', phone: '+44 20 7946 0958', email: 'operations@travelbooker.co.uk' }} />
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );

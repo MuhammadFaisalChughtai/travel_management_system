@@ -51,8 +51,8 @@ export const BookingRefSearchModal = ({ isOpen, onClose, onApply, currentValue }
   const [val, setVal] = useState(currentValue || '');
   return (
     <BaseModal isOpen={isOpen} onClose={onClose}  title="Search by Reference" icon={<Hash className="w-4 h-4" />}>
-      <input type="text" value={val} onChange={e => setVal(e.target.value)} placeholder="e.g. INV-12345" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" autoFocus />
-      <button onClick={() => onApply(val)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter</button>
+      <input type="text" value={val} onChange={e => { setVal(e.target.value); onApply(e.target.value, false); }} placeholder="e.g. INV-12345" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" autoFocus />
+      <button onClick={() => onApply(val, true)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter & Close</button>
     </BaseModal>
   );
 };
@@ -61,8 +61,8 @@ export const CustomerSearchModal = ({ isOpen, onClose, onApply, currentValue }: 
   const [val, setVal] = useState(currentValue || '');
   return (
     <BaseModal isOpen={isOpen} onClose={onClose}  title="Search Customer" icon={<User className="w-4 h-4" />}>
-      <input type="text" value={val} onChange={e => setVal(e.target.value)} placeholder="Name, Phone, or Email" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" autoFocus />
-      <button onClick={() => onApply(val)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter</button>
+      <input type="text" value={val} onChange={e => { setVal(e.target.value); onApply(e.target.value, false); }} placeholder="Name, Phone, or Email" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" autoFocus />
+      <button onClick={() => onApply(val, true)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter & Close</button>
     </BaseModal>
   );
 };
@@ -71,13 +71,13 @@ export const AgentSearchModal = ({ isOpen, onClose, onApply, currentValue, agent
   const [val, setVal] = useState(currentValue || 'Any');
   return (
     <BaseModal isOpen={isOpen} onClose={onClose}  title="Filter by Agent" icon={<Users className="w-4 h-4" />}>
-      <select value={val} onChange={e => setVal(e.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50">
+      <select value={val} onChange={e => { setVal(e.target.value); onApply(e.target.value, false); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50">
         <option value="Any">All Agents</option>
         {agents.map((a: any) => (
           <option key={a.id} value={a.name}>{a.name}</option>
         ))}
       </select>
-      <button onClick={() => onApply(val)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter</button>
+      <button onClick={() => onApply(val, true)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter & Close</button>
     </BaseModal>
   );
 };
@@ -100,14 +100,14 @@ export const DateRangeSearchModal = ({ isOpen, onClose, onApply, currentValue, t
       <div className="flex flex-col gap-3">
         <div>
           <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">From</label>
-          <input type="date" value={start} onChange={e => setStart(e.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" />
+          <input type="date" value={start} onChange={e => { setStart(e.target.value); onApply({start: e.target.value, end}, false); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" />
         </div>
         <div>
           <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">To</label>
-          <input type="date" value={end} onChange={e => setEnd(e.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" />
+          <input type="date" value={end} onChange={e => { setEnd(e.target.value); onApply({start, end: e.target.value}, false); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50" />
         </div>
       </div>
-      <button onClick={() => onApply({start, end})} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter</button>
+      <button onClick={() => onApply({start, end}, true)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter & Close</button>
     </BaseModal>
   );
 };
@@ -116,13 +116,13 @@ export const PaymentStatusSearchModal = ({ isOpen, onClose, onApply, currentValu
   const [val, setVal] = useState(currentValue || 'Any');
   return (
     <BaseModal isOpen={isOpen} onClose={onClose}  title="Payment Status" icon={<CreditCard className="w-4 h-4" />}>
-      <select value={val} onChange={e => setVal(e.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50">
+      <select value={val} onChange={e => { setVal(e.target.value); onApply(e.target.value, false); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-primary-500 font-semibold text-slate-700 bg-slate-50">
         <option value="Any">All Statuses</option>
         <option value="paid">Paid</option>
         <option value="partially_paid">Partially Paid</option>
         <option value="unpaid">Unpaid</option>
       </select>
-      <button onClick={() => onApply(val)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter</button>
+      <button onClick={() => onApply(val, true)} className="w-full mt-4 bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 rounded-xl transition-colors text-[12px]">Apply Filter & Close</button>
     </BaseModal>
   );
 };

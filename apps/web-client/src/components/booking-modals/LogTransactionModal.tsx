@@ -7,16 +7,18 @@ interface LogTransactionModalProps {
   booking?: BookingDetail;
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (transaction: Partial<Payment>) => void;
+  onSubmit: (transaction: Partial<Payment> & { serviceCategory?: string; serviceId?: string; ccCharges?: string; serviceName?: string }) => void;
 }
 
 export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogTransactionModalProps) {
-  const [form, setForm] = useState<Partial<Payment>>({
+  const [form, setForm] = useState<Partial<Payment> & { ccCharges?: string; serviceName?: string }>({
     paymentType: 'Received from Client',
     amount: '',
     paymentMethod: 'Bank Transfer',
     paidOn: new Date().toISOString().split('T')[0],
-    notes: ''
+    notes: '',
+    ccCharges: '',
+    serviceName: ''
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
@@ -42,7 +44,7 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
     if (selectedCategory === 'Flight') currentServiceName = `Flight ${selectedItem.flightNo} (${selectedItem.pnr})`;
     else if (selectedCategory === 'Accommodation') currentServiceName = `Hotel ${selectedItem.hotelName}`;
     else if (selectedCategory === 'Transportation') currentServiceName = `Transport ${selectedItem.vehicleType}`;
-    else if (selectedCategory === 'Visa') currentServiceName = `Visa ${selectedItem.country}`;
+    else if (selectedCategory === 'Visa') currentServiceName = `Visa ${selectedItem.visaType}`;
     else currentServiceName = `Service ${selectedItem.serviceName}`;
   }
 
@@ -85,7 +87,13 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
                   {selectedCategory && (
                     <div>
                        <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Specific Service</label>
-                       <select value={selectedServiceId} onChange={e => { 
+                       {selectedCategory === 'Other' ? (
+                <input type="text" value={form.serviceName || ''} onChange={e => {
+                  const serviceName = e.target.value;
+                  setForm(prev => ({ ...prev, serviceName, notes: `Manual payment for ${serviceName}` }));
+                }} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none font-semibold text-slate-700" placeholder="Type specific service..." />
+              ) : (
+                <select value={selectedServiceId} onChange={e => { 
                          const id = e.target.value;
                          setSelectedServiceId(id); 
                          const it = availableItems.find(i => i.id == id);
@@ -95,23 +103,29 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
                            if (selectedCategory === 'Flight') serviceName = `Flight: ${it.airline || 'Unknown'} - ${it.flightNo || 'No Flight No'} (${it.pnr})`;
                            else if (selectedCategory === 'Accommodation') serviceName = `Hotel ${it.hotelName}`;
                            else if (selectedCategory === 'Transportation') serviceName = `Transport ${it.vehicleType}`;
-                           else if (selectedCategory === 'Visa') serviceName = `Visa ${it.country}`;
+                           else if (selectedCategory === 'Visa') serviceName = `Visa ${it.visaType}`;
                            else serviceName = `Service ${it.serviceName}`;
                            
-                           setForm(prev => ({ ...prev, amount: cost, notes: `Manual vendor payment for ${serviceName}` }));
+                           setForm(prev => ({ ...prev, amount: cost, notes: `Manual vendor payment for ${serviceName}`, serviceName }));
                          }
-                       }} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none font-semibold">
+                       }} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none font-semibold text-slate-700">
                          <option value="">-- Select Service --</option>
-                         {availableItems.map(item => (
-                           <option key={item.id} value={item.id}>
-                             {selectedCategory === 'Flight' ? `Flight: ${item.airline || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})` :
-                              selectedCategory === 'Accommodation' ? `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})` :
-                              selectedCategory === 'Transportation' ? `Transport: ${item.vehicleType} (${item.date || 'No Date'})` :
-                              selectedCategory === 'Visa' ? `Visa: ${item.country} (${item.type || ''})` :
-                              `Service: ${item.serviceName || 'Unknown'} (£${item.charges || 0})`}
-                           </option>
-                         ))}
+                          {availableItems.map(item => {
+                            let label = '';
+                            if (selectedCategory === 'Flight') label = `Flight: ${item.airline || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
+                            else if (selectedCategory === 'Accommodation') label = `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})`;
+                            else if (selectedCategory === 'Transportation') label = `Transport: ${item.vehicleType} (${item.date || 'No Date'})`;
+                            else if (selectedCategory === 'Visa') label = `Visa: ${item.visaType} (${item.passportNumber || ''})`;
+                            else label = `Service: ${item.serviceName || 'Unknown'} (£${item.charges || 0})`;
+                            
+                            return (
+                              <option key={item.id} value={item.id}>
+                                {label.length > 55 ? label.substring(0, 55) + '...' : label}
+                              </option>
+                            );
+                          })}
                        </select>
+              )}
                     </div>
                   )}
                 </div>
@@ -127,10 +141,11 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
 
             <div className="md:col-span-2">
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Transaction Type</label>
-              <div className="grid grid-cols-2 gap-2">
-                {['Received from Client', 'Sent to Vendor'].map(type => (
+              <div className="grid grid-cols-3 gap-2">
+                {['Received from Client', 'Sent to Vendor', 'Margin Paid to Agent'].map(type => (
                   <button 
                     key={type}
+                    type="button"
                     onClick={() => setForm({...form, paymentType: type as any})}
                     className={`py-2 rounded-lg text-[11px] font-bold border transition-all ${form.paymentType === type ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20' : 'bg-white/50 border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                   >
@@ -164,6 +179,16 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
               </select>
             </div>
 
+            {form.paymentMethod === 'Credit Card' && (
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Credit Card Charges</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                  <input type="number" value={form.ccCharges} onChange={e => setForm({...form, ccCharges: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
+                </div>
+              </div>
+            )}
+
             <div className="md:col-span-2">
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Notes / Reference</label>
               <textarea value={form.notes || ''} onChange={e => setForm({...form, notes: e.target.value})} className="w-full h-20 border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold text-slate-700 resize-none" placeholder="Add transaction reference or notes here..." />
@@ -173,7 +198,7 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
 
         <div className="bg-slate-50/50 p-5 border-t border-slate-200 flex justify-end gap-3 backdrop-blur-md">
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
-          <button onClick={() => { onSubmit(form); onClose(); }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-emerald-600/30 transition-all uppercase tracking-wide active:scale-95">
+          <button onClick={() => { onSubmit({ ...form, serviceCategory: selectedCategory, serviceId: selectedServiceId }); onClose(); }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-emerald-600/30 transition-all uppercase tracking-wide active:scale-95">
             Log Transaction
           </button>
         </div>

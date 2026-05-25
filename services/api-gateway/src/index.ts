@@ -63,9 +63,8 @@ const authenticateAndPropagate = async (req: Request, res: Response, next: NextF
       if (decoded.isPlatformLevel) {
         // Platform Admin (Super Admin) has global access
         req.headers['x-is-platform-admin'] = 'true';
-        // For Super Admin, we might pass an X-Tenant-Id header if they are overriding context
-        // to manage a specific tenant, otherwise we leave it out or default to platform
-        req.headers['x-tenant-id'] = 'platform';
+        // Default Super Admin to Tenant 1 if no specific tenant context is provided by the frontend
+        req.headers['x-tenant-id'] = req.headers['x-tenant-id'] || '1';
       } else {
         req.headers['x-is-platform-admin'] = 'false';
         req.headers['x-tenant-id'] = String(decoded.tenantId);
@@ -90,6 +89,8 @@ const routes = [
   { path: '/api/hotels', target: process.env.HOTEL_SERVICE_URL || 'http://localhost:4003' },
   { path: '/api/flights', target: process.env.FLIGHT_SERVICE_URL || 'http://localhost:4004' },
   { path: '/api/bookings', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
+  { path: '/api/catalog', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
+  { path: '/api/ledger', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
   { path: '/api/agents', target: AUTH_SERVICE_URL },
   { path: '/api/vendors', target: AUTH_SERVICE_URL },
 ];
@@ -99,7 +100,7 @@ routes.forEach(route => {
     target: route.target,
     changeOrigin: true,
     pathRewrite: {
-      [`^${route.path}`]: route.path === '/api/agents' ? '/agents' : route.path === '/api/vendors' ? '/vendors' : '',
+      [`^${route.path}`]: route.path === '/api/agents' ? '/agents' : route.path === '/api/vendors' ? '/vendors' : route.path === '/api/catalog' ? '/catalog' : route.path === '/api/ledger' ? '/ledger' : '',
     },
     onProxyReq: (proxyReq, req, res) => {
       // Forward the injected SaaS headers downstream explicitly

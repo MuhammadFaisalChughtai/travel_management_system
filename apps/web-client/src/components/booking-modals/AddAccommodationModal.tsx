@@ -3,6 +3,7 @@ import { X, Hotel } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Accommodation } from '../../types/booking';
 import { VendorSelect } from '../shared/VendorSelect';
+import { api as axios } from '../../api/axios';
 
 interface AddAccommodationModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
   const [form, setForm] = useState<Partial<Accommodation>>({
     vendorName: '',
     hotelName: '',
+    city: '',
     roomType: 'Double',
     mealType: 'Room Only',
     checkInDate: '',
@@ -38,9 +40,20 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
         // Map date strings to YYYY-MM-DD for date inputs if necessary
         const mappedData = { ...initialData };
         // Format dates correctly for inputs
-        ['date', 'issueDate', 'checkIn', 'checkOut', 'dob', 'expiryDate', 'departureDate'].forEach(field => {
+        ['checkInDate', 'checkOutDate'].forEach(field => {
           if ((mappedData as any)[field]) {
-            try { (mappedData as any)[field] = new Date((mappedData as any)[field]).toISOString().split('T')[0]; } catch(e) {}
+            try { 
+              const d = new Date((mappedData as any)[field]);
+              // Format to YYYY-MM-DDTHH:mm
+              (mappedData as any)[field] = d.toISOString().slice(0, 16);
+            } catch(e) {}
+          }
+        });
+        ['issueDate', 'lastCancellationDate'].forEach(field => {
+          if ((mappedData as any)[field]) {
+            try { 
+              (mappedData as any)[field] = new Date((mappedData as any)[field]).toISOString().split('T')[0]; 
+            } catch(e) {}
           }
         });
         setForm(mappedData);
@@ -55,6 +68,90 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
   }, [isOpen, initialData]);
 
   if (!isOpen) return null;
+
+  const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [selectedCatalogId, setSelectedCatalogId] = useState<string>('custom');
+  
+  const selectedCatalogItem = catalogItems.find(i => i.id.toString() === selectedCatalogId);
+  const [selectedCategory, setSelectedCategory] = useState(''); // Will store stringified index
+  const [selectedOccupancy, setSelectedOccupancy] = useState('dbl');
+  const [addIftar, setAddIftar] = useState(false);
+  const [addSehor, setAddSehor] = useState(false);
+
+  // Effect 1: Auto-fill dates when category changes
+  useEffect(() => {
+    if (selectedCatalogItem?.metadata?.hotelRooms && selectedCategory) {
+      const room = selectedCatalogItem.metadata.hotelRooms[parseInt(selectedCategory)];
+      if (room) {
+        setForm(prev => {
+           let newCheckIn = prev.checkInDate;
+           let newCheckOut = prev.checkOutDate;
+           
+           if (room.fromDate) {
+               newCheckIn = `${room.fromDate}T14:00`;
+           }
+           if (room.toDate) {
+               newCheckOut = `${room.toDate}T12:00`;
+           }
+           
+           return {
+             ...prev,
+             checkInDate: newCheckIn,
+             checkOutDate: newCheckOut
+           };
+        });
+      }
+    }
+  }, [selectedCategory, selectedCatalogItem]);
+
+  // Effect 2: Recalculate price when dependencies change
+  useEffect(() => {
+    if (selectedCatalogItem?.metadata?.hotelRooms && selectedCategory) {
+      const room = selectedCatalogItem.metadata.hotelRooms[parseInt(selectedCategory)];
+      if (room) {
+        let basePrice = Number(room[selectedOccupancy]) || 0;
+        if (addIftar) basePrice += Number(room.iftar) || 0;
+        if (addSehor) basePrice += Number(room.sehor) || 0;
+        if (room.meals && room.meals !== 'Room Only' && room.mealPrice) {
+          basePrice += Number(room.mealPrice) || 0;
+        }
+        
+        setForm(prev => {
+           const total = basePrice * (prev.qty || 1);
+           const mealSuffix = (room.meals && room.meals !== 'Room Only') ? ` + ${room.meals}` : '';
+           
+           return {
+             ...prev,
+             price: total.toString(),
+             roomType: `${room.roomName} (${selectedOccupancy.toUpperCase()})${mealSuffix}${addIftar ? ' + Iftar' : ''}${addSehor ? ' + Sehor' : ''}`, // selectedCategory is index
+             mealType: room.meals
+           };
+        });
+      }
+    }
+  }, [selectedCategory, selectedOccupancy, addIftar, addSehor, form.qty, form.checkInDate, form.checkOutDate, selectedCatalogItem]);
+
+  useEffect(() => {
+    if (isOpen) {
+      axios.get('/catalog').then(res => {
+        setCatalogItems(res.data.filter((item: any) => item.serviceType === 'HOTEL'));
+      }).catch(console.error);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (selectedCatalogId !== 'custom') {
+      const item = catalogItems.find(i => i.id.toString() === selectedCatalogId);
+      if (item) {
+        setForm(prev => ({
+          ...prev,
+          vendorName: item.metadata?.vendorName || prev.vendorName,
+          price: ((prev.qty || 1) * Number(item.unitPrice)).toString(),
+          currency: item.currency || 'GBP'
+        }));
+      }
+    }
+  }, [selectedCatalogId, catalogItems]);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -71,6 +168,56 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
+          <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50 mb-2">
+              <label className="block text-[10px] font-extrabold text-indigo-800 mb-1.5 uppercase tracking-wide">Service Catalog Selection</label>
+              <select value={selectedCatalogId} onChange={e => setSelectedCatalogId(e.target.value)} className="w-full border border-indigo-200 bg-white rounded-lg px-3 py-2 text-sm font-bold text-indigo-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm">
+                <option value="custom">Custom / Not Listed (Manual Entry)</option>
+                {catalogItems.map((item, index) => (
+                  <option key={item.id || `item-${index}`} value={item.id.toString()}>{item.name}{item.metadata?.hotelRooms ? '' : ` - ${item.currency} ${item.unitPrice}`}</option>
+                ))}
+              </select>
+            </div>
+            
+            {selectedCatalogItem?.metadata?.hotelRooms && (
+              <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50 mb-2">
+                <h4 className="text-[11px] font-extrabold text-indigo-900 tracking-wide uppercase border-b border-indigo-100 pb-1 mb-3">Room Selection</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Category</label>
+                    <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-[11px] font-semibold text-slate-700 outline-none">
+                      <option value="">Select...</option>
+                      {selectedCatalogItem.metadata.hotelRooms.map((r: any, i: number) => (
+                        <option key={i} value={i.toString()}>
+                          {r.roomName} {r.fromDate || r.toDate ? `(${r.fromDate || '...'} to ${r.toDate || '...'})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Occupancy</label>
+                    <select value={selectedOccupancy} onChange={e => setSelectedOccupancy(e.target.value)} className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-[11px] font-semibold text-slate-700 outline-none">
+                      <option value="dbl">Double (DBL)</option>
+                      <option value="trp">Triple (TRP)</option>
+                      <option value="quad">Quad (QUAD)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end gap-4 pb-2">
+                    {selectedCategory && Number(selectedCatalogItem?.metadata?.hotelRooms?.[parseInt(selectedCategory)]?.iftar) > 0 && (
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" checked={addIftar} onChange={e => setAddIftar(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
+                        <span className="text-[11px] font-bold text-slate-700">Add Iftar</span>
+                      </label>
+                    )}
+                    {selectedCategory && Number(selectedCatalogItem?.metadata?.hotelRooms?.[parseInt(selectedCategory)]?.sehor) > 0 && (
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" checked={addSehor} onChange={e => setAddSehor(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
+                        <span className="text-[11px] font-bold text-slate-700">Add Sehor</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           
           <div className="space-y-4">
             <h4 className="text-[11px] font-extrabold text-indigo-900 tracking-wide uppercase border-b border-indigo-100 pb-1">Core Details</h4>
@@ -83,9 +230,13 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Vendor / Provider</label>
                 <VendorSelect category="accommodation" value={form.vendorName || ''} onChange={val => setForm({...form, vendorName: val})} />
               </div>
-              <div className="col-span-2">
+              <div>
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Hotel Address</label>
                 <input type="text" value={form.hotelAddress || ''} onChange={e => setForm({...form, hotelAddress: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">City</label>
+                <input type="text" value={form.city || ''} onChange={e => setForm({...form, city: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
               </div>
             </div>
           </div>
@@ -116,6 +267,10 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Last Cancellation Date</label>
                 <input type="date" value={form.lastCancellationDate || ''} onChange={e => setForm({...form, lastCancellationDate: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Booking Date</label>
+                <input type="date" value={form.issueDate || ''} onChange={e => setForm({...form, issueDate: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
               </div>
             </div>
           </div>
@@ -167,19 +322,19 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
                 {initialData?.isPaidToVendor && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">(Already Paid)</span>}
               </span>
             </label>
-            <p className="text-[10px] text-slate-500 mt-1 ml-6">Check this if you have already transferred the money for this service to the vendor. It will automatically log a transaction.</p>
+            <p className="text-[10px] text-slate-500 mt-1 ml-6">Check this to manually mark as paid if you have already transferred the money to the vendor. (To log a formal transaction, use the Log Transaction button).</p>
           </div>
           <div className="bg-slate-50/50 p-5 border-t border-slate-200 flex justify-end items-center backdrop-blur-md">
             
             <div className="flex gap-3">
               <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
-                            <button onClick={() => {
+              <button onClick={() => {
                 const payload = { ...form } as any;
-                if (payload.price) payload.price = parseFloat(payload.price);
-                if (payload.qty) payload.qty = parseInt(payload.qty, 10);
-                if (payload.conversionRate) payload.conversionRate = parseFloat(payload.conversionRate);
-                if (payload.refundAmount) payload.refundAmount = parseFloat(payload.refundAmount);
-                if (payload.fineAmount) payload.fineAmount = parseFloat(payload.fineAmount);
+                payload.price = payload.price ? parseFloat(payload.price) : undefined;
+                payload.qty = payload.qty ? parseInt(payload.qty, 10) : undefined;
+                payload.conversionRate = payload.conversionRate ? parseFloat(payload.conversionRate) : undefined;
+                payload.refundAmount = payload.refundAmount ? parseFloat(payload.refundAmount) : undefined;
+                payload.fineAmount = payload.fineAmount ? parseFloat(payload.fineAmount) : undefined;
                 onSubmit(payload);
                 onClose();
               }} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95">

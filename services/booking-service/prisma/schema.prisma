@@ -9,6 +9,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ServiceType {
+  VISA
+  TRANSPORT
+  HOTEL
+  FLIGHT
+  OTHER
+}
+
+model ServiceCatalog {
+  id          Int         @id @default(autoincrement())
+  tenantId    Int
+  serviceType ServiceType
+  name        String      @db.VarChar(255)
+  unitPrice   Decimal     @db.Decimal(10, 2)
+  currency    String?     @db.VarChar(10)
+  metadata    Json?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
 model Booking {
   id                  Int       @id @default(autoincrement())
   tenantId            Int
@@ -108,6 +129,7 @@ model AccommodationService {
   vendorId                 Int?
   vendorName               String    @db.VarChar(255)
   hotelName                String    @db.VarChar(255)
+  city                     String?   @db.VarChar(255)
   roomType                 String?   @db.VarChar(100)
   checkInDate              DateTime? @db.Date
   checkOutDate             DateTime? @db.Date
@@ -260,4 +282,56 @@ model AdditionalService {
   updatedAt     DateTime @updatedAt
 
   booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+// FINANCE AND LEDGER SYSTEM
+
+model LedgerAccount {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  accountType String   @db.VarChar(50) // "VENDOR_PAYABLE", "CUSTOMER_RECEIVABLE", "BANK", "REVENUE"
+  entityId    Int?     // e.g., Vendor ID or Agent ID
+  entityName  String?  @db.VarChar(255)
+  balance     Decimal  @default(0.00) @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  transactions LedgerEntry[]
+}
+
+model LedgerTransaction {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  transactionDate DateTime @db.Date
+  referenceNumber String?  @db.VarChar(100) // PNR, Ticket Number, Invoice Number
+  description     String   @db.Text
+  type            String   @db.VarChar(50) // "PAYMENT", "INVOICE", "REFUND", "CREDIT"
+  createdAt       DateTime @default(now())
+  
+  entries         LedgerEntry[]
+  allocations     BookingAllocation[]
+}
+
+model LedgerEntry {
+  id              Int      @id @default(autoincrement())
+  transactionId   Int
+  accountId       Int
+  debitAmount     Decimal  @default(0.00) @db.Decimal(12, 2)
+  creditAmount    Decimal  @default(0.00) @db.Decimal(12, 2)
+  
+  transaction     LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account         LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
+
+model BookingAllocation {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  transactionId   Int
+  bookingId       Int
+  serviceType     String   @db.VarChar(50) // "FLIGHT", "HOTEL", etc.
+  serviceId       Int      // ID of the specific service record
+  allocatedAmount Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+
+  transaction     LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 }

@@ -230,7 +230,16 @@ app.get('/my-bookings', requireGatewayHeaders, async (req: CustomRequest, res: R
         payments: true,
         vendorPayments: true,
         refunds: true,
-        discounts: true
+        discounts: true,
+        _count: {
+          select: {
+            flightServices: true,
+            accommodations: true,
+            transportServices: true,
+            visaServices: true,
+            additionalServices: true
+          }
+        }
       },
       orderBy: { createdAt: 'desc' }
     });

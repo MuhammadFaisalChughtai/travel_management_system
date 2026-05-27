@@ -49,7 +49,7 @@ export function Register() {
           </div>
           <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Create an account</h2>
           <p className="mt-2 text-sm text-slate-500">
-            Start your journey with Wanderlust today
+            Start your journey with Travel Booking Management System today
           </p>
         </div>
 

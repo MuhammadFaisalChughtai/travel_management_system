@@ -25,8 +25,8 @@ export function Layout() {
                 <div className="bg-primary-600 p-2 rounded-lg group-hover:bg-primary-500 transition-colors">
                   <Navigation2 className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-900 to-primary-600">
-                  Wanderlust
+                <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-900 to-primary-600 truncate">
+                  Travel Booking Management System
                 </span>
               </Link>
               {!isDashboard && (
@@ -84,7 +84,7 @@ export function Layout() {
       {!isDashboard && (
         <footer className="bg-white border-t py-12 mt-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center justify-center gap-6">
-            <p className="text-slate-500 text-sm">&copy; 2026 Wanderlust Travel Platform. All rights reserved.</p>
+            <p className="text-slate-500 text-sm">&copy; 2026 Travel Booking Management System. All rights reserved.</p>
             <TechbarredLogo />
           </div>
         </footer>

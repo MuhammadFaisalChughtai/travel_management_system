@@ -149,7 +149,7 @@ export function ServiceCatalogPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
+    <div className="flex-1 overflow-y-auto bg-slate-50">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex justify-between items-end mb-6">
           <div>

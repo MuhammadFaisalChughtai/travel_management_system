@@ -47,23 +47,53 @@ export function VendorSelect({ value, onChange, className, placeholder = 'Select
     fetchVendors();
   }, [category]);
 
+  const [isOther, setIsOther] = useState(false);
+
+  useEffect(() => {
+    // If we have a value that is not in the list (after loading is done), it's a custom value
+    if (!loading && value && !vendors.find(v => v.name === value)) {
+      setIsOther(true);
+    }
+  }, [loading, value, vendors]);
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === '__OTHER__') {
+      setIsOther(true);
+      onChange('');
+    } else {
+      setIsOther(false);
+      onChange(val);
+    }
+  };
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={className || "w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700"}
-      disabled={loading}
-    >
-      <option value="" disabled>{loading ? 'Loading vendors...' : placeholder}</option>
-      {vendors.map((v) => (
-        <option key={v.id} value={v.name}>
-          {v.name}
-        </option>
-      ))}
-      {/* If a value is selected but not in the list (e.g., historical data), we still want to show it */}
-      {value && !vendors.find(v => v.name === value) && !loading && (
-        <option value={value}>{value} (Legacy/Custom)</option>
+    <div className="flex flex-col gap-2">
+      <select
+        value={isOther ? '__OTHER__' : value}
+        onChange={handleSelectChange}
+        className={className || "w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700"}
+        disabled={loading}
+      >
+        <option value="" disabled>{loading ? 'Loading vendors...' : placeholder}</option>
+        {vendors.map((v) => (
+          <option key={v.id} value={v.name}>
+            {v.name}
+          </option>
+        ))}
+        <option value="__OTHER__">Other (Manual Entry)</option>
+      </select>
+      
+      {isOther && (
+        <input 
+          type="text" 
+          value={value} 
+          onChange={(e) => onChange(e.target.value)} 
+          placeholder="Type vendor name..." 
+          className={className || "w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700"}
+          autoFocus
+        />
       )}
-    </select>
+    </div>
   );
 }

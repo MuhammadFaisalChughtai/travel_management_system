@@ -28,22 +28,51 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
     currency: 'GBP',
     issueDate: '',
     ticketNumber: '',
-    baggage: '',
-    carryOnBaggage: '',
-    checkedBaggage: '',
+    baggage: '23 Kg',
+    carryOnBaggage: '7 Kg',
+    checkedBaggage: '23 Kg',
     flightClass: 'Economy'
   });
   
   const [showPnrModal, setShowPnrModal] = useState(false);
 
   const handlePnrData = (extracted: any) => {
+    let formattedDate = prev => prev.date;
+    if (extracted.date) {
+      // Convert DDMMM (e.g. 26JUL) to YYYY-MM-DD
+      const monthMap: Record<string, number> = {
+        JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+        JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11
+      };
+      const match = extracted.date.match(/(\d{2})([A-Z]{3})/i);
+      if (match) {
+        const day = parseInt(match[1], 10);
+        const month = monthMap[match[2].toUpperCase()];
+        if (month !== undefined) {
+          const now = new Date();
+          let year = now.getFullYear();
+          let parsedDate = new Date(year, month, day);
+          
+          // If the date is more than 3 months in the past, it's likely next year's flight
+          if (parsedDate.getTime() < now.getTime() - (90 * 24 * 60 * 60 * 1000)) {
+            year += 1;
+          }
+          
+          // Format manually to avoid timezone shift from .toISOString() which converts to UTC
+          formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
+      }
+    }
+
     setForm(prev => ({
       ...prev,
       airline: extracted.airline || prev.airline,
       flightNo: extracted.flightNo || prev.flightNo,
-      date: extracted.date || prev.date,
+      date: typeof formattedDate === 'string' ? formattedDate : prev.date,
       departedFrom: extracted.departedFrom || prev.departedFrom,
       arrivedAt: extracted.arrivedAt || prev.arrivedAt,
+      departTime: extracted.departTime || prev.departTime,
+      arrivalTime: extracted.arrivalTime || prev.arrivalTime,
       pnr: extracted.pnr || prev.pnr
     }));
   };
@@ -141,7 +170,7 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
               <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Airline / Provider</label>
-                  <VendorSelect category="airline" value={form.airline || ''} onChange={val => setForm({...form, airline: val})} />
+                  <VendorSelect category="airline" value={form.airline || form.vendorName || ''} onChange={val => setForm({...form, airline: val, vendorName: val})} />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Flight Number</label>

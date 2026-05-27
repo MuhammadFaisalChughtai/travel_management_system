@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { PlusCircle, FileText, Edit2, Trash2 } from 'lucide-react';
 import type { AdditionalService } from '../../types/booking';
+import { EmptyState } from '../shared/EmptyState';
 
 interface AdditionalServicesSectionProps {
   services: AdditionalService[] | undefined;
@@ -13,14 +14,17 @@ interface AdditionalServicesSectionProps {
 export function AdditionalServicesSection({ services, onAdd, onEdit, onDelete, onMarkPaid }: AdditionalServicesSectionProps) {
   if (!services || services.length === 0) {
     return (
-      <div className="p-8 text-center bg-slate-50 border border-slate-100 rounded-xl mt-4">
-        <PlusCircle className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-        <h4 className="text-sm font-bold text-slate-700">No Additional Services</h4>
-        <p className="text-xs text-slate-500 mt-1 mb-4">No extra services logged for this booking yet.</p>
-        <button onClick={onAdd} className="bg-white border border-slate-200 hover:border-primary-300 text-primary-600 px-4 py-2 rounded-lg text-xs font-bold transition-colors">
-          Add Service
-        </button>
-      </div>
+      <EmptyState
+        icon={PlusCircle}
+        title="No additional services"
+        description="No extra services logged for this booking yet."
+        size="sm"
+        action={
+          <button onClick={onAdd} className="bg-white border border-slate-200 hover:border-primary-300 text-primary-600 px-4 py-2 rounded-lg text-xs font-bold transition-colors mt-2">
+            Add Service
+          </button>
+        }
+      />
     );
   }
 
@@ -40,6 +44,7 @@ export function AdditionalServicesSection({ services, onAdd, onEdit, onDelete, o
             </div>
             <div>
               <h4 className="font-bold text-slate-900 text-sm">{service.serviceName}</h4>
+              <p className="text-[10px] font-bold text-primary-600 uppercase tracking-wide">{service.vendorName || 'No Vendor'}</p>
               {service.notes && (
                 <div className="flex items-start gap-1 mt-1 text-slate-500 text-xs">
                   <FileText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />

@@ -1071,7 +1071,9 @@ export function Dashboard() {
                       </tr>
                     </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {agentsAnalytics.performanceList.map((agent, index) => (
+                        {agentsAnalytics.performanceList.map((agent, index) => {
+                          const remainingAmount = agent.totalPrice - agent.totalPaid;
+                          return (
                           <tr key={agent.name} className="hover:bg-slate-50/50">
                             <td className="py-2.5 px-3 font-extrabold text-slate-500">#{index + 1}</td>
                             <td className="py-2.5 px-3">
@@ -1091,7 +1093,8 @@ export function Dashboard() {
                               </span>
                             </td>
                           </tr>
-                        ))}
+                        );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1302,7 +1305,7 @@ export function Dashboard() {
 
                         const totalReceived = clientPayments - refundsToClient;
                         const totalSent = vendorPayments - refundsFromVendor;
-                        const remainingAmount = Math.max(0, bookingTotal - clientPayments);
+                        const remainingAmount = bookingTotal - clientPayments;
                         
                         const netProfit = (totalReceived - totalSent) + totalDiscounts;
 
@@ -1329,7 +1332,10 @@ export function Dashboard() {
                           <td className="py-3.5 px-5 font-mono text-slate-500">{b.departureDate ? new Date(b.departureDate).toLocaleDateString() : 'N/A'}</td>
                           <td className="py-3.5 px-5 font-bold text-slate-700">{b.agentName || 'System'}</td>
                           <td className="py-3.5 px-5 text-right font-black text-slate-900">£{Number(b.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3.5 px-5 text-right font-bold text-amber-500">£{remainingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className={`py-3.5 px-5 text-right font-bold ${remainingAmount === 0 ? 'text-emerald-500' : remainingAmount < 0 ? 'text-rose-500' : 'text-amber-500'}`}>
+                            £{Math.abs(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {remainingAmount < 0 && <span className="block text-[8px] uppercase tracking-wide text-rose-500 mt-0.5">Overpaid</span>}
+                          </td>
                           <td className="py-3.5 px-5 text-right font-bold text-rose-500">£{totalSent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="py-3.5 px-5 text-right font-bold text-blue-500">£{agentMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="py-3.5 px-5 text-right font-black text-emerald-600">£{netProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>

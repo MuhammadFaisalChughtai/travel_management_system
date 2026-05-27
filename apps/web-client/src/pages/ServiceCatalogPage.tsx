@@ -5,6 +5,8 @@ import { api as axios } from '../api/axios';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import { VendorSelect } from '../components/shared/VendorSelect';
+import { EmptyState } from '../components/shared/EmptyState';
+import { LoadingState } from '../components/shared/LoadingState';
 
 interface CatalogItem {
   id: number;
@@ -161,9 +163,15 @@ export function ServiceCatalogPage() {
         </div>
 
         {loading ? (
-          <div className="p-10 text-center text-slate-500 font-semibold">Loading catalog...</div>
+          <LoadingState message="Loading catalog..." />
         ) : error ? (
           <div className="p-4 bg-red-50 text-red-600 rounded-xl font-bold">{error}</div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={Tag}
+            title="No services found"
+            description="No services defined yet."
+          />
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <table className="w-full text-left text-sm">
@@ -176,9 +184,7 @@ export function ServiceCatalogPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {items.length === 0 ? (
-                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">No services defined yet.</td></tr>
-                ) : items.map((item, index) => (
+                {items.map((item, index) => (
                   <tr key={item.id || `item-${index}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-[10px] font-black tracking-wide uppercase">

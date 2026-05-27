@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react';
-import type { BookingDetail } from '../../types/booking';
-import { ArrowDownLeft, ArrowUpRight, Clock, AlertCircle, Percent, Receipt, RefreshCcw, Tag, ChevronDown, ChevronUp } from 'lucide-react';
+import type { BookingDetail, Refund, Transaction } from '../../types/booking';
+import { EmptyState } from '../shared/EmptyState';
+import { ArrowDownLeft, ArrowUpRight, Clock, AlertCircle, Percent, Receipt, RefreshCcw, Tag, ChevronDown, ChevronUp, ArrowDownCircle } from 'lucide-react';
 import { api } from '../../api/axios';
 import { VendorTransactionsModal } from '../booking-modals/VendorTransactionsModal';
 import { ClientTransactionsModal } from '../booking-modals/ClientTransactionsModal';
 import { ProfitLedgerModal } from '../booking-modals/ProfitLedgerModal';
-import { PieChart } from 'lucide-react';
+import { LogRefundModal } from '../booking-modals/LogRefundModal';
+import { ClawbackMarginModal } from '../booking-modals/ClawbackMarginModal';
+import { PieChart, ArrowUpCircle, CheckCircle2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface TransactionsSectionProps {
   booking: BookingDetail;
   onAddDiscount?: () => void;
-  onLogRefund?: () => void;
+  onLogRefund: (refund: Partial<Refund>) => void;
+  onClawbackMargin: (data: { amount: string; reason: string }) => void;
+  onFinalizeMargin: (data: { amount: string; notes: string }) => void;
 }
 
-export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: TransactionsSectionProps) {
+export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onClawbackMargin, onFinalizeMargin }: TransactionsSectionProps) {
   const [filter, setFilter] = useState<'All' | 'Received from Client' | 'Sent to Vendor' | 'Margin Paid to Agent'>('All');
   const [customMarginPercentage, setCustomMarginPercentage] = useState<string>('0');
   const [marginPercentage, setMarginPercentage] = useState<number>(0);
@@ -22,6 +27,8 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
   const [showVendorTransactions, setShowVendorTransactions] = useState(false);
   const [showClientTransactions, setShowClientTransactions] = useState(false);
   const [showProfitLedger, setShowProfitLedger] = useState(false);
+  const [showLogRefundModal, setShowLogRefundModal] = useState(false);
+  const [showClawbackModal, setShowClawbackModal] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
 
   // Parse Booking Total
@@ -32,6 +39,14 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
   const legacyVendorPayments = booking.payments?.filter(p => p.paymentType === 'Sent to Vendor').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const modernVendorPayments = booking.vendorPayments?.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const vendorPayments = legacyVendorPayments + modernVendorPayments;
+
+  const flightCost = booking.flightServices?.reduce((sum, f) => sum + (parseFloat(f.price) || 0), 0) || 0;
+  const accCost = booking.accommodations?.reduce((sum, a) => sum + (parseFloat(a.price) || 0), 0) || 0;
+  const transCost = booking.transportServices?.reduce((sum, t) => sum + (parseFloat(t.price) || 0), 0) || 0;
+  const visaCost = booking.visaServices?.reduce((sum, v) => sum + (parseFloat(v.price) || 0), 0) || 0;
+  const addCost = booking.additionalServices?.reduce((sum, s) => sum + (parseFloat(s.charges) || 0), 0) || 0;
+  const totalVendorCost = flightCost + accCost + transCost + visaCost + addCost;
+  const remainingVendorPay = Math.max(0, totalVendorCost - vendorPayments);
   const totalDiscounts = booking.discounts?.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0) || 0;
   const refundsToClient = booking.refunds?.filter(r => r.direction === 'Refund to Client').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
   const refundsFromVendor = booking.refunds?.filter(r => r.direction === 'Refund from Vendor').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
@@ -44,7 +59,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
   
   // Remaining Balance should ONLY look at what the client was supposed to pay vs what they physically paid in gross.
   // Refunds do not make the client owe us more money.
-  const clientBalance = Math.max(0, bookingTotal - clientPayments);
+  const clientBalance = bookingTotal - clientPayments;
   
   const marginPaidToAgent = booking.payments?.filter(p => p.paymentType === 'Margin Paid to Agent').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const creditCardCharges = booking.payments?.filter(p => p.paymentType === 'Credit Card Charges').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
@@ -93,20 +108,10 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
   const totalAgentMargin = ((netProfit + marginPaidToAgent) * marginPercentage) / 100;
   const remainingAgentMargin = Math.max(0, totalAgentMargin - marginPaidToAgent);
 
-
-
-  // Correct Net Profit Formula:
-  // Money IN  = Client Payments + Refunds received back from Vendor + Discounts saved
-  // Money OUT = Vendor Payments + Refunds paid out to Client
-  // Agent Margin is a reference KPI (% of net profit) — NOT added to profit as it is
-  // already embedded in the spread between client price and vendor cost.
-
   // Gross margin % (profit as a % of total received — shown as informational)
   const grossMarginPct = clientPayments > 0 ? (netProfit / clientPayments) * 100 : 0;
 
   // Identify Pending Vendor Payments
-  // Rule: Check if we have services but no vendor payment transactions. 
-  // For a robust system, we would match vendor names, but as a visual cue we check if vendorPayments is 0 while there are services.
   const hasServices = (booking.flightServices?.length || 0) + (booking.accommodations?.length || 0) + (booking.transportServices?.length || 0) > 0;
   const hasPendingVendorPayments = hasServices && vendorPayments === 0;
 
@@ -144,16 +149,28 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
               <button onClick={onAddDiscount} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1.5">
                 <Percent className="w-3 h-3" /> Add Discount
               </button>
-              <button onClick={onLogRefund} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1.5">
+              <button onClick={() => setShowLogRefundModal(true)} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1.5">
                 <RefreshCcw className="w-3 h-3" /> Log Refund
+              </button>
+              {booking.marginStatus !== 'Finalized' && booking.marginStatus !== 'Paid' && (
+                <button 
+                  onClick={() => onFinalizeMargin({ amount: remainingAgentMargin.toString(), notes: '' })} 
+                  disabled={vendorPayments < totalVendorCost}
+                  title={vendorPayments < totalVendorCost ? 'Cannot finalize until all vendor payments meet or exceed booking cost' : 'Finalize margin and credit agent'}
+                  className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-100 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-emerald-500/30 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <CheckCircle2 className="w-3 h-3" /> Finalize Margin
+                </button>
+              )}
+              <button onClick={() => setShowClawbackModal(true)} className="bg-purple-500/20 hover:bg-purple-500/40 text-purple-100 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-purple-500/30 flex items-center gap-1.5">
+                <ArrowDownCircle className="w-3 h-3" /> Clawback Margin
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-9 gap-3">
             {/* Total Cost */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Total Cost</p>
+              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Invoice Price</p>
               <p className="font-black text-white text-lg">£{bookingTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
@@ -178,9 +195,11 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
             {/* Remaining Balance */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Remaining Balance</p>
-              <p className={`font-black text-lg ${clientBalance > 0 ? 'text-amber-400' : 'text-slate-300'}`}>£{clientBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-              {clientBalance <= 0 ? (
+              <p className={`font-black text-lg ${clientBalance > 0 ? 'text-amber-400' : clientBalance < 0 ? 'text-rose-400' : 'text-slate-300'}`}>£{Math.abs(clientBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              {clientBalance === 0 ? (
                 <p className="text-[8px] text-emerald-300 mt-0.5 font-bold">Fully Paid</p>
+              ) : clientBalance < 0 ? (
+                <p className="text-[8px] text-rose-300 mt-0.5 font-bold">Overpaid</p>
               ) : (
                 <p className="text-[8px] text-amber-300/70 mt-0.5">Pending Payment</p>
               )}
@@ -196,13 +215,24 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
               {refundsFromVendor > 0 && <p className="text-[8px] text-red-300 mt-0.5">After £{refundsFromVendor.toFixed(2)} refunded by vendor</p>}
             </div>
 
+            {/* Remaining to Pay Vendors */}
+            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Remaining to Pay</p>
+              <p className={`font-black text-lg ${remainingVendorPay > 0 ? 'text-amber-400' : 'text-slate-300'}`}>£{remainingVendorPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              {remainingVendorPay === 0 ? (
+                <p className="text-[8px] text-emerald-300 mt-0.5 font-bold">All Vendors Paid</p>
+              ) : (
+                <p className="text-[8px] text-amber-300/70 mt-0.5">Owed to vendors</p>
+              )}
+            </div>
+
             {/* Discounts */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Discounts Saved</p>
               <p className="font-black text-amber-400 text-lg">£{totalDiscounts.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
-            {/* Agent Margin — informational only, NOT added to net profit */}
+            {/* Agent Margin */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10 relative">
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">
                 Remaining Margin {loadingMargin ? <span className="animate-pulse">...</span> : `(${marginPercentage}%)`}
@@ -226,7 +256,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
               )}
             </div>
 
-            {/* Net Profit — colour-coded */}
+            {/* Net Profit */}
             <div 
               className={`rounded-xl p-3 border cursor-pointer hover:bg-emerald-500/30 transition-colors ${netProfit >= 0 ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-red-500/20 border-red-500/30'}`}
               onClick={() => setShowProfitLedger(true)}
@@ -292,10 +322,12 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
             >
               <div className="p-6 pt-4">
                 {filteredTransactions.length === 0 && (!booking.refunds || booking.refunds.length === 0) && (!booking.discounts || booking.discounts.length === 0) ? (
-                  <div className="text-center py-8 text-slate-400">
-                    <Receipt className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                    <p className="text-[12px] font-medium">No transactions found.</p>
-                  </div>
+                  <EmptyState
+                    icon={Receipt}
+                    title="No financial records"
+                    description="Log a client payment or vendor payment to begin."
+                    size="sm"
+                  />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse whitespace-nowrap">
@@ -391,6 +423,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
           )}
         </AnimatePresence>
       </div>
+
       {/* Modals */}
       <AnimatePresence>
         {showVendorTransactions && (
@@ -412,6 +445,22 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund }: Tra
             isOpen={showProfitLedger}
             onClose={() => setShowProfitLedger(false)}
             booking={booking}
+          />
+        )}
+        {showLogRefundModal && (
+          <LogRefundModal
+            booking={booking}
+            isOpen={showLogRefundModal}
+            onClose={() => setShowLogRefundModal(false)}
+            onSubmit={onLogRefund}
+          />
+        )}
+        {showClawbackModal && (
+          <ClawbackMarginModal
+            booking={booking}
+            isOpen={showClawbackModal}
+            onClose={() => setShowClawbackModal(false)}
+            onSubmit={onClawbackMargin}
           />
         )}
       </AnimatePresence>

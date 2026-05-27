@@ -96,7 +96,7 @@ services:
       context: ./services/booking-service
     container_name: travel_booking_service
     ports:
-      - "4005:4005"
+      - "4006:4005"
     environment:
       - PORT=4005
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/travel_platform?schema=public

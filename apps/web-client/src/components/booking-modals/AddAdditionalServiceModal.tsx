@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, PlusCircle } from "lucide-react";
+import { VendorSelect } from "../shared/VendorSelect";
 
 interface AddAdditionalServiceModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export function AddAdditionalServiceModal({
   const [fCustomType, setFCustomType] = useState("");
   const [charges, setCharges] = useState("");
   const [notes, setNotes] = useState("");
+  const [vendorName, setVendorName] = useState("");
   const [isPaidToVendor, setIsPaidToVendor] = useState(false);
 
   useEffect(() => {
@@ -56,6 +58,7 @@ export function AddAdditionalServiceModal({
         }
         if (mappedData.charges !== undefined) setCharges(String(mappedData.charges));
         if (mappedData.notes) setNotes(mappedData.notes);
+        if (mappedData.vendorName) setVendorName(mappedData.vendorName);
         if (mappedData.isPaidToVendor !== undefined) setIsPaidToVendor(mappedData.isPaidToVendor);
       } else {
         // We'd reset the form here normally, but let's just let useState handle the initial if it's not editing.
@@ -74,9 +77,12 @@ export function AddAdditionalServiceModal({
     try {
       const serviceName = fType === "Other" ? fCustomType || "Other" : fType;
       await onSubmit({
+        id: initialData?.id,
         serviceName,
+        vendorName,
         charges: parseFloat(charges) || 0,
         notes,
+        isPaidToVendor
       });
       onClose();
     } catch (error) {
@@ -152,6 +158,13 @@ export function AddAdditionalServiceModal({
 
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">
+                Vendor / Provider
+              </label>
+              <VendorSelect category="additional" value={vendorName || ''} onChange={val => setVendorName(val)} />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">
                 Service Charges (£)
               </label>
               <input
@@ -206,16 +219,8 @@ export function AddAdditionalServiceModal({
               Cancel
             </button>
             <button
-              onClick={() => {
-                onSubmit({
-                  id: initialData?.id,
-                  serviceName: fType === "Other" ? fCustomType : fType,
-                  charges,
-                  notes,
-                  isPaidToVendor
-                });
-                onClose();
-              }}
+              type="button"
+              onClick={handleSubmit}
               className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-primary-600/30 transition-all uppercase tracking-wide active:scale-95"
             >
               {initialData ? "Update" : "Save"}

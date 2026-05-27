@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { api } from '../api/axios';
 import { EntityCard } from '../components/EntityCard';
+import { EmptyState } from '../components/shared/EmptyState';
+import { LoadingState } from '../components/shared/LoadingState';
 
 interface Vendor {
   id: number;
@@ -89,17 +91,13 @@ export function VendorsPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-2xl h-48 border border-slate-100 shadow-sm animate-pulse"></div>
-          ))}
-        </div>
+        <LoadingState message="Loading vendors..." />
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
-          <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-slate-800">No vendors found</h3>
-          <p className="text-slate-500 text-sm mt-1">Try adjusting your search or add a new vendor.</p>
-        </div>
+        <EmptyState
+          icon={Building2}
+          title="No vendors found"
+          description="Try adjusting your search or add a new vendor."
+        />
       ) : (
         <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence>

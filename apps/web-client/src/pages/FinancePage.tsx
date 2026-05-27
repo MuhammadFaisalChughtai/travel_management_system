@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CreditCard, Search, Plus, Edit3, Trash2, X, Check, AlertCircle } from 'lucide-react';
 import { api } from '../api/axios';
 import toast from 'react-hot-toast';
+import { EmptyState } from '../components/shared/EmptyState';
+import { LoadingState } from '../components/shared/LoadingState';
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
@@ -282,9 +284,11 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
         {activeTab !== 'ledger' ? (
           filtered.length === 0 ? (
-            <div className="bg-white p-16 text-center text-slate-400 font-medium">
-              No transactions found matching your criteria.
-            </div>
+            <EmptyState
+              icon={Search}
+              title="No transactions found"
+              description="Try adjusting your search criteria or filters."
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -331,14 +335,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         ) : (
           <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px] mt-6">
             {ledgerLoading ? (
-              <div className="flex flex-col items-center justify-center py-24">
-                <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-4" />
-                <p className="text-slate-500 font-medium text-[13px]">Loading ledger records...</p>
-              </div>
+              <LoadingState message="Loading ledger records..." />
             ) : ledgerTransactions.length === 0 ? (
-              <div className="bg-white p-16 text-center text-slate-400 font-medium text-[13px]">
-                No ledger transactions found.
-              </div>
+              <EmptyState
+                icon={Search}
+                title="No ledger records"
+                description="No double-entry accounting records matched your filters."
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">

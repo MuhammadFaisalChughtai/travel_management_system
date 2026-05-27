@@ -105,6 +105,7 @@ model Agent {
   updatedAt   DateTime @updatedAt
 
   marginSegments AgentMarginSegment[]
+  wallet         AgentWallet?
 }
 
 model AgentMarginSegment {
@@ -133,4 +134,26 @@ model Vendor {
   updatedAt     DateTime @updatedAt
 
   @@unique([tenantId, name])
+}
+
+model AgentWallet {
+  id             Int      @id @default(autoincrement())
+  agentId        Int      @unique
+  currentBalance Decimal  @default(0.00) @db.Decimal(10, 2)
+  updatedAt      DateTime @updatedAt
+
+  agent          Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  transactions   AgentTransaction[]
+}
+
+model AgentTransaction {
+  id              Int      @id @default(autoincrement())
+  agentWalletId   Int
+  amount          Decimal  @db.Decimal(10, 2)
+  transactionType String   @db.VarChar(50)
+  referenceId     String?  @db.VarChar(100)
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  wallet          AgentWallet @relation(fields: [agentWalletId], references: [id], onDelete: Cascade)
 }

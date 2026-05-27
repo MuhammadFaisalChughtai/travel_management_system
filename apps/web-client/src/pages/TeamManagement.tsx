@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert } from 'lucide-react';
+import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/axios';
 import { EntityCard } from '../components/EntityCard';
+import { EmptyState } from '../components/shared/EmptyState';
+import { LoadingState } from '../components/shared/LoadingState';
 
 interface User {
   id: number;
@@ -225,7 +227,13 @@ export function TeamManagement() {
 
         <div className="p-6 bg-slate-50/50">
           {loading ? (
-            <div className="flex justify-center py-24"><div className="w-8 h-8 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin" /></div>
+            <LoadingState message="Loading team members..." />
+          ) : filtered.length === 0 ? (
+            <EmptyState 
+              icon={Users} 
+              title={search ? 'No team members found' : 'No team members yet'} 
+              description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by inviting a team member.'} 
+            />
           ) : (
             <motion.div layout className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               <AnimatePresence>

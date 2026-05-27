@@ -263,7 +263,7 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
             <div className="flex justify-between text-[16px] text-slate-800 font-black">
               <span>Amount Due</span>
               <span className={calculateRemaining() > 0 ? "text-rose-600" : "text-emerald-600"}>
-                £{Math.max(0, calculateRemaining()).toFixed(2)}
+                {calculateRemaining() < 0 ? `-£${Math.abs(calculateRemaining()).toFixed(2)} (Overpaid)` : `£${calculateRemaining().toFixed(2)}`}
               </span>
             </div>
             {calculateRemaining() <= 0 && (

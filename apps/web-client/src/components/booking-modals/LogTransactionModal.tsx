@@ -41,7 +41,7 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
   
   let currentServiceName = '';
   if (selectedItem) {
-    if (selectedCategory === 'Flight') currentServiceName = `Flight ${selectedItem.flightNo} (${selectedItem.pnr})`;
+    if (selectedCategory === 'Flight') currentServiceName = `Flight: ${selectedItem.airline || 'Unknown'} - ${selectedItem.flightNo || 'No Flight No'} (${selectedItem.pnr})`;
     else if (selectedCategory === 'Accommodation') currentServiceName = `Hotel ${selectedItem.hotelName}`;
     else if (selectedCategory === 'Transportation') currentServiceName = `Transport ${selectedItem.vehicleType}`;
     else if (selectedCategory === 'Visa') currentServiceName = `Visa ${selectedItem.visaType}`;
@@ -100,11 +100,11 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
                          if (it) {
                            const cost = it.price || it.charges || it.cost || 0;
                            let serviceName = '';
-                           if (selectedCategory === 'Flight') serviceName = `Flight: ${it.airline || 'Unknown'} - ${it.flightNo || 'No Flight No'} (${it.pnr})`;
-                           else if (selectedCategory === 'Accommodation') serviceName = `Hotel ${it.hotelName}`;
-                           else if (selectedCategory === 'Transportation') serviceName = `Transport ${it.vehicleType}`;
-                           else if (selectedCategory === 'Visa') serviceName = `Visa ${it.visaType}`;
-                           else serviceName = `Service ${it.serviceName}`;
+                           if (selectedCategory === 'Flight') serviceName = `Flight: ${it.airline || it.vendorName || 'Unknown'} - ${it.flightNo || 'No Flight No'} (${it.pnr})`;
+                           else if (selectedCategory === 'Accommodation') serviceName = `Hotel: ${it.hotelName || it.vendorName || 'Unknown'}`;
+                           else if (selectedCategory === 'Transportation') serviceName = `Transport: ${it.vehicleType || it.vendorName || 'Unknown'}`;
+                           else if (selectedCategory === 'Visa') serviceName = `Visa: ${it.vendorName || 'Unknown'} (${it.visaType})`;
+                           else serviceName = `Service: ${it.serviceName || it.vendorName || 'Unknown'}`;
                            
                            setForm(prev => ({ ...prev, amount: cost, notes: `Manual vendor payment for ${serviceName}`, serviceName }));
                          }
@@ -112,11 +112,11 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
                          <option value="">-- Select Service --</option>
                           {availableItems.map(item => {
                             let label = '';
-                            if (selectedCategory === 'Flight') label = `Flight: ${item.airline || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
-                            else if (selectedCategory === 'Accommodation') label = `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})`;
-                            else if (selectedCategory === 'Transportation') label = `Transport: ${item.vehicleType} (${item.date || 'No Date'})`;
-                            else if (selectedCategory === 'Visa') label = `Visa: ${item.visaType} (${item.passportNumber || ''})`;
-                            else label = `Service: ${item.serviceName || 'Unknown'} (£${item.charges || 0})`;
+                             if (selectedCategory === 'Flight') label = `Flight: ${item.airline || item.vendorName || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
+                             else if (selectedCategory === 'Accommodation') label = `Hotel: ${item.hotelName || item.vendorName || 'Unknown'} (${item.checkIn || item.date || 'No Date'})`;
+                             else if (selectedCategory === 'Transportation') label = `Transport: ${item.vehicleType || item.vendorName || 'Unknown'} (${item.date || 'No Date'})`;
+                             else if (selectedCategory === 'Visa') label = `Visa: ${item.vendorName || 'Unknown'} (${item.visaType || ''})`;
+                             else label = `Service: ${item.serviceName || item.vendorName || 'Unknown'} (£${item.charges || item.price || 0})`;
                             
                             return (
                               <option key={item.id} value={item.id}>
@@ -142,16 +142,21 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
             <div className="md:col-span-2">
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Transaction Type</label>
               <div className="grid grid-cols-3 gap-2">
-                {['Received from Client', 'Sent to Vendor', 'Margin Paid to Agent'].map(type => (
+                {['Received from Client', 'Sent to Vendor', 'Margin Paid to Agent'].map(type => {
+                  const isDisabled = type === 'Margin Paid to Agent' && booking?.marginStatus !== 'Finalized' && booking?.marginStatus !== 'Paid';
+                  return (
                   <button 
                     key={type}
                     type="button"
+                    disabled={isDisabled}
+                    title={isDisabled ? 'Margin must be finalized before paying to agent' : undefined}
                     onClick={() => setForm({...form, paymentType: type as any})}
-                    className={`py-2 rounded-lg text-[11px] font-bold border transition-all ${form.paymentType === type ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20' : 'bg-white/50 border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                    className={`py-2 rounded-lg text-[11px] font-bold border transition-all ${isDisabled ? 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed' : form.paymentType === type ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20' : 'bg-white/50 border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                   >
                     {type}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -198,7 +203,11 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
 
         <div className="bg-slate-50/50 p-5 border-t border-slate-200 flex justify-end gap-3 backdrop-blur-md">
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
-          <button onClick={() => { onSubmit({ ...form, serviceCategory: selectedCategory, serviceId: selectedServiceId }); onClose(); }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-emerald-600/30 transition-all uppercase tracking-wide active:scale-95">
+          <button 
+            disabled={form.paymentType === 'Sent to Vendor' && isDuplicate}
+            onClick={() => { onSubmit({ ...form, serviceCategory: selectedCategory, serviceId: selectedServiceId }); onClose(); }} 
+            className={`px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg transition-all uppercase tracking-wide ${form.paymentType === 'Sent to Vendor' && isDuplicate ? 'bg-slate-400 text-slate-200 cursor-not-allowed shadow-none' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-95'}`}
+          >
             Log Transaction
           </button>
         </div>

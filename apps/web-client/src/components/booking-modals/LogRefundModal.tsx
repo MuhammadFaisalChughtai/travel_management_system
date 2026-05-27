@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, RefreshCcw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import type { Refund, BookingDetail } from '../../types/booking';
 
 interface LogRefundModalProps {
@@ -40,8 +41,8 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white/80 backdrop-blur-xl border border-white/50 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] relative z-10 overflow-hidden flex flex-col">
         <div className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-6 py-4 flex justify-between items-center shadow-inner">
@@ -90,11 +91,11 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
                   <option value="">Select a specific service (Required)</option>
                   {availableItems.map(item => {
                     let val = '';
-                    if (form.vendorCategory === 'Flight') val = `Flight: ${item.airline || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
-                    else if (form.vendorCategory === 'Accommodation') val = `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})`;
-                    else if (form.vendorCategory === 'Transportation') val = `Transport: ${item.vehicleType} (${item.date || 'No Date'})`;
-                    else if (form.vendorCategory === 'Visa') val = `Visa: ${item.country} (${item.type || ''})`;
-                    else val = `Service: ${item.serviceName || 'Unknown'} (£${item.charges || 0})`;
+                    if (form.vendorCategory === 'Flight') val = `Flight: ${item.airline || item.vendorName || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
+                    else if (form.vendorCategory === 'Accommodation') val = `Hotel: ${item.hotelName || item.vendorName || 'Unknown'} (${item.checkIn || item.date || 'No Date'})`;
+                    else if (form.vendorCategory === 'Transportation') val = `Transport: ${item.vehicleType || item.vendorName || 'Unknown'} (${item.date || 'No Date'})`;
+                    else if (form.vendorCategory === 'Visa') val = `Visa: ${item.vendorName || 'Unknown'} (${item.visaType || item.type || ''})`;
+                    else val = `Service: ${item.serviceName || item.vendorName || 'Unknown'} (£${item.charges || item.price || 0})`;
                     return <option key={item.id} value={val}>{val}</option>;
                   })}
                 </select>
@@ -155,6 +156,7 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
           </button>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body
   );
 }

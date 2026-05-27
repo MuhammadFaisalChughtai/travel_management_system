@@ -1,5 +1,6 @@
 import { Users, Edit, Trash2, AlertCircle } from 'lucide-react';
 import type { Passenger } from '../../types/booking';
+import { EmptyState } from '../shared/EmptyState';
 
 interface PassengersSectionProps {
   onAdd?: () => void;
@@ -25,10 +26,12 @@ export function PassengersSection({ passengers, onEdit, onDelete }: PassengersSe
   return (
     <div className="flex flex-col gap-4">
       {passengers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10 px-4 text-center bg-white/50 rounded-2xl border border-dashed border-slate-300">
-          <Users className="w-10 h-10 text-slate-300 mb-3" />
-          <p className="text-slate-500 font-semibold text-xs">No passengers recorded.</p>
-        </div>
+        <EmptyState
+          icon={Users}
+          title="No passengers recorded"
+          description="Click the add button to log a new passenger."
+          size="sm"
+        />
       ) : (
         <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">

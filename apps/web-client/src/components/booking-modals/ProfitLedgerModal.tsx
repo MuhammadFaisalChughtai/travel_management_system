@@ -29,12 +29,13 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
   
   const clientRefunds = booking.refunds?.filter(r => r.direction === 'Refund to Client').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
   const vendorRefunds = booking.refunds?.filter(r => r.direction === 'Refund from Vendor').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
-  const marginPaidToAgent = booking.payments?.filter(p => p.paymentType === 'Margin Paid to Agent').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const marginPaidToAgentGross = booking.payments?.filter(p => p.paymentType === 'Margin Paid to Agent' && parseFloat(p.amount) > 0).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const marginClawback = Math.abs(booking.payments?.filter(p => p.paymentType === 'Margin Paid to Agent' && parseFloat(p.amount) < 0).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0);
   const creditCardCharges = booking.payments?.filter(p => p.paymentType === 'Credit Card Charges').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
 
   const netReceived = totalReceived - clientRefunds;
   const netSent = totalVendorPayments - vendorRefunds;
-  const netProfit = (netReceived - netSent) + totalDiscounts - marginPaidToAgent - creditCardCharges;
+  const netProfit = (netReceived - netSent) + totalDiscounts - marginPaidToAgentGross + marginClawback - creditCardCharges;
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -131,9 +132,17 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
 
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-amber-50/20">
                 <td className="py-4 font-semibold text-sans text-sm text-amber-700">Margin Paid to Agent</td>
-                <td className="text-right py-4 px-4 border-l border-slate-200 text-amber-700">£{marginPaidToAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-4 px-4 border-l border-slate-200 text-amber-700">£{marginPaidToAgentGross.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
+
+              {marginClawback > 0 && (
+                <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-purple-50/20">
+                  <td className="py-4 font-semibold text-sans text-sm text-purple-700">Margin Clawback from Agent</td>
+                  <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
+                  <td className="text-right py-4 px-4 border-l border-slate-200 text-purple-700">£{marginClawback.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                </tr>
+              )}
 
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-orange-50/20">
                 <td className="py-4 font-semibold text-sans text-sm text-orange-700">Credit Card Charges</td>

@@ -5,10 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, Search, X, Check,
   Trash2, Edit3, ChevronRight, AlertCircle, Percent, TrendingUp,
-  Save, ArrowLeft
+  Save, ArrowLeft, Wallet, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
 import { api } from '../api/axios';
 import { EntityCard } from '../components/EntityCard';
+import { EmptyState } from '../components/shared/EmptyState';
+import { LoadingState } from '../components/shared/LoadingState';
 
 interface MarginSegment {
   id?: number;
@@ -36,6 +38,17 @@ interface Agent {
     marginPercent: string;
     label: string | null;
   }[];
+  wallet?: {
+    currentBalance: number;
+    transactions: {
+      id: number;
+      amount: number;
+      transactionType: string;
+      referenceId: string | null;
+      notes: string | null;
+      createdAt: string;
+    }[];
+  };
 }
 
 const DEFAULT_SEGMENTS: MarginSegment[] = [
@@ -85,6 +98,10 @@ function AgentDetailView({ agent: initialAgent, onBack, onRefresh }: {
   const [agent, setAgent] = useState<Agent>(initialAgent);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setAgent(initialAgent);
+  }, [initialAgent]);
   
   const initialClientTags = initialAgent.client ? initialAgent.client.split(',').map(s => s.trim()).filter(Boolean) : [];
   const [form, setForm] = useState({
@@ -373,6 +390,70 @@ function AgentDetailView({ agent: initialAgent, onBack, onRefresh }: {
           </div>
         </div>
       </motion.div>
+
+      {/* NEW: Agent Wallet Section */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+        <div className="bg-gradient-to-r from-slate-50 to-indigo-50/30 px-8 py-5 border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <h2 className="text-slate-800 font-bold text-[15px] uppercase tracking-wider">Agent Wallet & Ledger</h2>
+          </div>
+          <div className="flex items-center gap-4">
+             <div className="flex flex-col items-end">
+               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Current Balance</span>
+               <span className={`text-xl font-black ${agent.wallet && Number(agent.wallet.currentBalance) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                 £{agent.wallet ? Number(agent.wallet.currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+               </span>
+             </div>
+          </div>
+        </div>
+        <div className="p-0">
+          {!agent.wallet || agent.wallet.transactions.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 text-[13px]">
+               No wallet transactions recorded yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13px]">
+                <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
+                  <tr>
+                    <th className="px-8 py-4">Date</th>
+                    <th className="px-8 py-4">Type</th>
+                    <th className="px-8 py-4">Reference</th>
+                    <th className="px-8 py-4 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {agent.wallet.transactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-8 py-4 text-slate-500 whitespace-nowrap">
+                        {new Date(tx.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </td>
+                      <td className="px-8 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest ${
+                          tx.amount > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {tx.amount > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
+                          {tx.transactionType.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-8 py-4 text-slate-600">
+                        {tx.referenceId || '—'}
+                        {tx.notes && <div className="text-[11px] text-slate-400 mt-0.5">{tx.notes}</div>}
+                      </td>
+                      <td className={`px-8 py-4 text-right font-bold ${Number(tx.amount) > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {Number(tx.amount) > 0 ? '+' : ''}£{Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -627,31 +708,26 @@ export function AgentsPage() {
 
         <div className="p-6 bg-slate-50/50">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-24">
-              <div className="w-10 h-10 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin mb-4" />
-              <p className="text-slate-500 font-medium">Loading agents repository...</p>
-            </div>
+            <LoadingState message="Loading agents repository..." />
           ) : error ? (
-            <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-2xl p-6 text-rose-600 max-w-2xl mx-auto my-12">
-              <AlertCircle className="w-6 h-6 shrink-0" /> 
-              <div>
-                <h4 className="font-bold text-[15px] mb-1">Failed to load data</h4>
-                <p className="text-[13px] opacity-90">{error}</p>
-              </div>
+            <div className="bg-rose-50 rounded-2xl border border-rose-200 p-12 text-center shadow-sm max-w-2xl mx-auto">
+              <AlertCircle className="w-12 h-12 text-rose-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-rose-800">Failed to load data</h3>
+              <p className="text-rose-600 text-sm mt-1">{error}</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-24 text-slate-400 bg-white border border-slate-200 border-dashed rounded-3xl mx-auto max-w-2xl">
-              <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
-                <Users className="w-8 h-8 text-slate-300" />
-              </div>
-              <h3 className="font-bold text-slate-700 text-lg mb-1">{search ? 'No agents found' : 'No agents yet'}</h3>
-              <p className="text-[14px] text-slate-500 mb-6">{search ? `We couldn't find anything matching "${search}"` : 'Get started by creating your first agent profile.'}</p>
-              {!search && (
-                <button onClick={() => setShowAddModal(true)} className="mx-auto flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 hover:border-primary-300 hover:bg-slate-50 text-primary-600 rounded-xl text-[13px] font-bold shadow-sm transition-all">
-                  <Plus className="w-4 h-4" /> Add Agent
-                </button>
-              )}
-            </div>
+            <EmptyState
+              icon={Users}
+              title={search ? 'No agents found' : 'No agents yet'}
+              description={search ? `We couldn't find anything matching "${search}"` : 'Get started by creating your first agent profile.'}
+              action={
+                !search && (
+                  <button onClick={() => setShowAddModal(true)} className="mx-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-primary-50 text-primary-600 hover:bg-primary-100 rounded-xl text-[13px] font-bold transition-colors">
+                    <Plus className="w-4 h-4" /> Add Agent
+                  </button>
+                )
+              }
+            />
           ) : (
             <motion.div layout className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               <AnimatePresence>

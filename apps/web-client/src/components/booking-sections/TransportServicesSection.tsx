@@ -1,5 +1,6 @@
 import { Car, Edit, Trash2 } from 'lucide-react';
 import type { TransportService } from '../../types/booking';
+import { EmptyState } from '../shared/EmptyState';
 
 interface TransportServicesSectionProps {
   onAdd?: () => void;
@@ -13,17 +14,19 @@ export function TransportServicesSection({ transports, onEdit, onDelete}: Transp
   return (
     <div className="flex flex-col gap-4">
       {transports.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10 px-4 text-center bg-white/50 rounded-2xl border border-dashed border-slate-300">
-          <Car className="w-10 h-10 text-slate-300 mb-3" />
-          <p className="text-slate-500 font-semibold text-xs">No transport services recorded.</p>
-        </div>
+        <EmptyState
+          icon={Car}
+          title="No transport services recorded"
+          description="Click the add button to log a new transport."
+          size="sm"
+        />
       ) : (
         <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-[11px]">
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 to-indigo-50/30 text-slate-500 font-extrabold uppercase border-b border-slate-100">
-                  <th className="py-3 px-4">Provider / Type</th>
+                  <th className="py-3 px-4">Vendor / Type</th>
                   <th className="py-3 px-4">Route</th>
                   <th className="py-3 px-4">Date</th>
                   <th className="py-3 px-4 text-right">Price</th>
@@ -34,7 +37,7 @@ export function TransportServicesSection({ transports, onEdit, onDelete}: Transp
                 {transports.map((t, i) => (
                   <tr key={t.id || i} className="hover:bg-indigo-50/30 transition-colors group">
                     <td className="py-3 px-4">
-                      <div className="font-black text-slate-800">{t.vendorName}</div>
+                      <div className="font-black text-slate-800">{t.vendorName || '—'}</div>
                       <div className="text-slate-500 font-semibold">{t.vehicleType}</div>
                     </td>
                     <td className="py-3 px-4">

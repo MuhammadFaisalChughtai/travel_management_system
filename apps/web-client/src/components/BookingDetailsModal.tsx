@@ -1,33 +1,45 @@
-import toast from 'react-hot-toast';
-import { useEffect, useState } from 'react';
-import { X, Plane, Users, Hotel, Car, FileText, Calculator, Plus, Loader2, RefreshCcw } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../api/axios';
-import type { BookingDetail, } from '../types/booking';
+import toast from "react-hot-toast";
+import { useEffect, useState } from "react";
+import {
+  X,
+  Plane,
+  Users,
+  Hotel,
+  Car,
+  FileText,
+  Calculator,
+  Plus,
+  Loader2,
+  RefreshCcw,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { api } from "../api/axios";
+import type { BookingDetail } from "../types/booking";
 
-import { AccordionSection } from './AccordionSection';
-import { SummaryLedgerSection } from './booking-sections/SummaryLedgerSection';
-import { TransactionsSection } from './booking-sections/TransactionsSection';
-import { PassengersSection } from './booking-sections/PassengersSection';
-import { FlightServicesSection } from './booking-sections/FlightServicesSection';
-import { StaysSection } from './booking-sections/StaysSection';
-import { TransportServicesSection } from './booking-sections/TransportServicesSection';
-import { VisaServicesSection } from './booking-sections/VisaServicesSection';
-import { AdditionalServicesSection } from './booking-sections/AdditionalServicesSection';
+import { AccordionSection } from "./AccordionSection";
+import { SummaryLedgerSection } from "./booking-sections/SummaryLedgerSection";
+import { TransactionsSection } from "./booking-sections/TransactionsSection";
+import { PassengersSection } from "./booking-sections/PassengersSection";
+import { FlightServicesSection } from "./booking-sections/FlightServicesSection";
+import { StaysSection } from "./booking-sections/StaysSection";
+import { TransportServicesSection } from "./booking-sections/TransportServicesSection";
+import { VisaServicesSection } from "./booking-sections/VisaServicesSection";
+import { AdditionalServicesSection } from "./booking-sections/AdditionalServicesSection";
 
-import { AddFlightModal } from './booking-modals/AddFlightModal';
-import { AddPassengerModal } from './booking-modals/AddPassengerModal';
-import { AddTransportModal } from './booking-modals/AddTransportModal';
-import { AddAccommodationModal } from './booking-modals/AddAccommodationModal';
-import { AddVisaModal } from './booking-modals/AddVisaModal';
-import { AddAdditionalServiceModal } from './booking-modals/AddAdditionalServiceModal';
-import { LogTransactionModal } from './booking-modals/LogTransactionModal';
-import { AddDiscountModal } from './booking-modals/AddDiscountModal';
-import { LogRefundModal } from './booking-modals/LogRefundModal';
-import { DeleteConfirmationModal } from './booking-modals/DeleteConfirmationModal';
-import { InvoiceTemplate } from './documents/InvoiceTemplate';
-import { VoucherTemplate } from './documents/VoucherTemplate';
-import { generateInvoicePDF } from '../utils/pdfGenerator';
+import { AddFlightModal } from "./booking-modals/AddFlightModal";
+import { AddPassengerModal } from "./booking-modals/AddPassengerModal";
+import { AddTransportModal } from "./booking-modals/AddTransportModal";
+import { AddAccommodationModal } from "./booking-modals/AddAccommodationModal";
+import { AddVisaModal } from "./booking-modals/AddVisaModal";
+import { AddAdditionalServiceModal } from "./booking-modals/AddAdditionalServiceModal";
+import { LogTransactionModal } from "./booking-modals/LogTransactionModal";
+import { LogRefundModal } from "./booking-modals/LogRefundModal";
+import { AddDiscountModal } from "./booking-modals/AddDiscountModal";
+import { DeleteConfirmationModal } from "./booking-modals/DeleteConfirmationModal";
+import { DebtOffsetModal } from "./booking-modals/DebtOffsetModal";
+import { InvoiceTemplate } from "./documents/InvoiceTemplate";
+import { VoucherTemplate } from "./documents/VoucherTemplate";
+import { generateInvoicePDF } from "../utils/pdfGenerator";
 
 interface BookingDetailsModalProps {
   bookingId: number | null;
@@ -36,42 +48,61 @@ interface BookingDetailsModalProps {
   onUpdate?: () => void;
 }
 
-export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: BookingDetailsModalProps) {
+export function BookingDetailsModal({
+  bookingId,
+  isOpen,
+  onClose,
+  onUpdate,
+}: BookingDetailsModalProps) {
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Accordion state
-  const [openSections, setOpenSections] = useState<string[]>(['summary']);
+  const [openSections, setOpenSections] = useState<string[]>(["summary"]);
 
   const toggleSection = (section: string) => {
-    setOpenSections(prev => 
-      prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section]
+    setOpenSections((prev) =>
+      prev.includes(section)
+        ? prev.filter((s) => s !== section)
+        : [...prev, section],
     );
   };
 
   // Nested Modal States
   const [showAddPassenger, setShowAddPassenger] = useState(false);
-  
+
   const [editingFlight, setEditingFlight] = useState<any>(null);
   const [editingAccommodation, setEditingAccommodation] = useState<any>(null);
   const [editingTransport, setEditingTransport] = useState<any>(null);
   const [editingVisa, setEditingVisa] = useState<any>(null);
-  const [editingAdditionalService, setEditingAdditionalService] = useState<any>(null);
+  const [editingAdditionalService, setEditingAdditionalService] =
+    useState<any>(null);
   const [editingPassenger, setEditingPassenger] = useState<any>(null);
 
   const [showAddFlight, setShowAddFlight] = useState(false);
   const [showAddHotel, setShowAddHotel] = useState(false);
   const [showAddTransport, setShowAddTransport] = useState(false);
   const [showAddVisa, setShowAddVisa] = useState(false);
-  const [showAddAdditionalService, setShowAddAdditionalService] = useState(false);
+  const [showAddAdditionalService, setShowAddAdditionalService] =
+    useState(false);
   const [showLogTransaction, setShowLogTransaction] = useState(false);
   const [showAddDiscount, setShowAddDiscount] = useState(false);
   const [showLogRefund, setShowLogRefund] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [isGeneratingHotelVoucher, setIsGeneratingHotelVoucher] = useState(false);
-  const [isGeneratingTransportVoucher, setIsGeneratingTransportVoucher] = useState(false);
-  const [deleteConfig, setDeleteConfig] = useState<{isOpen: boolean, serviceType: string, id: number} | null>(null);
+  const [isGeneratingHotelVoucher, setIsGeneratingHotelVoucher] =
+    useState(false);
+  const [isGeneratingTransportVoucher, setIsGeneratingTransportVoucher] =
+    useState(false);
+  const [deleteConfig, setDeleteConfig] = useState<{
+    isOpen: boolean;
+    serviceType: string;
+    id: number;
+  } | null>(null);
+
+  const [agentDebt, setAgentDebt] = useState<number>(0);
+  const [showDebtOffset, setShowDebtOffset] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState<any>(null);
 
   const handleDeleteService = async (serviceType: string, id: number) => {
     setDeleteConfig({ isOpen: true, serviceType, id });
@@ -81,22 +112,28 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     if (!deleteConfig) return;
     try {
       const typeMap: any = {
-        'passenger': 'passengers',
-        'flight': 'flight-services',
-        'accommodation': 'accommodations',
-        'transport': 'transport-services',
-        'visa': 'visa-services',
-        'additional': 'additional-services'
+        passenger: "passengers",
+        flight: "flight-services",
+        accommodation: "accommodations",
+        transport: "transport-services",
+        visa: "visa-services",
+        additional: "additional-services",
       };
       const endpoint = typeMap[deleteConfig.serviceType];
       if (!endpoint) throw new Error("Invalid service type");
-      
+
       await api.delete(`/bookings/${bookingId}/${endpoint}/${deleteConfig.id}`);
-      import('react-hot-toast').then(m => m.default.success('Deleted successfully'));
+      import("react-hot-toast").then((m) =>
+        m.default.success("Deleted successfully"),
+      );
       await fetchDetails();
       onUpdate?.();
     } catch (err: any) {
-      import('react-hot-toast').then(m => m.default.error(err?.response?.data?.error || err?.message || 'Failed to delete'));
+      import("react-hot-toast").then((m) =>
+        m.default.error(
+          err?.response?.data?.error || err?.message || "Failed to delete",
+        ),
+      );
     } finally {
       setDeleteConfig(null);
     }
@@ -106,27 +143,46 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     if (!booking) return;
     setIsGeneratingPDF(true);
     try {
-      await generateInvoicePDF('invoice-template', `Invoice_${booking.bookingReference}.pdf`);
+      await generateInvoicePDF(
+        "invoice-template",
+        `Invoice_${booking.bookingReference}.pdf`,
+      );
     } finally {
       setIsGeneratingPDF(false);
     }
   };
 
   const handleGenerateHotelVoucher = async () => {
-    if (!booking || !booking.accommodations || booking.accommodations.length === 0) return;
+    if (
+      !booking ||
+      !booking.accommodations ||
+      booking.accommodations.length === 0
+    )
+      return;
     setIsGeneratingHotelVoucher(true);
     try {
-      await generateInvoicePDF('hotel-voucher-template', `HotelVoucher_${booking.bookingReference}.pdf`);
+      await generateInvoicePDF(
+        "hotel-voucher-template",
+        `HotelVoucher_${booking.bookingReference}.pdf`,
+      );
     } finally {
       setIsGeneratingHotelVoucher(false);
     }
   };
 
   const handleGenerateTransportVoucher = async () => {
-    if (!booking || !booking.transportServices || booking.transportServices.length === 0) return;
+    if (
+      !booking ||
+      !booking.transportServices ||
+      booking.transportServices.length === 0
+    )
+      return;
     setIsGeneratingTransportVoucher(true);
     try {
-      await generateInvoicePDF('transport-voucher-template', `TransportVoucher_${booking.bookingReference}.pdf`);
+      await generateInvoicePDF(
+        "transport-voucher-template",
+        `TransportVoucher_${booking.bookingReference}.pdf`,
+      );
     } finally {
       setIsGeneratingTransportVoucher(false);
     }
@@ -135,12 +191,33 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const fetchDetails = async () => {
     if (!bookingId) return;
     setLoading(true);
-    setError('');
+    setError("");
     try {
       const res = await api.get(`/bookings/${bookingId}`);
-      setBooking(res.data.booking);
+      const bData = res.data.booking;
+      let resolvedAgentId = bData?.agentId;
+      if (!resolvedAgentId && bData?.agentName && bData.agentName !== 'System / Auto' && bData.agentName !== 'Any') {
+        try {
+          const agentRes = await api.get(`/agents/by-name/${encodeURIComponent(bData.agentName)}`);
+          resolvedAgentId = agentRes.data?.agent?.id;
+        } catch (e) {
+          console.error("Failed to fetch agent by name", e);
+        }
+      }
+
+      if (resolvedAgentId) {
+        try {
+          const debtRes = await api.get(`/agents/${resolvedAgentId}/wallet/debt`);
+          setAgentDebt(debtRes.data.debt || 0);
+        } catch (e) {
+          console.error("Failed to fetch agent debt", e);
+        }
+      }
+      setBooking(bData);
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load booking details.');
+      setError(
+        err?.response?.data?.message || "Failed to load booking details.",
+      );
     } finally {
       setLoading(false);
     }
@@ -148,32 +225,79 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
 
   const handleSaveTransaction = async (data: any) => {
     if (!bookingId) return;
-    try {
-      await api.post(`/bookings/${bookingId}/payments`, {
-        amount: parseFloat(data.amount),
-        paymentMethod: data.paymentMethod,
-        paymentType: data.paymentType,
-        paidOn: data.paidOn || data.date,
-        notes: data.notes || null
-      });
 
-      if (data.paymentType === 'Sent to Vendor' && data.serviceId && data.serviceCategory && data.serviceCategory !== 'Other') {
-        // The service's isPaidToVendor status is now dynamically calculated by the backend 
-        // based on the presence of this transaction. No need to patch the service directly.
+    if (data.paymentType === "Margin Paid to Agent" && agentDebt > 0) {
+      setPendingTransaction(data);
+      setShowDebtOffset(true);
+      return; // Pause execution until offset is handled
+    }
+
+    await submitTransaction(data, 0);
+  };
+
+  const submitTransaction = async (data: any, offsetAmount: number) => {
+    try {
+      const finalAmount = Math.max(0, parseFloat(data.amount) - offsetAmount);
+      
+      // If there's an offset, log it separately
+      if (offsetAmount > 0) {
+        await api.post(`/bookings/${bookingId}/payments`, {
+          amount: offsetAmount,
+          paymentMethod: "System Offset",
+          paymentType: "Margin Paid to Agent",
+          paidOn: data.paidOn || data.date,
+          notes: `Debt Settlement Offset. ${data.notes || ''}`
+        });
       }
-      if (data.paymentMethod === 'Credit Card' && data.ccCharges && parseFloat(data.ccCharges) > 0) {
+
+      if (finalAmount > 0) {
+        await api.post(`/bookings/${bookingId}/payments`, {
+          amount: finalAmount,
+          paymentMethod: data.paymentMethod,
+          paymentType: data.paymentType,
+          paidOn: data.paidOn || data.date,
+          notes: data.notes || null,
+        });
+      }
+
+      if (
+        data.paymentType === "Sent to Vendor" &&
+        data.serviceId &&
+        data.serviceCategory &&
+        data.serviceCategory !== "Other"
+      ) {
+        let endpoint = '';
+        if (data.serviceCategory === 'Flight') endpoint = `/bookings/${bookingId}/flight-services/${data.serviceId}`;
+        else if (data.serviceCategory === 'Accommodation') endpoint = `/bookings/${bookingId}/accommodations/${data.serviceId}`;
+        else if (data.serviceCategory === 'Transportation') endpoint = `/bookings/${bookingId}/transport-services/${data.serviceId}`;
+        else if (data.serviceCategory === 'Visa') endpoint = `/bookings/${bookingId}/visa-services/${data.serviceId}`;
+        else endpoint = `/bookings/${bookingId}/additional-services/${data.serviceId}`;
+
+        if (endpoint) {
+          await api.patch(endpoint, { isPaidToVendor: true });
+        }
+      }
+      if (
+        data.paymentMethod === "Credit Card" &&
+        data.ccCharges &&
+        parseFloat(data.ccCharges) > 0
+      ) {
         await api.post(`/bookings/${bookingId}/payments`, {
           amount: parseFloat(data.ccCharges),
-          paymentMethod: 'System Generated',
-          paymentType: 'Credit Card Charges',
+          paymentMethod: "System Generated",
+          paymentType: "Credit Card Charges",
           paidOn: data.paidOn || data.date,
-          notes: `Credit card charges for ${data.paymentType}${data.serviceName ? ` (${data.serviceName})` : ''}`
+          notes: `Credit card charges for ${data.paymentType}${data.serviceName ? ` (${data.serviceName})` : ""}`,
         });
       }
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to save transaction.';
-      console.error('Transaction error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.details ||
+        err?.message ||
+        "Failed to save transaction.";
+      console.error("Transaction error:", err?.response?.data || err);
       toast.error(`Transaction Error: ${msg}`);
     }
   };
@@ -186,21 +310,29 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         serviceName: data.serviceName || null,
         amount: parseFloat(data.amount),
         notes: data.notes || null,
-        date: data.date
+        date: data.date,
       });
-      if (data.paymentMethod === 'Credit Card' && data.ccCharges && parseFloat(data.ccCharges) > 0) {
+      if (
+        data.paymentMethod === "Credit Card" &&
+        data.ccCharges &&
+        parseFloat(data.ccCharges) > 0
+      ) {
         await api.post(`/bookings/${bookingId}/payments`, {
           amount: parseFloat(data.ccCharges),
-          paymentMethod: 'System Generated',
-          paymentType: 'Credit Card Charges',
+          paymentMethod: "System Generated",
+          paymentType: "Credit Card Charges",
           paidOn: data.date,
-          notes: `Credit card charges for discount applied${data.serviceName ? ` to ${data.serviceName}` : ''}`
+          notes: `Credit card charges for discount applied${data.serviceName ? ` to ${data.serviceName}` : ""}`,
         });
       }
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to save discount.';
-      console.error('Discount error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.details ||
+        err?.message ||
+        "Failed to save discount.";
+      console.error("Discount error:", err?.response?.data || err);
       toast.error(`Discount Error: ${msg}`);
     }
   };
@@ -214,33 +346,87 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         serviceName: data.serviceName || null,
         amount: parseFloat(data.amount),
         notes: data.notes || null,
-        date: data.date
+        date: data.date,
       });
-      if (data.paymentMethod === 'Credit Card' && data.ccCharges && parseFloat(data.ccCharges) > 0) {
+      if (
+        data.paymentMethod === "Credit Card" &&
+        data.ccCharges &&
+        parseFloat(data.ccCharges) > 0
+      ) {
         await api.post(`/bookings/${bookingId}/payments`, {
           amount: parseFloat(data.ccCharges),
-          paymentMethod: 'System Generated',
-          paymentType: 'Credit Card Charges',
+          paymentMethod: "System Generated",
+          paymentType: "Credit Card Charges",
           paidOn: data.date,
-          notes: `Credit card charges for ${data.direction}${data.serviceName ? ` on ${data.serviceName}` : ''}`
+          notes: `Credit card charges for ${data.direction}${data.serviceName ? ` on ${data.serviceName}` : ""}`,
         });
       }
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data?.details || err?.message || 'Failed to log refund.';
-      console.error('Refund error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.details ||
+        err?.message ||
+        "Failed to log refund.";
+      console.error("Refund error:", err?.response?.data || err);
       toast.error(`Refund Error: ${msg}`);
     }
   };
 
+  const handleClawbackMargin = async (data: any) => {
+    if (!bookingId) return;
+    try {
+      await api.post(`/bookings/${bookingId}/clawback-margin`, {
+        amount: parseFloat(data.amount),
+        reason: data.reason || null,
+      });
+      fetchDetails();
+      toast.success("Margin clawback successful");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.details ||
+        err?.message ||
+        "Failed to clawback margin.";
+      console.error("Clawback error:", err?.response?.data || err);
+      toast.error(`Clawback Error: ${msg}`);
+    }
+  };
+
+  const handleFinalizeMargin = async (data: any) => {
+    if (!bookingId) return;
+    try {
+      await api.post(`/bookings/${bookingId}/finalize-margin`, {
+        amount: parseFloat(data.amount),
+        notes: data.notes || null,
+      });
+      fetchDetails();
+      toast.success("Margin finalized successfully");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.details ||
+        err?.message ||
+        "Failed to finalize margin.";
+      console.error("Finalize error:", err?.response?.data || err);
+      toast.error(`Finalize Error: ${msg}`);
+    }
+  };
+
+
   const handleSavePassenger = async (data: any) => {
     if (!bookingId) return;
     try {
-      data.id ? await api.patch(`/bookings/${bookingId}/passengers/${data.id}`, data) : await api.post(`/bookings/${bookingId}/passengers`, data);
+      data.id
+        ? await api.patch(`/bookings/${bookingId}/passengers/${data.id}`, data)
+        : await api.post(`/bookings/${bookingId}/passengers`, data);
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save passenger.';
-      console.error('Passenger error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to save passenger.";
+      console.error("Passenger error:", err?.response?.data || err);
       toast.error(`Passenger Error: ${msg}`);
     }
   };
@@ -248,11 +434,19 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const handleSaveFlight = async (data: any) => {
     if (!bookingId) return;
     try {
-      data.id ? await api.patch(`/bookings/${bookingId}/flight-services/${data.id}`, data) : await api.post(`/bookings/${bookingId}/flight-services`, data);
+      data.id
+        ? await api.patch(
+            `/bookings/${bookingId}/flight-services/${data.id}`,
+            data,
+          )
+        : await api.post(`/bookings/${bookingId}/flight-services`, data);
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save flight.';
-      console.error('Flight error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to save flight.";
+      console.error("Flight error:", err?.response?.data || err);
       toast.error(`Flight Error: ${msg}`);
     }
   };
@@ -260,11 +454,19 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const handleSaveAccommodation = async (data: any) => {
     if (!bookingId) return;
     try {
-      data.id ? await api.patch(`/bookings/${bookingId}/accommodations/${data.id}`, data) : await api.post(`/bookings/${bookingId}/accommodations`, data);
+      data.id
+        ? await api.patch(
+            `/bookings/${bookingId}/accommodations/${data.id}`,
+            data,
+          )
+        : await api.post(`/bookings/${bookingId}/accommodations`, data);
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save accommodation.';
-      console.error('Hotel error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to save accommodation.";
+      console.error("Hotel error:", err?.response?.data || err);
       toast.error(`Hotel Error: ${msg}`);
     }
   };
@@ -272,11 +474,19 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const handleSaveTransport = async (data: any) => {
     if (!bookingId) return;
     try {
-      data.id ? await api.patch(`/bookings/${bookingId}/transport-services/${data.id}`, data) : await api.post(`/bookings/${bookingId}/transport-services`, data);
+      data.id
+        ? await api.patch(
+            `/bookings/${bookingId}/transport-services/${data.id}`,
+            data,
+          )
+        : await api.post(`/bookings/${bookingId}/transport-services`, data);
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save transport.';
-      console.error('Transport error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to save transport.";
+      console.error("Transport error:", err?.response?.data || err);
       toast.error(`Transport Error: ${msg}`);
     }
   };
@@ -284,11 +494,17 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const handleSaveVisa = async (data: any) => {
     if (!bookingId) return;
     try {
-      data.id ? await api.patch(`/bookings/${bookingId}/visa-services/${data.id}`, data) : await api.post(`/bookings/${bookingId}/visa-services`, data);
+      data.id
+        ? await api.patch(
+            `/bookings/${bookingId}/visa-services/${data.id}`,
+            data,
+          )
+        : await api.post(`/bookings/${bookingId}/visa-services`, data);
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save visa.';
-      console.error('Visa error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message || err?.message || "Failed to save visa.";
+      console.error("Visa error:", err?.response?.data || err);
       toast.error(`Visa Error: ${msg}`);
     }
   };
@@ -296,11 +512,19 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
   const handleSaveAdditionalService = async (data: any) => {
     if (!bookingId) return;
     try {
-      data.id ? await api.patch(`/bookings/${bookingId}/additional-services/${data.id}`, data) : await api.post(`/bookings/${bookingId}/additional-services`, data);
+      data.id
+        ? await api.patch(
+            `/bookings/${bookingId}/additional-services/${data.id}`,
+            data,
+          )
+        : await api.post(`/bookings/${bookingId}/additional-services`, data);
       fetchDetails();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save additional service.';
-      console.error('Additional service error:', err?.response?.data || err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to save additional service.";
+      console.error("Additional service error:", err?.response?.data || err);
       toast.error(`Service Error: ${msg}`);
     }
   };
@@ -309,12 +533,15 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
     if (!bookingId) return;
     try {
       await api.patch(`/bookings/${bookingId}`, {
-        [field]: value
+        [field]: value,
       });
       fetchDetails();
       if (onUpdate) onUpdate();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || `Failed to update ${field}.`;
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        `Failed to update ${field}.`;
       console.error(`Update ${field} error:`, err?.response?.data || err);
       toast.error(`Update Error: ${msg}`);
     }
@@ -346,57 +573,80 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className="relative w-full max-w-[95vw] xl:max-w-7xl h-[96vh] bg-slate-50 shadow-2xl flex flex-col z-10 rounded-2xl overflow-hidden"
       >
         {/* Premium Header */}
         <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-8 py-6 flex justify-between items-center shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
           <div className="absolute bottom-0 left-20 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl -mb-10"></div>
-          
+
           <div className="relative z-10 flex flex-col">
             <h2 className="text-2xl font-extrabold tracking-tight flex items-center gap-3">
-              Booking Workspace 
+              Booking Workspace
               {booking && (
                 <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-mono tracking-widest backdrop-blur-md border border-white/20">
                   {booking.bookingReference}
                 </span>
               )}
             </h2>
-            <p className="text-indigo-200 text-xs mt-1 font-medium">Complete overview and administration</p>
+            <p className="text-indigo-200 text-xs mt-1 font-medium">
+              Complete overview and administration
+            </p>
           </div>
           <div className="relative z-10 flex items-center gap-4">
-            {booking && booking.accommodations && booking.accommodations.length > 0 && (
-              <button 
-                onClick={handleGenerateHotelVoucher} 
-                disabled={isGeneratingHotelVoucher}
-                className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
-              >
-                {isGeneratingHotelVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {isGeneratingHotelVoucher ? 'Generating...' : 'Hotel Voucher'}
-              </button>
-            )}
-            {booking && booking.transportServices && booking.transportServices.length > 0 && (
-              <button 
-                onClick={handleGenerateTransportVoucher} 
-                disabled={isGeneratingTransportVoucher}
-                className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
-              >
-                {isGeneratingTransportVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {isGeneratingTransportVoucher ? 'Generating...' : 'Transport Voucher'}
-              </button>
-            )}
+            {booking &&
+              booking.accommodations &&
+              booking.accommodations.length > 0 && (
+                <button
+                  onClick={handleGenerateHotelVoucher}
+                  disabled={isGeneratingHotelVoucher}
+                  className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
+                >
+                  {isGeneratingHotelVoucher ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
+                  {isGeneratingHotelVoucher ? "Generating..." : "Hotel Voucher"}
+                </button>
+              )}
+            {booking &&
+              booking.transportServices &&
+              booking.transportServices.length > 0 && (
+                <button
+                  onClick={handleGenerateTransportVoucher}
+                  disabled={isGeneratingTransportVoucher}
+                  className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
+                >
+                  {isGeneratingTransportVoucher ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
+                  {isGeneratingTransportVoucher
+                    ? "Generating..."
+                    : "Transport Voucher"}
+                </button>
+              )}
             {booking && (
-              <button 
-                onClick={handleGenerateInvoice} 
+              <button
+                onClick={handleGenerateInvoice}
                 disabled={isGeneratingPDF}
                 className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
               >
-                {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {isGeneratingPDF ? 'Generating...' : 'Generate Invoice'}
+                {isGeneratingPDF ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4" />
+                )}
+                {isGeneratingPDF ? "Generating..." : "Generate Invoice"}
               </button>
             )}
-            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/80 hover:text-white">
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/80 hover:text-white"
+            >
               <X className="w-6 h-6" />
             </button>
           </div>
@@ -409,7 +659,9 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64">
               <Loader2 className="w-10 h-10 text-primary-500 animate-spin mb-4" />
-              <p className="text-slate-500 font-semibold text-sm">Loading workspace data...</p>
+              <p className="text-slate-500 font-semibold text-sm">
+                Loading workspace data...
+              </p>
             </div>
           ) : error ? (
             <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100 flex flex-col items-center text-center">
@@ -418,116 +670,182 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
             </div>
           ) : booking ? (
             <div className="relative z-10 max-w-6xl mx-auto space-y-4">
-              
-              <AccordionSection 
-                title="Financial Dashboard & Ledger" 
+              <AccordionSection
+                title="Financial Dashboard & Ledger"
                 icon={<Calculator className="w-4 h-4" />}
-                isOpen={openSections.includes('summary')} 
-                onToggle={() => toggleSection('summary')}
+                isOpen={openSections.includes("summary")}
+                onToggle={() => toggleSection("summary")}
                 action={
                   <div className="flex gap-2">
-                    <button onClick={() => setShowLogRefund(true)} className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                    <button
+                      onClick={() => setShowLogRefund(true)}
+                      className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
                       <RefreshCcw className="w-3 h-3" /> Refund
                     </button>
-                    <button onClick={() => setShowAddDiscount(true)} className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                    <button
+                      onClick={() => setShowAddDiscount(true)}
+                      className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
                       <Plus className="w-3 h-3" /> Discount
                     </button>
-                    <button onClick={() => setShowLogTransaction(true)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                    <button
+                      onClick={() => setShowLogTransaction(true)}
+                      className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
                       <Plus className="w-3 h-3" /> Log Transaction
                     </button>
                   </div>
                 }
               >
                 <div className="space-y-4">
-                  <SummaryLedgerSection booking={booking || undefined} onUpdate={handleUpdateCoreField} />
-                  <TransactionsSection booking={booking || undefined} onAddDiscount={() => setShowAddDiscount(true)} onLogRefund={() => setShowLogRefund(true)} />
+                  <SummaryLedgerSection
+                    booking={booking || undefined}
+                    onUpdate={handleUpdateCoreField}
+                  />
+                  <TransactionsSection
+                    booking={booking || undefined}
+                    onAddDiscount={() => setShowAddDiscount(true)}
+                    onLogRefund={() => setShowLogRefund(true)}
+                    onClawbackMargin={handleClawbackMargin}
+                    onFinalizeMargin={handleFinalizeMargin}
+                  />
                 </div>
               </AccordionSection>
 
-              <AccordionSection 
-                title="Passengers" 
+              <AccordionSection
+                title="Passengers"
                 icon={<Users className="w-4 h-4" />}
-                isOpen={openSections.includes('passengers')} 
-                onToggle={() => toggleSection('passengers')}
+                isOpen={openSections.includes("passengers")}
+                onToggle={() => toggleSection("passengers")}
                 action={
-                  <button onClick={() => setShowAddPassenger(true)} className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                  <button
+                    onClick={() => setShowAddPassenger(true)}
+                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                  >
                     <Plus className="w-3 h-3" /> Add
                   </button>
                 }
               >
-                <PassengersSection passengers={booking.customers} onAdd={() => setShowAddPassenger(true)} onEdit={(p) => setEditingPassenger(p)} onDelete={(s: any) => handleDeleteService('passenger', s.id)} />
+                <PassengersSection
+                  passengers={booking.customers}
+                  onAdd={() => setShowAddPassenger(true)}
+                  onEdit={(p) => setEditingPassenger(p)}
+                  onDelete={(s: any) => handleDeleteService("passenger", s.id)}
+                />
               </AccordionSection>
 
-              <AccordionSection 
-                title="Flight Services" 
+              <AccordionSection
+                title="Flight Services"
                 icon={<Plane className="w-4 h-4" />}
-                isOpen={openSections.includes('flights')} 
-                onToggle={() => toggleSection('flights')}
+                isOpen={openSections.includes("flights")}
+                onToggle={() => toggleSection("flights")}
                 action={
-                  <button onClick={() => setShowAddFlight(true)} className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                  <button
+                    onClick={() => setShowAddFlight(true)}
+                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                  >
                     <Plus className="w-3 h-3" /> Add
                   </button>
                 }
               >
-                <FlightServicesSection flights={booking.flightServices} onEdit={setEditingFlight} onAdd={() => setShowAddFlight(true)} onDelete={(s: any) => handleDeleteService('flight', s.id)} />
+                <FlightServicesSection
+                  flights={booking.flightServices}
+                  onEdit={setEditingFlight}
+                  onAdd={() => setShowAddFlight(true)}
+                  onDelete={(s: any) => handleDeleteService("flight", s.id)}
+                />
               </AccordionSection>
 
-              <AccordionSection 
-                title="Accommodations & Stays" 
+              <AccordionSection
+                title="Accommodations & Stays"
                 icon={<Hotel className="w-4 h-4" />}
-                isOpen={openSections.includes('stays')} 
-                onToggle={() => toggleSection('stays')}
+                isOpen={openSections.includes("stays")}
+                onToggle={() => toggleSection("stays")}
                 action={
-                  <button onClick={() => setShowAddHotel(true)} className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                  <button
+                    onClick={() => setShowAddHotel(true)}
+                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                  >
                     <Plus className="w-3 h-3" /> Add
                   </button>
                 }
               >
-                <StaysSection stays={booking.accommodations} onAdd={() => setShowAddHotel(true)} onEdit={(s: any) => setEditingAccommodation(s)} onDelete={(s: any) => handleDeleteService('accommodation', s.id)} />
+                <StaysSection
+                  stays={booking.accommodations}
+                  onAdd={() => setShowAddHotel(true)}
+                  onEdit={(s: any) => setEditingAccommodation(s)}
+                  onDelete={(s: any) =>
+                    handleDeleteService("accommodation", s.id)
+                  }
+                />
               </AccordionSection>
 
-              <AccordionSection 
-                title="Transport Services" 
+              <AccordionSection
+                title="Transport Services"
                 icon={<Car className="w-4 h-4" />}
-                isOpen={openSections.includes('transport')} 
-                onToggle={() => toggleSection('transport')}
+                isOpen={openSections.includes("transport")}
+                onToggle={() => toggleSection("transport")}
                 action={
-                  <button onClick={() => setShowAddTransport(true)} className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                  <button
+                    onClick={() => setShowAddTransport(true)}
+                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                  >
                     <Plus className="w-3 h-3" /> Add
                   </button>
                 }
               >
-                <TransportServicesSection transports={booking.transportServices} onEdit={setEditingTransport} onAdd={() => setShowAddTransport(true)} onDelete={(s: any) => handleDeleteService('transport', s.id)} />
+                <TransportServicesSection
+                  transports={booking.transportServices}
+                  onEdit={setEditingTransport}
+                  onAdd={() => setShowAddTransport(true)}
+                  onDelete={(s: any) => handleDeleteService("transport", s.id)}
+                />
               </AccordionSection>
 
-              <AccordionSection 
-                title="Visa Services" 
+              <AccordionSection
+                title="Visa Services"
                 icon={<FileText className="w-4 h-4" />}
-                isOpen={openSections.includes('visas')} 
-                onToggle={() => toggleSection('visas')}
+                isOpen={openSections.includes("visas")}
+                onToggle={() => toggleSection("visas")}
                 action={
-                  <button onClick={() => setShowAddVisa(true)} className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                  <button
+                    onClick={() => setShowAddVisa(true)}
+                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                  >
                     <Plus className="w-3 h-3" /> Add
                   </button>
                 }
               >
-                <VisaServicesSection visas={booking.visaServices} onEdit={setEditingVisa} onAdd={() => setShowAddVisa(true)} onDelete={(s: any) => handleDeleteService('visa', s.id)} />
+                <VisaServicesSection
+                  visas={booking.visaServices}
+                  onEdit={setEditingVisa}
+                  onAdd={() => setShowAddVisa(true)}
+                  onDelete={(s: any) => handleDeleteService("visa", s.id)}
+                />
               </AccordionSection>
 
-              <AccordionSection 
-                title="Additional Services" 
+              <AccordionSection
+                title="Additional Services"
                 icon={<Plus className="w-4 h-4" />}
-                isOpen={openSections.includes('additional')} 
-                onToggle={() => toggleSection('additional')}
+                isOpen={openSections.includes("additional")}
+                onToggle={() => toggleSection("additional")}
                 action={
-                  <button onClick={() => setShowAddAdditionalService(true)} className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide">
+                  <button
+                    onClick={() => setShowAddAdditionalService(true)}
+                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                  >
                     <Plus className="w-3 h-3" /> Add
                   </button>
                 }
               >
-                <AdditionalServicesSection services={booking.additionalServices} onEdit={setEditingAdditionalService} onAdd={() => setShowAddAdditionalService(true)} onDelete={(s: any) => handleDeleteService('additional', s.id)} />
+                <AdditionalServicesSection
+                  services={booking.additionalServices}
+                  onEdit={setEditingAdditionalService}
+                  onAdd={() => setShowAddAdditionalService(true)}
+                  onDelete={(s: any) => handleDeleteService("additional", s.id)}
+                />
               </AccordionSection>
-
             </div>
           ) : null}
         </div>
@@ -542,76 +860,111 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
           onConfirm={confirmDelete}
         />
         {(showAddPassenger || !!editingPassenger) && (
-          <AddPassengerModal 
-            isOpen={showAddPassenger || !!editingPassenger} 
-            onClose={() => { setShowAddPassenger(false); setEditingPassenger(null); }} 
+          <AddPassengerModal
+            isOpen={showAddPassenger || !!editingPassenger}
+            onClose={() => {
+              setShowAddPassenger(false);
+              setEditingPassenger(null);
+            }}
             onSubmit={handleSavePassenger}
             initialData={editingPassenger}
           />
         )}
         {(showAddFlight || !!editingFlight) && (
-          <AddFlightModal 
-            isOpen={showAddFlight || !!editingFlight} 
-            onClose={() => { setShowAddFlight(false); setEditingFlight(null); }} 
+          <AddFlightModal
+            isOpen={showAddFlight || !!editingFlight}
+            onClose={() => {
+              setShowAddFlight(false);
+              setEditingFlight(null);
+            }}
             onSubmit={handleSaveFlight}
             initialData={editingFlight}
           />
         )}
         {(showAddHotel || !!editingAccommodation) && (
-          <AddAccommodationModal 
-            isOpen={showAddHotel || !!editingAccommodation} 
-            onClose={() => { setShowAddHotel(false); setEditingAccommodation(null); }} 
+          <AddAccommodationModal
+            isOpen={showAddHotel || !!editingAccommodation}
+            onClose={() => {
+              setShowAddHotel(false);
+              setEditingAccommodation(null);
+            }}
             onSubmit={handleSaveAccommodation}
             initialData={editingAccommodation}
           />
         )}
         {(showAddTransport || !!editingTransport) && (
-          <AddTransportModal 
-            isOpen={showAddTransport || !!editingTransport} 
-            onClose={() => { setShowAddTransport(false); setEditingTransport(null); }} 
+          <AddTransportModal
+            isOpen={showAddTransport || !!editingTransport}
+            onClose={() => {
+              setShowAddTransport(false);
+              setEditingTransport(null);
+            }}
             onSubmit={handleSaveTransport}
             flights={booking?.flightServices || []}
             initialData={editingTransport}
           />
         )}
         {(showAddVisa || !!editingVisa) && (
-          <AddVisaModal 
-            isOpen={showAddVisa || !!editingVisa} 
-            onClose={() => { setShowAddVisa(false); setEditingVisa(null); }} 
+          <AddVisaModal
+            isOpen={showAddVisa || !!editingVisa}
+            onClose={() => {
+              setShowAddVisa(false);
+              setEditingVisa(null);
+            }}
             onSubmit={handleSaveVisa}
             initialData={editingVisa}
             passengers={booking?.customers || []}
           />
         )}
         {(showAddAdditionalService || !!editingAdditionalService) && (
-          <AddAdditionalServiceModal 
-            isOpen={showAddAdditionalService || !!editingAdditionalService} 
-            onClose={() => { setShowAddAdditionalService(false); setEditingAdditionalService(null); }} 
+          <AddAdditionalServiceModal
+            isOpen={showAddAdditionalService || !!editingAdditionalService}
+            onClose={() => {
+              setShowAddAdditionalService(false);
+              setEditingAdditionalService(null);
+            }}
             onSubmit={handleSaveAdditionalService}
             initialData={editingAdditionalService}
           />
         )}
         {showLogTransaction && (
-          <LogTransactionModal 
+          <LogTransactionModal
             booking={booking!}
-            isOpen={showLogTransaction} 
-            onClose={() => setShowLogTransaction(false)} 
+            isOpen={showLogTransaction}
+            onClose={() => setShowLogTransaction(false)}
             onSubmit={handleSaveTransaction}
           />
         )}
+        {showDebtOffset && booking?.agentId && pendingTransaction && (
+          <DebtOffsetModal
+            isOpen={showDebtOffset}
+            agentName={booking.agentName || "Agent"}
+            debtAmount={agentDebt}
+            newPayoutAmount={parseFloat(pendingTransaction.amount)}
+            onClose={() => {
+              setShowDebtOffset(false);
+              setPendingTransaction(null);
+            }}
+            onSubmit={async (offsetAmount) => {
+              setShowDebtOffset(false);
+              await submitTransaction(pendingTransaction, offsetAmount);
+              setPendingTransaction(null);
+            }}
+          />
+        )}
         {showAddDiscount && (
-          <AddDiscountModal 
+          <AddDiscountModal
             booking={booking!}
-            isOpen={showAddDiscount} 
-            onClose={() => setShowAddDiscount(false)} 
+            isOpen={showAddDiscount}
+            onClose={() => setShowAddDiscount(false)}
             onSubmit={handleSaveDiscount}
           />
         )}
         {showLogRefund && (
-          <LogRefundModal 
+          <LogRefundModal
             booking={booking!}
-            isOpen={showLogRefund} 
-            onClose={() => setShowLogRefund(false)} 
+            isOpen={showLogRefund}
+            onClose={() => setShowLogRefund(false)}
             onSubmit={handleSaveRefund}
           />
         )}
@@ -619,23 +972,55 @@ export function BookingDetailsModal({ bookingId, isOpen, onClose, onUpdate }: Bo
 
       {/* Hidden Templates for PDF Generation */}
       {booking && (
-        <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "-9999px",
+            left: "-9999px",
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+        >
           <div id="invoice-template">
-            <InvoiceTemplate booking={booking} companyInfo={{ name: 'TravelBooker Workspace', location: 'London, UK', phone: '+44 20 7946 0958', email: 'operations@travelbooker.co.uk' }} />
+            <InvoiceTemplate
+              booking={booking}
+              companyInfo={{
+                name: "TravelBooker Workspace",
+                location: "London, UK",
+                phone: "+44 20 7946 0958",
+                email: "operations@travelbooker.co.uk",
+              }}
+            />
           </div>
           {booking.accommodations && booking.accommodations.length > 0 && (
             <div id="hotel-voucher-template">
-              <VoucherTemplate booking={booking} type="hotel" companyInfo={{ name: 'TravelBooker Workspace', phone: '+44 20 7946 0958', email: 'operations@travelbooker.co.uk' }} />
+              <VoucherTemplate
+                booking={booking}
+                type="hotel"
+                companyInfo={{
+                  name: "TravelBooker Workspace",
+                  phone: "+44 20 7946 0958",
+                  email: "operations@travelbooker.co.uk",
+                }}
+              />
             </div>
           )}
-          {booking.transportServices && booking.transportServices.length > 0 && (
-            <div id="transport-voucher-template">
-              <VoucherTemplate booking={booking} type="transport" companyInfo={{ name: 'TravelBooker Workspace', phone: '+44 20 7946 0958', email: 'operations@travelbooker.co.uk' }} />
-            </div>
-          )}
+          {booking.transportServices &&
+            booking.transportServices.length > 0 && (
+              <div id="transport-voucher-template">
+                <VoucherTemplate
+                  booking={booking}
+                  type="transport"
+                  companyInfo={{
+                    name: "TravelBooker Workspace",
+                    phone: "+44 20 7946 0958",
+                    email: "operations@travelbooker.co.uk",
+                  }}
+                />
+              </div>
+            )}
         </div>
       )}
-
     </div>
   );
 }

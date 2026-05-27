@@ -537,7 +537,10 @@ app.get('/agents', requireTenantContext, async (req: any, res: Response) => {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const agents = await (prisma as any).agent.findMany({
       where: { tenantId },
-      include: { marginSegments: { orderBy: { minAmount: 'asc' } } },
+      include: { 
+        marginSegments: { orderBy: { minAmount: 'asc' } },
+        wallet: { include: { transactions: { orderBy: { createdAt: 'desc' } } } }
+      },
       orderBy: { name: 'asc' }
     });
     res.status(200).json({ agents });
@@ -571,7 +574,10 @@ app.get('/agents/:id', requireTenantContext, async (req: any, res: Response) => 
     const id = parseInt(req.params.id);
     const agent = await (prisma as any).agent.findFirst({
       where: { id, tenantId },
-      include: { marginSegments: { orderBy: { minAmount: 'asc' } } }
+      include: { 
+        marginSegments: { orderBy: { minAmount: 'asc' } },
+        wallet: { include: { transactions: { orderBy: { createdAt: 'desc' } } } }
+      }
     });
     if (!agent) return res.status(404).json({ error: 'Not Found', message: 'Agent not found' });
     res.status(200).json({ agent });
@@ -823,6 +829,76 @@ app.post('/agents/:id/margin-segments', requireTenantContext, async (req: any, r
     res.status(200).json({ message: 'Margin segments updated successfully', agent });
   } catch (error: any) {
     console.error('Update Margin Segments Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error?.message });
+  }
+});
+
+// GET /agents/:id/wallet/debt — Fetch negative balance for offset
+app.get('/agents/:id/wallet/debt', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+
+    const agent = await (prisma as any).agent.findFirst({ where: { id: agentId, tenantId } });
+    if (!agent) return res.status(404).json({ error: 'Not Found', message: 'Agent not found' });
+
+    const wallet = await (prisma as any).agentWallet.findUnique({ where: { agentId } });
+    if (!wallet) return res.status(200).json({ debt: 0 });
+
+    const currentBalance = parseFloat(wallet.currentBalance);
+    const debt = currentBalance < 0 ? Math.abs(currentBalance) : 0;
+
+    res.status(200).json({ debt });
+  } catch (error: any) {
+    console.error('Fetch Debt Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error?.message });
+  }
+});
+
+// POST /agents/:id/wallet/transaction — Log a transaction to the Agent's Wallet
+app.post('/agents/:id/wallet/transaction', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+    const { amount, transactionType, referenceId, notes } = req.body;
+
+    const agent = await (prisma as any).agent.findFirst({ where: { id: agentId, tenantId } });
+    if (!agent) return res.status(404).json({ error: 'Not Found', message: 'Agent not found' });
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount)) return res.status(400).json({ error: 'Invalid amount' });
+
+    // Execute in transaction to prevent race conditions
+    const result = await (prisma as any).$transaction(async (tx: any) => {
+      // Find or create wallet
+      let wallet = await tx.agentWallet.findUnique({ where: { agentId } });
+      if (!wallet) {
+        wallet = await tx.agentWallet.create({ data: { agentId, currentBalance: 0 } });
+      }
+
+      // Create transaction log
+      const txn = await tx.agentTransaction.create({
+        data: {
+          agentWalletId: wallet.id,
+          amount: numAmount,
+          transactionType,
+          referenceId: referenceId || null,
+          notes: notes || null
+        }
+      });
+
+      // Update wallet balance
+      wallet = await tx.agentWallet.update({
+        where: { id: wallet.id },
+        data: { currentBalance: { increment: numAmount } }
+      });
+
+      return { wallet, txn };
+    });
+
+    res.status(201).json({ message: 'Wallet transaction logged', ...result });
+  } catch (error: any) {
+    console.error('Wallet Transaction Error:', error);
     res.status(500).json({ error: 'Internal Server Error', message: error?.message });
   }
 });

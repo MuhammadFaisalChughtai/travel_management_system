@@ -1,5 +1,6 @@
 import { Hotel, Edit, Trash2 } from 'lucide-react';
 import type { Accommodation } from '../../types/booking';
+import { EmptyState } from '../shared/EmptyState';
 
 interface StaysSectionProps {
   onAdd?: () => void;
@@ -13,17 +14,19 @@ export function StaysSection({ stays, onEdit, onDelete}: StaysSectionProps) {
   return (
     <div className="flex flex-col gap-4">
       {stays.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10 px-4 text-center bg-white/50 rounded-2xl border border-dashed border-slate-300">
-          <Hotel className="w-10 h-10 text-slate-300 mb-3" />
-          <p className="text-slate-500 font-semibold text-xs">No accommodations recorded.</p>
-        </div>
+        <EmptyState
+          icon={Hotel}
+          title="No accommodations recorded"
+          description="Click the add button to log a new stay."
+          size="sm"
+        />
       ) : (
         <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-[11px]">
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 to-indigo-50/30 text-slate-500 font-extrabold uppercase border-b border-slate-100">
-                  <th className="py-3 px-4">Hotel</th>
+                  <th className="py-3 px-4">Vendor / Hotel</th>
                   <th className="py-3 px-4">Check In</th>
                   <th className="py-3 px-4">Check Out</th>
                   <th className="py-3 px-4">Rooms</th>
@@ -34,7 +37,12 @@ export function StaysSection({ stays, onEdit, onDelete}: StaysSectionProps) {
               <tbody className="divide-y divide-slate-100">
                 {stays.map((s, i) => (
                   <tr key={s.id || i} className="hover:bg-indigo-50/30 transition-colors group">
-                    <td className="py-3 px-4 font-black text-slate-800">{s.hotelName || s.vendorName}</td>
+                    <td className="py-3 px-4">
+                      <div className="font-black text-slate-800">{s.vendorName || s.hotelName}</div>
+                      {s.hotelName && s.vendorName && s.hotelName !== s.vendorName && (
+                        <div className="text-slate-500 font-semibold">{s.hotelName}</div>
+                      )}
+                    </td>
                     <td className="py-3 px-4 font-semibold text-slate-600">{s.checkInDate ? new Date(s.checkInDate).toLocaleDateString() : '—'}</td>
                     <td className="py-3 px-4 font-semibold text-slate-600">{s.checkOutDate ? new Date(s.checkOutDate).toLocaleDateString() : '—'}</td>
                     <td className="py-3 px-4 font-mono text-slate-600">{s.qty || 1}</td>

@@ -598,7 +598,7 @@ app.get('/users', requireTenantContext, async (req: any, res: Response) => {
     const tenantId = parseInt(req.tenantId!);
     const users = await prisma.user.findMany({
       where: { tenantId },
-      include: { role: true },
+      include: { role: true, agent: true },
       orderBy: { createdAt: 'desc' }
     });
     
@@ -608,6 +608,8 @@ app.get('/users', requireTenantContext, async (req: any, res: Response) => {
       name: u.name,
       email: u.email,
       role: u.role?.name || 'UNKNOWN',
+      agentId: u.agentId,
+      agentName: u.agent?.name,
       createdAt: u.createdAt,
       updatedAt: u.updatedAt
     }));
@@ -622,7 +624,7 @@ app.get('/users', requireTenantContext, async (req: any, res: Response) => {
 app.post('/users', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
-    const { name, email, password, roleName } = req.body;
+    const { name, email, password, roleName, agentId } = req.body;
 
     if (!name || !email || !password || !roleName) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -656,7 +658,8 @@ app.post('/users', requireTenantContext, async (req: any, res: Response) => {
         email,
         encryptedPassword: hashedPassword,
         tenantId,
-        roleId: role.id
+        roleId: role.id,
+        agentId: agentId ? parseInt(agentId) : null
       }
     });
 
@@ -679,13 +682,14 @@ app.patch('/users/:id', requireTenantContext, async (req: any, res: Response) =>
   try {
     const tenantId = parseInt(req.tenantId!);
     const userId = parseInt(req.params.id);
-    const { name, roleName, password } = req.body;
+    const { name, roleName, password, agentId } = req.body;
 
     const user = await prisma.user.findFirst({ where: { id: userId, tenantId } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     let dataToUpdate: any = {};
     if (name) dataToUpdate.name = name;
+    if (agentId !== undefined) dataToUpdate.agentId = agentId === null ? null : parseInt(agentId);
 
     if (password) {
       const salt = await bcrypt.genSalt(10);

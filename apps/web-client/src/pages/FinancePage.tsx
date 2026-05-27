@@ -5,6 +5,7 @@ import { api } from '../api/axios';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
+import { Pagination } from '../components/shared/Pagination';
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
@@ -59,6 +60,15 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
     (p.vendorName && p.vendorName.toLowerCase().includes(search.toLowerCase())) ||
     (p.notes && p.notes.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const paymentsPerPage = 10;
+  useEffect(() => { setPaymentsPage(1); }, [activeTab, search]);
+  const paginatedPayments = filtered.slice((paymentsPage - 1) * paymentsPerPage, paymentsPage * paymentsPerPage);
+
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const ledgerPerPage = 10;
+  useEffect(() => { setLedgerPage(1); }, [ledgerTransactions]);
 
   const handleDelete = async () => {
     if (!deletingPayment) return;
@@ -290,6 +300,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
               description="Try adjusting your search criteria or filters."
             />
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -304,7 +315,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {filtered.map(p => (
+                  {paginatedPayments.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-4 px-6 font-mono text-slate-400 text-xs">TXN-{p.id}</td>
                       <td className="py-4 px-6 font-black text-slate-900">{p.bookingRef}</td>
@@ -331,6 +342,16 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                 </tbody>
               </table>
             </div>
+            {filtered.length > 0 && (
+              <Pagination 
+                currentPage={paymentsPage} 
+                totalPages={Math.ceil(filtered.length / paymentsPerPage)} 
+                onPageChange={setPaymentsPage} 
+                itemsPerPage={paymentsPerPage} 
+                totalItems={filtered.length} 
+              />
+            )}
+          </>
           )
         ) : (
           <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px] mt-6">
@@ -343,6 +364,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                 description="No double-entry accounting records matched your filters."
               />
             ) : (
+              <>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -356,7 +378,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                    {ledgerTransactions.map((txn) => {
+                    {ledgerTransactions.slice((ledgerPage - 1) * ledgerPerPage, ledgerPage * ledgerPerPage).map((txn) => {
                       const debit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount), 0) || 0;
                       const credit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount), 0) || 0;
                       
@@ -418,6 +440,16 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   </tbody>
                 </table>
               </div>
+              {ledgerTransactions.length > 0 && (
+                <Pagination 
+                  currentPage={ledgerPage} 
+                  totalPages={Math.ceil(ledgerTransactions.length / ledgerPerPage)} 
+                  onPageChange={setLedgerPage} 
+                  itemsPerPage={ledgerPerPage} 
+                  totalItems={ledgerTransactions.length} 
+                />
+              )}
+            </>
             )}
           </div>
         )}

@@ -67,6 +67,7 @@ import {
 } from 'recharts';
 import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { AgentsPage } from './AgentsPage';
+import { Pagination } from '../components/shared/Pagination';
 
 const SIDEBAR_ITEMS = [
   { id: 'overview', icon: Home, label: 'Overview' },
@@ -84,6 +85,11 @@ export function Dashboard() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [bookingsPage, setBookingsPage] = useState(1);
+  const bookingsPerPage = 10;
+
+  useEffect(() => { setBookingsPage(1); }, [bookings]);
 
   // Sidebar navigation tab state
   const [sidebarTab, setSidebarTab] = useState<'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog'>('overview');
@@ -1276,8 +1282,9 @@ export function Dashboard() {
                 </button>
               </div>
             ) : (
-              <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
-                <div className="overflow-x-auto">
+              <>
+                <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
+                  <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase border-b border-slate-100">
@@ -1295,7 +1302,7 @@ export function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                      {bookings.map((b) => {
+                      {bookings.slice((bookingsPage - 1) * bookingsPerPage, bookingsPage * bookingsPerPage).map((b) => {
                         const bookingTotal = Number(b.totalPrice) || 0;
                         const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
                         const vendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -1379,6 +1386,16 @@ export function Dashboard() {
                   </table>
                 </div>
               </div>
+              {bookings.length > 0 && (
+                <Pagination 
+                  currentPage={bookingsPage} 
+                  totalPages={Math.ceil(bookings.length / bookingsPerPage)} 
+                  onPageChange={setBookingsPage} 
+                  itemsPerPage={bookingsPerPage} 
+                  totalItems={bookings.length} 
+                />
+              )}
+              </>
             )}
               </div>
             </div> {/* End of Main Flex Layout */}

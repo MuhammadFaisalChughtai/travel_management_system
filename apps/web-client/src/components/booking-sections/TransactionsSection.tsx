@@ -10,6 +10,7 @@ import { LogRefundModal } from '../booking-modals/LogRefundModal';
 import { ClawbackMarginModal } from '../booking-modals/ClawbackMarginModal';
 import { PieChart, ArrowUpCircle, CheckCircle2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Pagination } from '../shared/Pagination';
 
 interface TransactionsSectionProps {
   booking: BookingDetail;
@@ -116,21 +117,32 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
   const hasPendingVendorPayments = hasServices && vendorPayments === 0;
 
   const allCombinedTransactions = [
-    ...(booking.payments || []),
+    ...(booking.payments?.map(p => ({ ...p, _type: 'payment' })) || []),
     ...(booking.vendorPayments?.map(vp => ({
+      ...vp,
+      _type: 'vendorPayment',
       id: `vp-${vp.id}`,
-      paidOn: vp.paidOn,
       paymentType: 'Sent to Vendor',
-      paymentMethod: vp.vendorName,
-      amount: vp.amount,
-      notes: vp.notes
-    })) || [])
+      paymentMethod: vp.vendorName
+    })) || []),
+    ...(booking.refunds?.map(r => ({ ...r, _type: 'refund', paidOn: r.date })) || []),
+    ...(booking.discounts?.map(d => ({ ...d, _type: 'discount', paidOn: d.date })) || [])
   ];
 
-  const filteredTransactions = allCombinedTransactions.filter(p => filter === 'All' || p.paymentType === filter);
+  const filteredTransactions = allCombinedTransactions.filter(p => {
+    if (filter === 'All') return true;
+    if (p._type === 'payment' || p._type === 'vendorPayment') return p.paymentType === filter;
+    return false; // hide refunds and discounts when a specific payment type filter is selected
+  });
 
   // Sort by date descending
   filteredTransactions.sort((a, b) => new Date(b.paidOn || new Date()).getTime() - new Date(a.paidOn || new Date()).getTime());
+
+  const [txPage, setTxPage] = useState(1);
+  const txPerPage = 10;
+  useEffect(() => { setTxPage(1); }, [filter, booking]);
+
+  const paginatedTxs = filteredTransactions.slice((txPage - 1) * txPerPage, txPage * txPerPage);
 
   return (
     <div className="space-y-6">
@@ -340,83 +352,101 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                         </tr>
                       </thead>
                       <tbody className="text-[12px]">
-                        {filteredTransactions.map(t => {
-                          const isReceived = t.paymentType === 'Received from Client';
-                          return (
-                            <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                              <td className="py-2 px-4 text-slate-500">{new Date(t.paidOn || new Date()).toLocaleDateString()}</td>
-                              <td className="py-2 px-4 font-bold text-slate-800">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isReceived ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
-                                    {isReceived ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                        {paginatedTxs.map((item: any) => {
+                          if (item._type === 'payment' || item._type === 'vendorPayment') {
+                            const t = item;
+                            const isReceived = t.paymentType === 'Received from Client';
+                            return (
+                              <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                                <td className="py-2 px-4 text-slate-500">{new Date(t.paidOn || new Date()).toLocaleDateString()}</td>
+                                <td className="py-2 px-4 font-bold text-slate-800">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isReceived ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                                      {isReceived ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                                    </div>
+                                    {t.paymentType}
                                   </div>
-                                  {t.paymentType}
-                                </div>
-                              </td>
-                              <td className="py-2 px-4">
-                                <div className="flex flex-col">
-                                  <span className="text-slate-600 font-medium">{t.paymentMethod}</span>
-                                  {t.notes && <span className="text-[10px] text-slate-400 italic whitespace-normal">"{t.notes}"</span>}
-                                </div>
-                              </td>
-                              <td className={`py-2 px-4 text-right font-black ${isReceived ? 'text-emerald-600' : 'text-red-600'}`}>
-                                {isReceived ? '+' : '-'}£{parseFloat(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {booking.refunds?.map(r => {
-                          const isFromVendor = r.direction === 'Refund from Vendor';
-                          return (
-                            <tr key={`ref-${r.id}`} className="border-b border-slate-100 hover:bg-rose-50/50 transition-colors">
-                              <td className="py-2 px-4 text-slate-500">{new Date(r.date).toLocaleDateString()}</td>
-                              <td className="py-2 px-4 font-bold text-rose-800">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isFromVendor ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
-                                    <RefreshCcw className="w-3 h-3" />
+                                </td>
+                                <td className="py-2 px-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-slate-600 font-medium">{t.paymentMethod}</span>
+                                    {t.notes && <span className="text-[10px] text-slate-400 italic whitespace-normal">"{t.notes}"</span>}
                                   </div>
-                                  {r.direction} <span className="text-rose-500 font-medium text-[10px]">({r.vendorCategory})</span>
-                                </div>
-                              </td>
-                              <td className="py-2 px-4">
-                                <div className="flex flex-col">
-                                  {r.serviceName && <span className="text-rose-600 font-medium">{r.serviceName}</span>}
-                                  {r.notes && <span className="text-[10px] text-rose-400 italic whitespace-normal">"{r.notes}"</span>}
-                                </div>
-                              </td>
-                              <td className={`py-2 px-4 text-right font-black ${isFromVendor ? 'text-emerald-600' : 'text-red-600'}`}>
-                                {isFromVendor ? '+' : '-'}£{parseFloat(r.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {booking.discounts?.map(d => {
-                          return (
-                            <tr key={`disc-${d.id}`} className="border-b border-slate-100 hover:bg-amber-50/50 transition-colors">
-                              <td className="py-2 px-4 text-slate-500">{new Date(d.date).toLocaleDateString()}</td>
-                              <td className="py-2 px-4 font-bold text-amber-800">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-600">
-                                    <Tag className="w-3 h-3" />
+                                </td>
+                                <td className={`py-2 px-4 text-right font-black ${isReceived ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {isReceived ? '+' : '-'}£{parseFloat(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            );
+                          }
+                          
+                          if (item._type === 'refund') {
+                            const r = item;
+                            const isFromVendor = r.direction === 'Refund from Vendor';
+                            return (
+                              <tr key={`ref-${r.id}`} className="border-b border-slate-100 hover:bg-rose-50/50 transition-colors">
+                                <td className="py-2 px-4 text-slate-500">{new Date(r.date).toLocaleDateString()}</td>
+                                <td className="py-2 px-4 font-bold text-rose-800">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isFromVendor ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                                      <RefreshCcw className="w-3 h-3" />
+                                    </div>
+                                    {r.direction} <span className="text-rose-500 font-medium text-[10px]">({r.vendorCategory})</span>
                                   </div>
-                                  Discount Received <span className="text-amber-500 font-medium text-[10px]">({d.vendorCategory})</span>
-                                </div>
-                              </td>
-                              <td className="py-2 px-4">
-                                <div className="flex flex-col">
-                                  {d.serviceName && <span className="text-amber-600 font-medium">{d.serviceName}</span>}
-                                  {d.notes && <span className="text-[10px] text-amber-600 italic whitespace-normal">"{d.notes}"</span>}
-                                </div>
-                              </td>
-                              <td className="py-2 px-4 text-right font-black text-emerald-600">
-                                +£{parseFloat(d.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          );
+                                </td>
+                                <td className="py-2 px-4">
+                                  <div className="flex flex-col">
+                                    {r.serviceName && <span className="text-rose-600 font-medium">{r.serviceName}</span>}
+                                    {r.notes && <span className="text-[10px] text-rose-400 italic whitespace-normal">"{r.notes}"</span>}
+                                  </div>
+                                </td>
+                                <td className={`py-2 px-4 text-right font-black ${isFromVendor ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {isFromVendor ? '+' : '-'}£{parseFloat(r.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          if (item._type === 'discount') {
+                            const d = item;
+                            return (
+                              <tr key={`disc-${d.id}`} className="border-b border-slate-100 hover:bg-amber-50/50 transition-colors">
+                                <td className="py-2 px-4 text-slate-500">{new Date(d.date).toLocaleDateString()}</td>
+                                <td className="py-2 px-4 font-bold text-amber-800">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-600">
+                                      <Tag className="w-3 h-3" />
+                                    </div>
+                                    Discount Received <span className="text-amber-500 font-medium text-[10px]">({d.vendorCategory})</span>
+                                  </div>
+                                </td>
+                                <td className="py-2 px-4">
+                                  <div className="flex flex-col">
+                                    {d.serviceName && <span className="text-amber-600 font-medium">{d.serviceName}</span>}
+                                    {d.notes && <span className="text-[10px] text-amber-600 italic whitespace-normal">"{d.notes}"</span>}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-4 text-right font-black text-emerald-600">
+                                  +£{parseFloat(d.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            );
+                          }
+                          
+                          return null;
                         })}
                       </tbody>
                     </table>
                   </div>
+                )}
+                {filteredTransactions.length > 0 && (
+                  <Pagination 
+                    currentPage={txPage} 
+                    totalPages={Math.ceil(filteredTransactions.length / txPerPage)} 
+                    onPageChange={setTxPage} 
+                    itemsPerPage={txPerPage} 
+                    totalItems={filteredTransactions.length} 
+                  />
                 )}
               </div>
             </motion.div>

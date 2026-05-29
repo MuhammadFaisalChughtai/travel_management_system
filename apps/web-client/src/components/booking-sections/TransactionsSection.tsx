@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { BookingDetail, Refund, Transaction } from '../../types/booking';
+import type { BookingDetail, Refund } from '../../types/booking';
 import { EmptyState } from '../shared/EmptyState';
 import { ArrowDownLeft, ArrowUpRight, Clock, AlertCircle, Percent, Receipt, RefreshCcw, Tag, ChevronDown, ChevronUp, ArrowDownCircle } from 'lucide-react';
 import { api } from '../../api/axios';
@@ -8,7 +8,7 @@ import { ClientTransactionsModal } from '../booking-modals/ClientTransactionsMod
 import { ProfitLedgerModal } from '../booking-modals/ProfitLedgerModal';
 import { LogRefundModal } from '../booking-modals/LogRefundModal';
 import { ClawbackMarginModal } from '../booking-modals/ClawbackMarginModal';
-import { PieChart, ArrowUpCircle, CheckCircle2 } from 'lucide-react';
+import { PieChart, CheckCircle2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Pagination } from '../shared/Pagination';
 
@@ -131,7 +131,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
 
   const filteredTransactions = allCombinedTransactions.filter(p => {
     if (filter === 'All') return true;
-    if (p._type === 'payment' || p._type === 'vendorPayment') return p.paymentType === filter;
+    if (p._type === 'payment' || p._type === 'vendorPayment') return (p as any).paymentType === filter;
     return false; // hide refunds and discounts when a specific payment type filter is selected
   });
 

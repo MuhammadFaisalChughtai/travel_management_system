@@ -308,7 +308,7 @@ export function Dashboard() {
   }, [bookings]);
 
   const revenueChartData = useMemo(() => {
-    const getActualSum = (filterFn) => {
+    const getActualSum = (filterFn: (b: any) => boolean) => {
       return bookings.filter(filterFn).reduce((sum, b) => sum + (parseFloat(b.totalPrice) || 0), 0);
     };
 
@@ -318,7 +318,7 @@ export function Dashboard() {
           const d = new Date();
           d.setDate(d.getDate() - (13 - idx));
           const dateStr = d.toISOString().split('T')[0];
-          const actualSum = getActualSum(b => b.date.startsWith(dateStr));
+          const actualSum = getActualSum((b: any) => b.date.startsWith(dateStr));
           return {
             label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             Revenue: parseFloat(actualSum.toFixed(2)),
@@ -333,7 +333,7 @@ export function Dashboard() {
         return Array.from({ length: 12 }).map((_, idx) => {
           const mIdx = (currentMonthIdx - 11 + idx + 12) % 12;
           const yearOffset = mIdx > currentMonthIdx ? 1 : 0;
-          const actualSum = getActualSum(b => {
+          const actualSum = getActualSum((b: any) => {
             const bDate = new Date(b.date);
             return bDate.getMonth() === mIdx && bDate.getFullYear() === (new Date().getFullYear() - yearOffset);
           });
@@ -352,7 +352,7 @@ export function Dashboard() {
           let qIdx = currentQuarter - (3 - idx);
           let y = currentYear;
           while (qIdx < 0) { qIdx += 4; y -= 1; }
-          const actualSum = getActualSum(b => {
+          const actualSum = getActualSum((b: any) => {
             const bDate = new Date(b.date);
             return bDate.getFullYear() === y && Math.floor(bDate.getMonth() / 3) === qIdx;
           });
@@ -371,7 +371,7 @@ export function Dashboard() {
           let hIdx = currentHalf - (3 - idx);
           let y = currentYear;
           while (hIdx < 0) { hIdx += 2; y -= 1; }
-          const actualSum = getActualSum(b => {
+          const actualSum = getActualSum((b: any) => {
             const bDate = new Date(b.date);
             return bDate.getFullYear() === y && (bDate.getMonth() < 6 ? 0 : 1) === hIdx;
           });
@@ -386,7 +386,7 @@ export function Dashboard() {
         const currentYear = new Date().getFullYear();
         const years = [currentYear - 4, currentYear - 3, currentYear - 2, currentYear - 1, currentYear];
         return years.map(yr => {
-          const actualSum = getActualSum(b => new Date(b.date).getFullYear() === yr);
+          const actualSum = getActualSum((b: any) => new Date(b.date).getFullYear() === yr);
           return {
             label: String(yr),
             Revenue: parseFloat(actualSum.toFixed(2)),
@@ -463,7 +463,7 @@ export function Dashboard() {
   }, [bookings]);
 
   const agentsAnalytics = useMemo(() => {
-    const agentPerformance = {};
+    const agentPerformance: Record<string, any> = {};
     const colors = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
     const badgeColors = ['bg-indigo-50 text-indigo-600', 'bg-primary-50 text-primary-600', 'bg-emerald-50 text-emerald-600', 'bg-amber-50 text-amber-600', 'bg-pink-50 text-pink-600', 'bg-purple-50 text-purple-600'];
     
@@ -485,7 +485,7 @@ export function Dashboard() {
       agentPerformance[agent].bookings += 1;
     });
 
-    const performanceList = Object.entries(agentPerformance).map(([name, data]) => ({
+    const performanceList = Object.entries(agentPerformance).map(([name, data]: [string, any]) => ({
       name,
       ...data,
       aov: data.bookings > 0 ? data.revenue / data.bookings : 0
@@ -495,8 +495,8 @@ export function Dashboard() {
     const currentMonthIdx = new Date().getMonth();
     const last6Months = Array.from({ length: 6 }).map((_, idx) => months[(currentMonthIdx - 5 + idx + 12) % 12]);
     
-    const monthlyTrends = last6Months.map((m) => {
-      const row = { label: m };
+    const monthlyTrends: Record<string, any>[] = last6Months.map((m) => {
+      const row: Record<string, any> = { label: m };
       Object.keys(agentPerformance).forEach(agent => {
         row[agent] = 0;
       });
@@ -1105,7 +1105,6 @@ export function Dashboard() {
                     </thead>
                       <tbody className="divide-y divide-slate-50">
                         {agentsAnalytics.performanceList.map((agent, index) => {
-                          const remainingAmount = agent.totalPrice - agent.totalPaid;
                           return (
                           <tr key={agent.name} className="hover:bg-slate-50/50">
                             <td className="py-2.5 px-3 font-extrabold text-slate-500">#{index + 1}</td>

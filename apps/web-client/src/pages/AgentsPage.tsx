@@ -4,13 +4,10 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, Search, X, Check,
-  Trash2, Edit3, ChevronRight, AlertCircle, Percent, TrendingUp,
-  Save, ArrowLeft, Wallet, ArrowUpRight, ArrowDownLeft
+  Trash2, Edit3, AlertCircle, Percent, TrendingUp,
+  Save, Wallet, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
 import { api } from '../api/axios';
-import { EntityCard } from '../components/EntityCard';
-import { EmptyState } from '../components/shared/EmptyState';
-import { LoadingState } from '../components/shared/LoadingState';
 import { AccordionSection } from '../components/AccordionSection';
 import { Pagination } from '../components/shared/Pagination';
 

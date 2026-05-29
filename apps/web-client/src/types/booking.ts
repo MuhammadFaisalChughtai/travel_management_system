@@ -168,6 +168,7 @@ export interface AdditionalService {
   conversionRate?: string | null;
   notes: string | null;
   isPaidToVendor?: boolean;
+  vendorName?: string;
 }
 
 export interface BookingDetail {
@@ -195,4 +196,6 @@ export interface BookingDetail {
   additionalServices?: AdditionalService[];
   discounts: Discount[];
   refunds?: Refund[];
+  marginStatus?: string;
+  agentId?: number | null;
 }

@@ -9,7 +9,7 @@ import { Pagination } from '../components/shared/Pagination';
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'client' | 'vendor' | 'ledger'>('client');
+  const [activeTab, setActiveTab] = useState<'client' | 'vendor' | 'ledger'>('ledger');
   const [showAddModal, setShowAddModal] = useState(false);
   
   const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
@@ -283,7 +283,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                 </div>
               </div>
               <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center rounded-b-2xl">
-                <button onClick={() => { const blank = { dateStart: '', dateEnd: '', agentName: '', vendorName: '', reference: '' }; setLedgerFilters(blank); fetchLedgerReport(blank); }} className="px-4 py-2 text-rose-600 font-bold text-[13px] hover:bg-rose-50 rounded-lg transition-colors">Clear All</button>
+                <button onClick={() => { const blank = { dateStart: new Date(new Date().setDate(new Date().getDate() - 10)).toISOString().split('T')[0], dateEnd: '', agentName: '', vendorName: '', reference: '' }; setLedgerFilters(blank); fetchLedgerReport(blank); }} className="px-4 py-2 text-rose-600 font-bold text-[13px] hover:bg-rose-50 rounded-lg transition-colors">Clear All</button>
                 <button onClick={() => { fetchLedgerReport(); setShowFiltersModal(false); }} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl text-[13px] font-bold shadow-md transition-all">Apply Filters</button>
               </div>
             </motion.div>
@@ -298,6 +298,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
               icon={Search}
               title="No transactions found"
               description="Try adjusting your search criteria or filters."
+              transparent
             />
           ) : (
             <>
@@ -362,6 +363,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                 icon={Search}
                 title="No ledger records"
                 description="No double-entry accounting records matched your filters."
+                transparent
               />
             ) : (
               <>
@@ -378,7 +380,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                    {ledgerTransactions.slice((ledgerPage - 1) * ledgerPerPage, ledgerPage * ledgerPerPage).map((txn) => {
+                    {ledgerTransactions.map((txn) => {
                       const debit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount), 0) || 0;
                       const credit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount), 0) || 0;
                       

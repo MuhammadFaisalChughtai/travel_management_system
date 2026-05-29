@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client-booking';
 import { requirePermission } from './middleware/rbac';
 import { Permission, Role } from './types/rbac';
 

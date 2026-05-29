@@ -118,6 +118,7 @@ export function VendorsPage() {
                 icon={Building2} 
                 title={search ? 'No vendors found' : 'No vendors yet'} 
                 description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by adding a new vendor.'} 
+                transparent
               />
             </div>
           ) : (

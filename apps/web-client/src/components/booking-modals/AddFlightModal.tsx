@@ -37,7 +37,7 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
   const [showPnrModal, setShowPnrModal] = useState(false);
 
   const handlePnrData = (extracted: any) => {
-    let formattedDate = prev => prev.date;
+    let formattedDate: string | undefined = undefined;
     if (extracted.date) {
       // Convert DDMMM (e.g. 26JUL) to YYYY-MM-DD
       const monthMap: Record<string, number> = {
@@ -68,7 +68,7 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
       ...prev,
       airline: extracted.airline || prev.airline,
       flightNo: extracted.flightNo || prev.flightNo,
-      date: typeof formattedDate === 'string' ? formattedDate : prev.date,
+      date: formattedDate || prev.date,
       departedFrom: extracted.departedFrom || prev.departedFrom,
       arrivedAt: extracted.arrivedAt || prev.arrivedAt,
       departTime: extracted.departTime || prev.departTime,

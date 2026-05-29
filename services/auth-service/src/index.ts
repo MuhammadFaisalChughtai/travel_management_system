@@ -5,11 +5,12 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client-auth';
 import * as Minio from 'minio';
 import multer from 'multer';
 import crypto from 'crypto';
 import path from 'path';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -1019,6 +1020,261 @@ app.delete('/vendors/:id', requireTenantContext, async (req: any, res: Response)
   } catch (error: any) {
     console.error('Delete Vendor Error:', error);
     res.status(500).json({ error: 'Internal Server Error', message: error?.message });
+  }
+});
+
+// Helper to create nodemailer transporter dynamically from DB settings or defaults
+async function getSmtpTransporter() {
+  const hostSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_host' } });
+  const portSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_port' } });
+  const secureSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_secure' } });
+  const userSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
+  const passSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_pass' } });
+
+  const host = hostSetting?.value || 'smtp.gmail.com';
+  const port = parseInt(portSetting?.value || '587');
+  const secure = secureSetting ? secureSetting.value === 'true' : false;
+  const user = userSetting?.value || 'muhammadfaisalchughtai@gmail.com';
+  const pass = passSetting?.value || 'ozgx vknu tvbi kmzl';
+
+  console.log(`Creating SMTP transporter: ${host}:${port} (secure: ${secure}) with user ${user}`);
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user,
+      pass,
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
+}
+
+// POST /request-demo — Public endpoint to submit a demo request
+app.post('/request-demo', async (req: Request, res: Response) => {
+  try {
+    const { fullName, email, companyName, phoneNumber, agencySize, gdsSystems, message } = req.body;
+
+    if (!fullName || !email || !companyName) {
+      return res.status(400).json({ error: 'Validation failed', message: 'Full Name, Work Email, and Company Name are required.' });
+    }
+
+    // 1. Save demo request to database
+    const demoReq = await prisma.demoRequest.create({
+      data: {
+        fullName,
+        email,
+        companyName,
+        phoneNumber: phoneNumber || null,
+        agencySize: agencySize || null,
+        gdsSystems: gdsSystems || null,
+        message: message || null,
+      }
+    });
+
+    // 2. Fetch transporter
+    const transporter = await getSmtpTransporter();
+
+    // Get current configured user for sending
+    const userSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
+    const smtpUser = userSetting?.value || 'muhammadfaisalchughtai@gmail.com';
+
+    // 3. Email to admin
+    const adminEmail = smtpUser; // Receive admin emails at configured user
+    const adminMailOptions = {
+      from: `"TravelBooker Platform" <${smtpUser}>`,
+      to: adminEmail,
+      subject: `New Demo Request: ${companyName}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+          <h2 style="color: #4f46e5; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-top: 0;">New Demo Request</h2>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; width: 35%; color: #475569;">Company Name:</td>
+              <td style="padding: 8px 0; color: #1e293b;">${companyName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #475569;">Full Name:</td>
+              <td style="padding: 8px 0; color: #1e293b;">${fullName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #475569;">Work Email:</td>
+              <td style="padding: 8px 0; color: #1e293b;"><a href="mailto:${email}">${email}</a></td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #475569;">Phone Number:</td>
+              <td style="padding: 8px 0; color: #1e293b;">${phoneNumber || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #475569;">Agency Size:</td>
+              <td style="padding: 8px 0; color: #1e293b;">${agencySize || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #475569;">GDS / Systems:</td>
+              <td style="padding: 8px 0; color: #1e293b;">${gdsSystems || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Message/Notes:</td>
+              <td style="padding: 8px 0; color: #1e293b; white-space: pre-line;">${message || 'N/A'}</td>
+            </tr>
+          </table>
+          <div style="margin-top: 25px; font-size: 12px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+            Received at ${new Date().toLocaleString()} • TravelBooker Platform Command Center
+          </div>
+        </div>
+      `
+    };
+
+    // 4. Email to user requesting
+    const userMailOptions = {
+      from: `"TravelBooker Support" <${smtpUser}>`,
+      to: email,
+      subject: `Demo Request Received - TravelBooker`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #fafafa;">
+          <div style="background-color: #0b0f19; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">Travel<span style="color: #3b82f6;">Booker</span></h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 25px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none;">
+            <p style="font-size: 16px; color: #1e293b; font-weight: 600; margin-top: 0;">Dear ${fullName},</p>
+            <p style="font-size: 15px; color: #475569; line-height: 1.6;">
+              Thank you for requesting a demo of <strong>TravelBooker</strong>. We are thrilled to show you how our B2B travel operating system can transform your agency operations.
+            </p>
+            <p style="font-size: 15px; color: #475569; line-height: 1.6;">
+              A member of our team will contact you shortly at <strong>${email}</strong> (or <strong>${phoneNumber || 'your phone number'}</strong>) to schedule a personalized walkthrough.
+            </p>
+            
+            <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #f1f5f9;">
+              <h4 style="margin: 0 0 10px 0; color: #0f172a; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Details You Submitted:</h4>
+              <p style="margin: 3px 0; font-size: 13px; color: #475569;"><strong>Company:</strong> ${companyName}</p>
+              <p style="margin: 3px 0; font-size: 13px; color: #475569;"><strong>Size:</strong> ${agencySize || 'Not specified'}</p>
+              <p style="margin: 3px 0; font-size: 13px; color: #475569;"><strong>GDS:</strong> ${gdsSystems || 'Not specified'}</p>
+            </div>
+            
+            <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin-top: 20px;">
+              Best regards,<br/>
+              <strong>TravelBooker Sales Team</strong>
+            </p>
+          </div>
+          <div style="margin-top: 20px; font-size: 11px; color: #94a3b8; text-align: center;">
+            This email was sent to ${email} regarding your request for a demo of the B2B Travel OS.
+          </div>
+        </div>
+      `
+    };
+
+    // Send emails in background, but log failures
+    transporter.sendMail(adminMailOptions).catch(err => {
+      console.error('Failed to send admin notification email:', err);
+    });
+    transporter.sendMail(userMailOptions).catch(err => {
+      console.error('Failed to send user confirmation email:', err);
+    });
+
+    res.status(201).json({ message: 'Demo request submitted successfully', demoRequest: demoReq });
+  } catch (error: any) {
+    console.error('Request Demo Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error?.message });
+  }
+});
+
+// GET /system-settings/smtp — Fetch current SMTP settings (Platform Admin only)
+app.get('/system-settings/smtp', requirePlatformAdmin, async (req: any, res: Response) => {
+  try {
+    const host = await prisma.systemSetting.findUnique({ where: { key: 'smtp_host' } });
+    const port = await prisma.systemSetting.findUnique({ where: { key: 'smtp_port' } });
+    const secure = await prisma.systemSetting.findUnique({ where: { key: 'smtp_secure' } });
+    const user = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
+    const pass = await prisma.systemSetting.findUnique({ where: { key: 'smtp_pass' } });
+
+    res.status(200).json({
+      settings: {
+        host: host?.value || 'smtp.gmail.com',
+        port: port?.value || '587',
+        secure: secure ? secure.value === 'true' : false,
+        user: user?.value || 'muhammadfaisalchughtai@gmail.com',
+        pass: pass?.value || 'ozgx vknu tvbi kmzl'
+      }
+    });
+  } catch (error) {
+    console.error('Fetch SMTP Settings Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /system-settings/smtp — Save SMTP settings (Platform Admin only)
+app.post('/system-settings/smtp', requirePlatformAdmin, async (req: any, res: Response) => {
+  try {
+    const { host, port, secure, user, pass } = req.body;
+
+    if (!host || !port || !user || !pass) {
+      return res.status(400).json({ error: 'Validation failed', message: 'Host, port, user, and password are required.' });
+    }
+
+    await prisma.$transaction([
+      prisma.systemSetting.upsert({
+        where: { key: 'smtp_host' },
+        update: { value: host },
+        create: { key: 'smtp_host', value: host }
+      }),
+      prisma.systemSetting.upsert({
+        where: { key: 'smtp_port' },
+        update: { value: String(port) },
+        create: { key: 'smtp_port', value: String(port) }
+      }),
+      prisma.systemSetting.upsert({
+        where: { key: 'smtp_secure' },
+        update: { value: String(secure) },
+        create: { key: 'smtp_secure', value: String(secure) }
+      }),
+      prisma.systemSetting.upsert({
+        where: { key: 'smtp_user' },
+        update: { value: user },
+        create: { key: 'smtp_user', value: user }
+      }),
+      prisma.systemSetting.upsert({
+        where: { key: 'smtp_pass' },
+        update: { value: pass },
+        create: { key: 'smtp_pass', value: pass }
+      }),
+    ]);
+
+    res.status(200).json({ message: 'SMTP Settings updated successfully' });
+  } catch (error) {
+    console.error('Update SMTP Settings Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET /demo-requests — Fetch all submitted demo requests (Platform Admin only)
+app.get('/demo-requests', requirePlatformAdmin, async (req: any, res: Response) => {
+  try {
+    const requests = await prisma.demoRequest.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    res.status(200).json({ requests });
+  } catch (error) {
+    console.error('Fetch Demo Requests Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// PATCH /demo-requests/:id — Update status of a demo request (Platform Admin only)
+app.patch('/demo-requests/:id', requirePlatformAdmin, async (req: any, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status } = req.body;
+    const request = await prisma.demoRequest.update({
+      where: { id },
+      data: { status }
+    });
+    res.status(200).json({ message: 'Demo request updated successfully', request });
+  } catch (error) {
+    console.error('Update Demo Request Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

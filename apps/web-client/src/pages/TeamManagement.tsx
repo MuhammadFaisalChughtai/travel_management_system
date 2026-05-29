@@ -275,6 +275,7 @@ export function TeamManagement() {
                 icon={Users} 
                 title={search ? 'No team members found' : 'No team members yet'} 
                 description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by inviting a team member.'} 
+                transparent
               />
             </div>
           ) : (

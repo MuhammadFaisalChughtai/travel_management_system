@@ -36,36 +36,36 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-[80vh] flex items-center justify-center py-10 px-4 sm:px-6 lg:px-8">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4 }}
-        className="max-w-md w-full space-y-8 bg-white p-10 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100"
+        className="max-w-sm w-full space-y-6 bg-white p-6 sm:p-8 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100"
       >
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 bg-primary-100 text-primary-600 rounded-2xl flex items-center justify-center mb-4">
-            <Navigation2 className="h-6 w-6" />
+          <div className="mx-auto h-10 w-10 bg-primary-50 text-primary-600 rounded-xl flex items-center justify-center mb-3">
+            <Navigation2 className="h-5 w-5" />
           </div>
-          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Create an account</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Start your journey with Travel Booking Management System today
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Create an account</h2>
+          <p className="mt-1.5 text-xs text-slate-500">
+            Start your journey with Travel Booking Management System
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
+          <div className="bg-red-50 text-red-600 p-2.5 rounded-lg text-xs text-center font-medium">
             {error}
           </div>
         )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
+        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+          <div className="space-y-3">
             <div>
               <label htmlFor="name" className="sr-only">Full name</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
+                  <User className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   id="name"
@@ -74,7 +74,7 @@ export function Register() {
                   value={name}
                   onChange={e => setName(e.target.value)}
                   required
-                  className="appearance-none rounded-xl relative block w-full pl-10 px-3 py-3 border border-slate-300 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
+                  className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-[13px] transition-all"
                   placeholder="Full name"
                 />
               </div>
@@ -83,7 +83,7 @@ export function Register() {
               <label htmlFor="email-address" className="sr-only">Email address</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" />
+                  <Mail className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   id="email-address"
@@ -93,7 +93,7 @@ export function Register() {
                   onChange={e => setEmail(e.target.value)}
                   autoComplete="email"
                   required
-                  className="appearance-none rounded-xl relative block w-full pl-10 px-3 py-3 border border-slate-300 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
+                  className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-[13px] transition-all"
                   placeholder="Email address"
                 />
               </div>
@@ -102,7 +102,7 @@ export function Register() {
               <label htmlFor="password" className="sr-only">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
+                  <Lock className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   id="password"
@@ -112,7 +112,7 @@ export function Register() {
                   onChange={e => setPassword(e.target.value)}
                   autoComplete="new-password"
                   required
-                  className="appearance-none rounded-xl relative block w-full pl-10 px-3 py-3 border border-slate-300 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm transition-all"
+                  className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-[13px] transition-all"
                   placeholder="Password"
                 />
               </div>
@@ -123,19 +123,19 @@ export function Register() {
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-primary-600 hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-lg shadow-primary-500/30 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
+              className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-[13px] font-semibold rounded-lg text-white bg-primary-600 hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-md shadow-primary-500/20 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
             >
               {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 'Create Account'
               )}
             </button>
           </div>
           
-          <div className="text-center text-sm text-slate-600">
+          <div className="text-center text-[11px] text-slate-600">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
+            <Link to="/login" className="font-semibold text-primary-600 hover:text-primary-500">
               Sign in instead
             </Link>
           </div>

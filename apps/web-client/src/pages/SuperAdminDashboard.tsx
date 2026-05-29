@@ -1,9 +1,10 @@
 import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { 
-  Building2, Plus, Users, Shield, RefreshCw, Layers, CheckCircle, 
+  Building2, Plus, Users, Shield, RefreshCw, CheckCircle, 
   AlertTriangle, Upload, Edit, Calendar, MapPin, Briefcase, 
-  Mail, Phone, Clock, X, LogOut
+  Mail, Phone, Clock, X, LogOut, Settings, Inbox, Server, Key,
+  Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -31,13 +32,56 @@ interface Tenant {
   createdAt: string;
 }
 
+interface DemoRequest {
+  id: number;
+  fullName: string;
+  email: string;
+  companyName: string;
+  phoneNumber: string | null;
+  agencySize: string | null;
+  gdsSystems: string | null;
+  message: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SmtpSettings {
+  host: string;
+  port: string;
+  secure: boolean;
+  user: string;
+  pass: string;
+}
+
 export function SuperAdminDashboard() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
   
+  // Active Tab State
+  const [activeTab, setActiveTab] = useState<'tenants' | 'demos' | 'settings'>('tenants');
+
   // Data State
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // SMTP Settings State
+  const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>({
+    host: '',
+    port: '',
+    secure: false,
+    user: '',
+    pass: ''
+  });
+  const [loadingSmtp, setLoadingSmtp] = useState(false);
+  const [savingSmtp, setSavingSmtp] = useState(false);
+
+  // Demo Requests State
+  const [demoRequests, setDemoRequests] = useState<DemoRequest[]>([]);
+  const [loadingDemos, setLoadingDemos] = useState(false);
+  const [updatingDemoId, setUpdatingDemoId] = useState<number | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedDemo, setSelectedDemo] = useState<DemoRequest | null>(null);
   
   // Create Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -80,8 +124,14 @@ export function SuperAdminDashboard() {
       return;
     }
 
-    fetchTenants();
-  }, [isAuthenticated, user, navigate]);
+    if (activeTab === 'tenants') {
+      fetchTenants();
+    } else if (activeTab === 'demos') {
+      fetchDemoRequests();
+    } else if (activeTab === 'settings') {
+      fetchSmtpSettings();
+    }
+  }, [isAuthenticated, user, navigate, activeTab]);
 
   const fetchTenants = async () => {
     setLoading(true);
@@ -92,6 +142,70 @@ export function SuperAdminDashboard() {
       console.error('Failed to fetch tenants:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSmtpSettings = async () => {
+    setLoadingSmtp(true);
+    try {
+      const response = await api.get('/auth/system-settings/smtp');
+      if (response.data?.settings) {
+        setSmtpSettings(response.data.settings);
+      }
+    } catch (error) {
+      console.error('Failed to fetch SMTP settings:', error);
+      toast.error('Failed to load SMTP settings');
+    } finally {
+      setLoadingSmtp(false);
+    }
+  };
+
+  const fetchDemoRequests = async () => {
+    setLoadingDemos(true);
+    try {
+      const response = await api.get('/auth/demo-requests');
+      if (response.data?.requests) {
+        setDemoRequests(response.data.requests);
+      }
+    } catch (error) {
+      console.error('Failed to fetch Demo Requests:', error);
+      toast.error('Failed to load demo requests');
+    } finally {
+      setLoadingDemos(false);
+    }
+  };
+
+  const handleSaveSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSmtp(true);
+    try {
+      await api.post('/auth/system-settings/smtp', {
+        host: smtpSettings.host,
+        port: parseInt(smtpSettings.port),
+        secure: smtpSettings.secure,
+        user: smtpSettings.user,
+        pass: smtpSettings.pass
+      });
+      toast.success('SMTP Settings saved successfully');
+    } catch (error: any) {
+      console.error('Failed to save SMTP settings:', error);
+      toast.error(error.response?.data?.error || 'Failed to save SMTP settings');
+    } finally {
+      setSavingSmtp(false);
+    }
+  };
+
+  const handleUpdateDemoStatus = async (id: number, newStatus: string) => {
+    setUpdatingDemoId(id);
+    try {
+      const response = await api.patch(`/auth/demo-requests/${id}`, { status: newStatus });
+      setDemoRequests(demoRequests.map(req => req.id === id ? response.data.request : req));
+      toast.success(`Demo status updated to ${newStatus}`);
+    } catch (error) {
+      console.error('Failed to update demo request status:', error);
+      toast.error('Failed to update demo request');
+    } finally {
+      setUpdatingDemoId(null);
     }
   };
 
@@ -245,14 +359,33 @@ export function SuperAdminDashboard() {
           </div>
           
           <nav className="space-y-1">
-            <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-50 text-primary-600 font-medium transition-colors">
+            <button
+              onClick={() => setActiveTab('tenants')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left font-medium transition-colors ${
+                activeTab === 'tenants' ? 'bg-primary-50 text-primary-600' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
               <Building2 className="h-5 w-5" />
               Companies (Tenants)
-            </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors">
-              <Layers className="h-5 w-5" />
-              Subscription Plans
-            </a>
+            </button>
+            <button
+              onClick={() => setActiveTab('demos')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left font-medium transition-colors ${
+                activeTab === 'demos' ? 'bg-primary-50 text-primary-600' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Inbox className="h-5 w-5" />
+              Demo Requests
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left font-medium transition-colors ${
+                activeTab === 'settings' ? 'bg-primary-50 text-primary-600' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Settings className="h-5 w-5" />
+              SMTP Settings
+            </button>
           </nav>
         </div>
         
@@ -273,198 +406,519 @@ export function SuperAdminDashboard() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">SaaS Command Center</h1>
-              <p className="text-slate-500 mt-1">Manage global enterprise tenants, database workspaces, and subscription access.</p>
+              <h1 className="text-3xl font-bold text-slate-900">
+                {activeTab === 'tenants' && 'SaaS Command Center'}
+                {activeTab === 'demos' && 'Demo Requests'}
+                {activeTab === 'settings' && 'SMTP Configuration'}
+              </h1>
+              <p className="text-slate-500 mt-1">
+                {activeTab === 'tenants' && 'Manage global enterprise tenants, database workspaces, and subscription access.'}
+                {activeTab === 'demos' && 'Manage incoming B2B demo leads, view company profile details, and track follow-ups.'}
+                {activeTab === 'settings' && 'Manage platform SMTP settings for verification, notifications, and customer emails.'}
+              </p>
             </div>
             
             <div className="flex gap-3">
               <button 
-                onClick={fetchTenants}
+                onClick={() => {
+                  if (activeTab === 'tenants') fetchTenants();
+                  else if (activeTab === 'demos') fetchDemoRequests();
+                  else if (activeTab === 'settings') fetchSmtpSettings();
+                }}
                 className="p-2 border border-slate-200 bg-white rounded-xl hover:bg-slate-100 transition-colors"
                 title="Refresh Data"
               >
-                <RefreshCw className={`h-5 w-5 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 text-slate-600 ${(loading || loadingDemos || loadingSmtp) ? 'animate-spin' : ''}`} />
               </button>
-              <button 
-                onClick={() => setIsCreateModalOpen(true)}
-                className="bg-primary-600 text-white px-5 py-2.5 rounded-xl hover:bg-primary-500 font-medium shadow-md shadow-primary-500/20 transition-all hover:-translate-y-0.5 flex items-center gap-2"
-              >
-                <Plus className="h-5 w-5" />
-                Add Company
-              </button>
+              {activeTab === 'tenants' && (
+                <button 
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="bg-primary-600 text-white px-5 py-2.5 rounded-xl hover:bg-primary-500 font-medium shadow-md shadow-primary-500/20 transition-all hover:-translate-y-0.5 flex items-center gap-2"
+                >
+                  <Plus className="h-5 w-5" />
+                  Add Company
+                </button>
+              )}
             </div>
           </div>
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="p-3 bg-primary-50 text-primary-600 rounded-xl">
-                <Building2 className="h-6 w-6" />
+          {activeTab === 'tenants' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-primary-50 text-primary-600 rounded-xl">
+                  <Building2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Total Companies</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">{tenants.length}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Total Companies</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{tenants.length}</p>
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                  <Users className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Active Staff Users</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">
+                    {tenants.reduce((acc, curr) => acc + (curr._count?.users || 0), 0)}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <CheckCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">System Health</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">100% Operational</p>
+                </div>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                <Users className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Active Staff Users</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">
-                  {tenants.reduce((acc, curr) => acc + (curr._count?.users || 0), 0)}
-                </p>
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                <CheckCircle className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">System Health</p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">100% Operational</p>
-              </div>
-            </div>
-          </div>
+          )}
 
-          {/* Companies List */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-slate-900">Registered Companies</h3>
+          {activeTab === 'demos' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-primary-50 text-primary-600 rounded-xl">
+                  <Inbox className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Total Demo Requests</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">{demoRequests.length}</p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                  <Clock className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Pending Response</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">
+                    {demoRequests.filter(r => r.status === 'pending').length}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <CheckCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Contacted Leads</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">
+                    {demoRequests.filter(r => r.status === 'contacted').length}
+                  </p>
+                </div>
+              </div>
             </div>
-            
-            {loading && tenants.length === 0 ? (
-              <div className="p-12 text-center text-slate-500">
-                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary-600 mb-2" />
-                Loading SaaS metrics...
-              </div>
-            ) : tenants.length === 0 ? (
-              <div className="p-12 text-center text-slate-500">
-                <Building2 className="h-12 w-12 mx-auto text-slate-300 mb-4" />
-                <p className="font-medium text-lg text-slate-700">No companies registered yet</p>
-                <p className="text-sm mt-1">Click the button in the top right to register your first enterprise client.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[1000px]">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50/20">
-                      <th className="px-6 py-4">Company Info</th>
-                      <th className="px-6 py-4">Industry / Location</th>
-                      <th className="px-6 py-4">Contact Info</th>
-                      <th className="px-6 py-4">Subscription Plan</th>
-                      <th className="px-6 py-4">Trial Expiry / Status</th>
-                      <th className="px-6 py-4 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm text-slate-600">
-                    {tenants.map(tenant => {
-                      const isTrial = tenant.subscriptionPlan === 'trial';
-                      const isExpired = isTrial && tenant.trialEndsAt && new Date() > new Date(tenant.trialEndsAt);
-                      const isSuspended = tenant.status === 'suspended';
+          )}
 
-                      return (
-                        <tr key={tenant.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              {tenant.logo ? (
-                                <img 
-                                  src={tenant.logo} 
-                                  alt={`${tenant.name} Logo`} 
-                                  className="w-10 h-10 rounded-xl object-contain border border-slate-100 bg-slate-50 p-1"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200">
-                                  <Building2 className="w-5 h-5" />
-                                </div>
-                              )}
-                              <div>
-                                <span className="font-semibold text-slate-900 block">{tenant.name}</span>
-                                <span className="text-xs font-mono text-slate-400">{tenant.domain}.travelbooker.com</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="space-y-1">
-                              <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                                <Briefcase className="w-3.5 h-3.5 text-slate-400" /> {tenant.industry || 'Unspecified'}
-                              </span>
-                              <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                <MapPin className="w-3.5 h-3.5 text-slate-400" /> {tenant.location || 'Unspecified'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="space-y-1">
-                              {tenant.email && (
-                                <span className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
-                                  <Mail className="w-3.5 h-3.5 text-slate-400" /> {tenant.email}
-                                </span>
-                              )}
-                              {tenant.phone && (
-                                <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                  <Phone className="w-3.5 h-3.5 text-slate-400" /> {tenant.phone}
-                                </span>
-                              )}
-                              {!tenant.email && !tenant.phone && <span className="text-slate-400 text-xs">No contact added</span>}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
-                              tenant.subscriptionPlan === 'lifetime' 
-                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm'
-                                : tenant.subscriptionPlan === 'active'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-100'
-                            }`}>
-                              {tenant.subscriptionPlan}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            {isTrial ? (
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-1.5">
-                                  <Clock className={`w-4 h-4 ${isExpired ? 'text-red-500' : 'text-slate-400'}`} />
-                                  <span className={`text-xs font-semibold ${isExpired ? 'text-red-600' : 'text-slate-700'}`}>
-                                    {isExpired ? 'Trial Expired' : 'Active Trial'}
-                                  </span>
-                                </div>
-                                <span className="text-[11px] text-slate-400 block font-mono">
-                                  {tenant.trialEndsAt ? new Date(tenant.trialEndsAt).toLocaleDateString() : 'N/A'}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                {isSuspended ? (
-                                  <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100">
-                                    Suspended
-                                  </span>
+          {activeTab === 'settings' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-primary-50 text-primary-600 rounded-xl">
+                  <Server className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">SMTP Host</p>
+                  <p className="text-lg font-bold text-slate-900 mt-1 truncate max-w-[200px]" title={smtpSettings.host}>
+                    {smtpSettings.host || 'smtp.gmail.com'}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <Mail className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Sender Account</p>
+                  <p className="text-lg font-bold text-slate-900 mt-1 truncate max-w-[200px]" title={smtpSettings.user}>
+                    {smtpSettings.user || 'muhammadfaisalchughtai@gmail.com'}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <Activity className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Mail Client Status</p>
+                  <p className="text-lg font-bold text-emerald-600 mt-1">Configured</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Active Tab Panel */}
+          {activeTab === 'tenants' && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 className="font-bold text-slate-900">Registered Companies</h3>
+              </div>
+              
+              {loading && tenants.length === 0 ? (
+                <div className="p-12 text-center text-slate-500">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary-600 mb-2" />
+                  Loading SaaS metrics...
+                </div>
+              ) : tenants.length === 0 ? (
+                <div className="p-12 text-center text-slate-500">
+                  <Building2 className="h-12 w-12 mx-auto text-slate-300 mb-4" />
+                  <p className="font-medium text-lg text-slate-700">No companies registered yet</p>
+                  <p className="text-sm mt-1">Click the button in the top right to register your first enterprise client.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[1000px]">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50/20">
+                        <th className="px-6 py-4">Company Info</th>
+                        <th className="px-6 py-4">Industry / Location</th>
+                        <th className="px-6 py-4">Contact Info</th>
+                        <th className="px-6 py-4">Subscription Plan</th>
+                        <th className="px-6 py-4">Trial Expiry / Status</th>
+                        <th className="px-6 py-4 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm text-slate-600">
+                      {tenants.map(tenant => {
+                        const isTrial = tenant.subscriptionPlan === 'trial';
+                        const isExpired = isTrial && tenant.trialEndsAt && new Date() > new Date(tenant.trialEndsAt);
+                        const isSuspended = tenant.status === 'suspended';
+
+                        return (
+                          <tr key={tenant.id} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                {tenant.logo ? (
+                                  <img 
+                                    src={tenant.logo} 
+                                    alt={`${tenant.name} Logo`} 
+                                    className="w-10 h-10 rounded-xl object-contain border border-slate-100 bg-slate-50 p-1"
+                                  />
                                 ) : (
-                                  <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                    Active
+                                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200">
+                                    <Building2 className="w-5 h-5" />
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="font-semibold text-slate-900 block">{tenant.name}</span>
+                                  <span className="text-xs font-mono text-slate-400">{tenant.domain}.travelbooker.com</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="space-y-1">
+                                <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                                  <Briefcase className="w-3.5 h-3.5 text-slate-400" /> {tenant.industry || 'Unspecified'}
+                                </span>
+                                <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                                  <MapPin className="w-3.5 h-3.5 text-slate-400" /> {tenant.location || 'Unspecified'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="space-y-1">
+                                {tenant.email && (
+                                  <span className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
+                                    <Mail className="w-3.5 h-3.5 text-slate-400" /> {tenant.email}
                                   </span>
                                 )}
+                                {tenant.phone && (
+                                  <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                                    <Phone className="w-3.5 h-3.5 text-slate-400" /> {tenant.phone}
+                                  </span>
+                                )}
+                                {!tenant.email && !tenant.phone && <span className="text-slate-400 text-xs">No contact added</span>}
                               </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => openEditModal(tenant)}
-                              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors border border-slate-200 shadow-sm inline-flex items-center gap-1"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                              Manage
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                                tenant.subscriptionPlan === 'lifetime' 
+                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm'
+                                  : tenant.subscriptionPlan === 'active'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-100'
+                              }`}>
+                                {tenant.subscriptionPlan}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              {isTrial ? (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock className={`w-4 h-4 ${isExpired ? 'text-red-500' : 'text-slate-400'}`} />
+                                    <span className={`text-xs font-semibold ${isExpired ? 'text-red-600' : 'text-slate-700'}`}>
+                                      {isExpired ? 'Trial Expired' : 'Active Trial'}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 block font-mono">
+                                    {tenant.trialEndsAt ? new Date(tenant.trialEndsAt).toLocaleDateString() : 'N/A'}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  {isSuspended ? (
+                                    <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-100">
+                                      Suspended
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                      Active
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <button
+                                onClick={() => openEditModal(tenant)}
+                                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors border border-slate-200 shadow-sm inline-flex items-center gap-1"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                Manage
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'demos' && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50/50">
+                <h3 className="font-bold text-slate-900">Demo Request Submissions</h3>
+                <div className="flex gap-2">
+                  {['all', 'pending', 'contacted'].map((statusOption) => (
+                    <button
+                      key={statusOption}
+                      onClick={() => setFilterStatus(statusOption)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase border transition-all ${
+                        filterStatus === statusOption
+                          ? 'bg-primary-600 text-white border-primary-600 shadow-sm'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {statusOption}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
+
+              {loadingDemos && demoRequests.length === 0 ? (
+                <div className="p-12 text-center text-slate-500">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary-600 mb-2" />
+                  Loading demo requests...
+                </div>
+              ) : demoRequests.length === 0 ? (
+                <div className="p-12 text-center text-slate-500">
+                  <Inbox className="h-12 w-12 mx-auto text-slate-300 mb-4" />
+                  <p className="font-medium text-lg text-slate-700">No demo requests found</p>
+                  <p className="text-sm mt-1">Incoming demo requests from the public landing page will appear here.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[1000px]">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50/20">
+                        <th className="px-6 py-4">Contact Info</th>
+                        <th className="px-6 py-4">Company Details</th>
+                        <th className="px-6 py-4">GDS Systems</th>
+                        <th className="px-6 py-4">Request Message</th>
+                        <th className="px-6 py-4">Submitted At</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm text-slate-600">
+                      {demoRequests
+                        .filter(req => filterStatus === 'all' ? true : req.status === filterStatus)
+                        .map(req => {
+                          const isPending = req.status === 'pending';
+
+                          return (
+                            <tr key={req.id} className="hover:bg-slate-50/30 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="space-y-0.5">
+                                  <span className="font-semibold text-slate-900 block">{req.fullName}</span>
+                                  <span className="text-xs text-slate-400 font-mono block">{req.email}</span>
+                                  {req.phoneNumber && (
+                                    <span className="text-xs text-slate-500 block">{req.phoneNumber}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="space-y-0.5">
+                                  <span className="font-semibold text-slate-900 block">{req.companyName}</span>
+                                  {req.agencySize && (
+                                    <span className="text-xs text-slate-500 block">Size: {req.agencySize}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg">
+                                  {req.gdsSystems || 'None / Unknown'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 max-w-[200px]">
+                                <p className="text-xs text-slate-500 truncate" title={req.message || ''}>
+                                  {req.message || <span className="italic text-slate-400">No message</span>}
+                                </p>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="text-xs text-slate-500 font-mono">
+                                  {new Date(req.createdAt).toLocaleDateString()} {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                                  req.status === 'contacted'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>
+                                  {req.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => setSelectedDemo(req)}
+                                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors border border-slate-200 shadow-sm"
+                                  >
+                                    View
+                                  </button>
+                                  {isPending ? (
+                                    <button
+                                      onClick={() => handleUpdateDemoStatus(req.id, 'contacted')}
+                                      disabled={updatingDemoId === req.id}
+                                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors border border-emerald-700 shadow-sm disabled:opacity-50"
+                                    >
+                                      Mark Contacted
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleUpdateDemoStatus(req.id, 'pending')}
+                                      disabled={updatingDemoId === req.id}
+                                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors border border-amber-700 shadow-sm disabled:opacity-50"
+                                    >
+                                      Mark Pending
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 max-w-3xl">
+              <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                <div className="p-2.5 bg-primary-50 text-primary-600 rounded-xl">
+                  <Server className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">SMTP Server Settings</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Configure platform-wide SMTP settings for outgoing emails and demo confirmations.</p>
+                </div>
+              </div>
+
+              {loadingSmtp ? (
+                <div className="p-12 text-center text-slate-500">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary-600 mb-2" />
+                  Loading configuration...
+                </div>
+              ) : (
+                <form onSubmit={handleSaveSmtp} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">SMTP Host *</label>
+                      <input 
+                        type="text" 
+                        required 
+                        value={smtpSettings.host}
+                        onChange={e => setSmtpSettings({ ...smtpSettings, host: e.target.value })}
+                        placeholder="smtp.gmail.com" 
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm transition-all font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">SMTP Port *</label>
+                      <input 
+                        type="text" 
+                        required 
+                        value={smtpSettings.port}
+                        onChange={e => setSmtpSettings({ ...smtpSettings, port: e.target.value })}
+                        placeholder="587" 
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">SMTP User (Sender Email) *</label>
+                      <input 
+                        type="email" 
+                        required 
+                        value={smtpSettings.user}
+                        onChange={e => setSmtpSettings({ ...smtpSettings, user: e.target.value })}
+                        placeholder="example@gmail.com" 
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm transition-all font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">SMTP Password / App Secret *</label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                        <input 
+                          type="password" 
+                          required 
+                          value={smtpSettings.pass}
+                          onChange={e => setSmtpSettings({ ...smtpSettings, pass: e.target.value })}
+                          placeholder="••••••••••••" 
+                          className="w-full pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 py-1">
+                    <input 
+                      type="checkbox" 
+                      id="secure"
+                      checked={smtpSettings.secure}
+                      onChange={e => setSmtpSettings({ ...smtpSettings, secure: e.target.checked })}
+                      className="w-4 h-4 rounded text-primary-600 border-slate-300 focus:ring-primary-500"
+                    />
+                    <label htmlFor="secure" className="text-sm font-semibold text-slate-700 cursor-pointer select-none">
+                      Enable SSL / Secure Connection (Secure on port 465, STARTTLS on port 587)
+                    </label>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex justify-end">
+                    <button 
+                      type="submit" 
+                      disabled={savingSmtp}
+                      className="bg-primary-600 text-white px-5 py-2.5 rounded-xl hover:bg-primary-500 text-sm font-semibold shadow-md shadow-primary-500/20 disabled:opacity-75 transition-all flex items-center gap-2"
+                    >
+                      {savingSmtp ? 'Saving Settings...' : 'Save Configuration'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       </main>
 
@@ -979,6 +1433,148 @@ export function SuperAdminDashboard() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* View Demo Request Modal */}
+      <AnimatePresence>
+        {selectedDemo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedDemo(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-lg p-7 relative z-10 overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between mb-4 border-b border-slate-100 pb-4 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-primary-50 text-primary-600 rounded-xl">
+                    <Inbox className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Demo Request Details</h3>
+                    <p className="text-slate-500 text-xs mt-0.5">Review lead details and update contact status.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedDemo(null)}
+                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="space-y-4 overflow-y-auto pr-1 flex-1 text-sm text-slate-600">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Full Name</span>
+                    <span className="text-slate-900 font-medium block mt-0.5">{selectedDemo.fullName}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Email Address</span>
+                    <span className="text-slate-950 font-medium block mt-0.5 font-mono">{selectedDemo.email}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Company Name</span>
+                    <span className="text-slate-900 font-medium block mt-0.5">{selectedDemo.companyName}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Phone Number</span>
+                    <span className="text-slate-900 font-medium block mt-0.5">{selectedDemo.phoneNumber || 'N/A'}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Agency Size</span>
+                    <span className="text-slate-900 font-medium block mt-0.5">{selectedDemo.agencySize || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">GDS Systems</span>
+                    <span className="inline-block mt-0.5 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg">
+                      {selectedDemo.gdsSystems || 'None / Unknown'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Submission Date</span>
+                  <span className="text-slate-900 font-medium block mt-0.5">
+                    {new Date(selectedDemo.createdAt).toLocaleDateString()} {new Date(selectedDemo.createdAt).toLocaleTimeString()}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Message</span>
+                  <p className="text-slate-700 whitespace-pre-wrap text-xs leading-relaxed">
+                    {selectedDemo.message || <span className="italic text-slate-400">No message provided.</span>}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Status:</span>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${
+                    selectedDemo.status === 'contacted'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                      : 'bg-amber-50 text-amber-700 border border-amber-100'
+                  }`}>
+                    {selectedDemo.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 flex-shrink-0">
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedDemo(null)}
+                  className="px-4 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-sm font-medium text-slate-600 transition-colors"
+                >
+                  Close
+                </button>
+                {selectedDemo.status === 'pending' ? (
+                  <button 
+                    type="button" 
+                    disabled={updatingDemoId === selectedDemo.id}
+                    onClick={async () => {
+                      await handleUpdateDemoStatus(selectedDemo.id, 'contacted');
+                      // Update the status locally in the modal
+                      setSelectedDemo(prev => prev ? { ...prev, status: 'contacted' } : null);
+                    }}
+                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-500 text-sm font-semibold shadow-md shadow-emerald-500/20 disabled:opacity-75 transition-all flex items-center gap-2"
+                  >
+                    {updatingDemoId === selectedDemo.id ? 'Updating...' : 'Mark as Contacted'}
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    disabled={updatingDemoId === selectedDemo.id}
+                    onClick={async () => {
+                      await handleUpdateDemoStatus(selectedDemo.id, 'pending');
+                      // Update the status locally in the modal
+                      setSelectedDemo(prev => prev ? { ...prev, status: 'pending' } : null);
+                    }}
+                    className="bg-amber-600 text-white px-5 py-2.5 rounded-xl hover:bg-amber-500 text-sm font-semibold shadow-md shadow-amber-500/20 disabled:opacity-75 transition-all flex items-center gap-2"
+                  >
+                    {updatingDemoId === selectedDemo.id ? 'Updating...' : 'Mark as Pending'}
+                  </button>
+                )}
+              </div>
             </motion.div>
           </div>
         )}

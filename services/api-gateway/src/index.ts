@@ -31,15 +31,17 @@ app.get('/health', (req, res) => {
 
 // Middleware to validate JWT and propagate SaaS Tenant & User headers to downstream
 const authenticateAndPropagate = async (req: Request, res: Response, next: NextFunction) => {
-  // Allow registration and login to bypass gateway verification
+  // Allow registration, login and demo request to bypass gateway verification
   const path = req.path;
   if (
     path.startsWith('/auth/login') ||
     path.startsWith('/auth/register') ||
     path.startsWith('/auth/super-admin/register') ||
+    path.startsWith('/auth/request-demo') ||
     path.startsWith('/api/auth/login') ||
     path.startsWith('/api/auth/register') ||
-    path.startsWith('/api/auth/super-admin/register')
+    path.startsWith('/api/auth/super-admin/register') ||
+    path.startsWith('/api/auth/request-demo')
   ) {
     return next();
   }

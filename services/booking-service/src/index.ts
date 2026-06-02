@@ -14,7 +14,12 @@ const PORT = process.env.PORT || 4005;
 const prisma = new PrismaClient();
 
 app.use(helmet());
-app.use(cors());
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS']
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Extend Express Request type
@@ -224,27 +229,44 @@ app.get('/my-bookings', requireGatewayHeaders, async (req: CustomRequest, res: R
       whereClause.tenantId = parseInt(req.tenantId!);
     }
 
-    const bookings = await prisma.booking.findMany({
-      where: whereClause,
-      include: {
-        payments: true,
-        vendorPayments: true,
-        refunds: true,
-        discounts: true,
-        _count: {
-          select: {
-            flightServices: true,
-            accommodations: true,
-            transportServices: true,
-            visaServices: true,
-            additionalServices: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    const pageNum = parseInt(req.query.page as string) || 1;
+    const isAll = req.query.limit === 'all';
+    const limitNum = isAll ? undefined : (parseInt(req.query.limit as string) || 10);
+    const skip = isAll ? undefined : (pageNum - 1) * limitNum!;
 
-    res.status(200).json({ bookings });
+    const [total, bookings] = await Promise.all([
+      prisma.booking.count({ where: whereClause }),
+      prisma.booking.findMany({
+        where: whereClause,
+        ...(skip !== undefined && { skip }),
+        ...(limitNum !== undefined && { take: limitNum }),
+        include: {
+          customers: true,
+          payments: true,
+          vendorPayments: true,
+          refunds: true,
+          discounts: true,
+          _count: {
+            select: {
+              flightServices: true,
+              accommodations: true,
+              transportServices: true,
+              visaServices: true,
+              additionalServices: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+
+    res.status(200).json({ 
+      bookings,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: limitNum ? Math.ceil(total / limitNum) : 1
+    });
   } catch (error) {
     console.error('Fetch Bookings Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -263,12 +285,27 @@ app.get('/catalog', requireGatewayHeaders, async (req: CustomRequest, res: Respo
     const filter: any = { isActive: true, tenantId: parseInt(req.tenantId as string) || 1 };
     if (serviceType) filter.serviceType = String(serviceType);
 
-    const items = await prisma.serviceCatalog.findMany({
-      where: filter,
-      orderBy: { name: 'asc' }
-    });
+    const pageNum = parseInt(req.query.page as string) || 1;
+    const limitNum = parseInt(req.query.limit as string) || 10;
+    const skip = (pageNum - 1) * limitNum;
 
-    res.json(items);
+    const [total, items] = await Promise.all([
+      prisma.serviceCatalog.count({ where: filter }),
+      prisma.serviceCatalog.findMany({
+        where: filter,
+        skip,
+        take: limitNum,
+        orderBy: { name: 'asc' }
+      })
+    ]);
+
+    res.json({
+      items,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: limitNum ? Math.ceil(total / limitNum) : 1
+    });
   } catch (error) {
     console.error('Fetch catalog error:', error);
     res.status(500).json({ error: 'Failed to fetch catalog' });
@@ -2265,6 +2302,63 @@ app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.RE
     res.status(200).json({ transactions, accounts });
   } catch (error) {
     console.error('Ledger Report Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/finance/payments', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { type, page, limit, search } = req.query;
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    if (type === 'vendor') {
+      const where: any = { tenantId };
+      if (search) {
+        where.OR = [
+          { vendorName: { contains: search as string, mode: 'insensitive' } },
+          { notes: { contains: search as string, mode: 'insensitive' } },
+          { booking: { bookingReference: { contains: search as string, mode: 'insensitive' } } }
+        ];
+      }
+      const [total, payments] = await Promise.all([
+        prisma.vendorPayment.count({ where }),
+        prisma.vendorPayment.findMany({
+          where,
+          skip,
+          take: limitNum,
+          include: { booking: { select: { bookingReference: true } } },
+          orderBy: { paidOn: 'desc' }
+        })
+      ]);
+      const formatted = payments.map(p => ({ ...p, bookingRef: p.booking?.bookingReference, isVendor: true }));
+      return res.json({ payments: formatted, total, page: pageNum, limit: limitNum, totalPages: limitNum ? Math.ceil(total / limitNum) : 1 });
+    } else {
+      const where: any = { tenantId };
+      if (search) {
+        where.OR = [
+          { paymentMethod: { contains: search as string, mode: 'insensitive' } },
+          { notes: { contains: search as string, mode: 'insensitive' } },
+          { booking: { bookingReference: { contains: search as string, mode: 'insensitive' } } }
+        ];
+      }
+      const [total, payments] = await Promise.all([
+        prisma.bookingPayment.count({ where }),
+        prisma.bookingPayment.findMany({
+          where,
+          skip,
+          take: limitNum,
+          include: { booking: { select: { bookingReference: true } } },
+          orderBy: { paidOn: 'desc' }
+        })
+      ]);
+      const formatted = payments.map(p => ({ ...p, bookingRef: p.booking?.bookingReference, isVendor: false }));
+      return res.json({ payments: formatted, total, page: pageNum, limit: limitNum, totalPages: limitNum ? Math.ceil(total / limitNum) : 1 });
+    }
+  } catch (error) {
+    console.error('Fetch Payments Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

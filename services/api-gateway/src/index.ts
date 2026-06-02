@@ -14,7 +14,12 @@ const PORT = process.env.PORT || 4000;
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:4001';
 
 app.use(helmet());
-app.use(cors({ origin: '*' }));
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS']
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(morgan('combined'));
 
 const limiter = rateLimit({
@@ -93,6 +98,7 @@ const routes = [
   { path: '/api/bookings', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
   { path: '/api/catalog', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
   { path: '/api/ledger', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
+  { path: '/api/finance', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
   { path: '/api/agents', target: AUTH_SERVICE_URL },
   { path: '/api/vendors', target: AUTH_SERVICE_URL },
 ];
@@ -102,7 +108,7 @@ routes.forEach(route => {
     target: route.target,
     changeOrigin: true,
     pathRewrite: {
-      [`^${route.path}`]: route.path === '/api/agents' ? '/agents' : route.path === '/api/vendors' ? '/vendors' : route.path === '/api/catalog' ? '/catalog' : route.path === '/api/ledger' ? '/ledger' : '',
+      [`^${route.path}`]: route.path === '/api/agents' ? '/agents' : route.path === '/api/vendors' ? '/vendors' : route.path === '/api/catalog' ? '/catalog' : route.path === '/api/ledger' ? '/ledger' : route.path === '/api/finance' ? '/finance' : '',
     },
     onProxyReq: (proxyReq, req, res) => {
       // Forward the injected SaaS headers downstream explicitly

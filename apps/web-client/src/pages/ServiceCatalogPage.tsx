@@ -44,11 +44,22 @@ export function ServiceCatalogPage() {
     }
   });
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const fetchCatalog = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/catalog');
-      setItems(res.data);
+      const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', itemsPerPage.toString());
+
+      const res = await axios.get(`/catalog?${params.toString()}`);
+      setItems(res.data.items || res.data.catalog || (Array.isArray(res.data) ? res.data : []));
+      setTotalItems(res.data.total || (res.data.items ? res.data.items.length : (res.data.catalog ? res.data.catalog.length : res.data.length)));
+      setTotalPages(res.data.totalPages || 1);
     } catch (err) {
       console.error(err);
       setError('Failed to fetch catalog items.');
@@ -61,7 +72,7 @@ export function ServiceCatalogPage() {
     if (user && user.role !== 'AGENT') {
       fetchCatalog();
     }
-  }, [user]);
+  }, [user, currentPage]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,43 +184,54 @@ export function ServiceCatalogPage() {
             description="No services defined yet."
           />
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase tracking-wider text-[11px] border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Service Name</th>
-                  <th className="px-6 py-4 text-right">Fixed Price</th>
-                  <th className="px-6 py-4 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {items.map((item, index) => (
-                  <tr key={item.id || `item-${index}`} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-[10px] font-black tracking-wide uppercase">
-                        {item.serviceType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">{item.name}</td>
-                    <td className="px-6 py-4 text-right text-emerald-600 font-black">
-                      {item.currency} {Number(item.unitPrice).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => openEditModal(item)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(item.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase tracking-wider text-[11px] border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4">Type</th>
+                    <th className="px-6 py-4">Service Name</th>
+                    <th className="px-6 py-4 text-right">Fixed Price</th>
+                    <th className="px-6 py-4 text-center">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                  {items.map((item, index) => (
+                    <tr key={item.id || `item-${index}`} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-[10px] font-black tracking-wide uppercase">
+                          {item.serviceType}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">{item.name}</td>
+                      <td className="px-6 py-4 text-right text-emerald-600 font-black">
+                        {item.currency} {Number(item.unitPrice).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => openEditModal(item)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDelete(item.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {items.length > 0 && (
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={totalItems}
+              />
+            )}
+          </>
         )}
       </div>
 

@@ -10,6 +10,8 @@ import {
 import { api } from '../api/axios';
 import { AccordionSection } from '../components/AccordionSection';
 import { Pagination } from '../components/shared/Pagination';
+import { EmptyState } from '../components/shared/EmptyState';
+import { LoadingState } from '../components/shared/LoadingState';
 
 interface MarginSegment {
   id?: number;
@@ -663,7 +665,10 @@ function DeleteConfirmationModal({ onClose, onConfirm, loading }: { onClose: () 
 }
 
 export function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]); // All agents for stats
+  const [tableAgents, setTableAgents] = useState<Agent[]>([]); // Paginated agents for table
+  const [totalTableItems, setTotalTableItems] = useState(0);
+  const [totalTablePages, setTotalTablePages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -679,8 +684,26 @@ export function AgentsPage() {
   const fetchAgents = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/agents');
-      setAgents(res.data.agents || []);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+
+      const paginatedParams = new URLSearchParams(params.toString());
+      paginatedParams.append('page', currentPage.toString());
+      paginatedParams.append('limit', itemsPerPage.toString());
+
+      const allParams = new URLSearchParams(params.toString());
+      allParams.append('limit', 'all');
+
+      const [paginatedRes, allRes] = await Promise.all([
+        api.get(`/agents?${paginatedParams.toString()}`),
+        api.get(`/agents?${allParams.toString()}`)
+      ]);
+
+      setTableAgents(paginatedRes.data.agents || []);
+      setTotalTableItems(paginatedRes.data.total || 0);
+      setTotalTablePages(paginatedRes.data.totalPages || 1);
+
+      setAgents(allRes.data.agents || []);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load agents');
     } finally {
@@ -688,7 +711,7 @@ export function AgentsPage() {
     }
   };
 
-  useEffect(() => { fetchAgents(); }, []);
+  useEffect(() => { fetchAgents(); }, [currentPage, search]);
 
   const handleDelete = async () => {
     if (!deletingAgentId) return;
@@ -697,7 +720,9 @@ export function AgentsPage() {
       await api.delete(`/agents/${deletingAgentId}`);
       toast.success('Agent deleted successfully');
       setAgents(prev => prev.filter(a => a.id !== deletingAgentId));
+      setTableAgents(prev => prev.filter(a => a.id !== deletingAgentId));
       setDeletingAgentId(null);
+      fetchAgents();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to delete agent');
     } finally {
@@ -705,16 +730,7 @@ export function AgentsPage() {
     }
   };
 
-  const filtered = agents.filter(a =>
-    a.name.toLowerCase().includes(search.toLowerCase()) ||
-    (a.email || '').toLowerCase().includes(search.toLowerCase()) ||
-    (a.phoneNumber || '').includes(search)
-  );
-
   useEffect(() => { setCurrentPage(1); }, [search]);
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginatedAgents = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -771,8 +787,8 @@ export function AgentsPage() {
 
         <div className="flex-1 w-full min-w-0">
           {loading ? (
-            <div className="flex justify-center p-12 bg-white rounded-3xl border border-slate-100">
-              <div className="animate-spin w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full" />
+            <div className="p-8">
+              <LoadingState message="Loading agents..." />
             </div>
           ) : error ? (
             <div className="bg-rose-50 rounded-2xl border border-rose-200 p-12 text-center shadow-sm max-w-2xl mx-auto">
@@ -780,39 +796,40 @@ export function AgentsPage() {
               <h3 className="text-lg font-bold text-rose-800">Failed to load data</h3>
               <p className="text-rose-600 text-sm mt-1">{error}</p>
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="bg-white p-16 text-center border border-slate-100 rounded-3xl flex flex-col items-center justify-center min-h-[400px]">
-              <div className="bg-slate-50 w-24 h-24 rounded-full flex items-center justify-center mb-6">
-                <Search className="w-10 h-10 text-slate-300" />
-              </div>
-              <h3 className="text-xl font-black text-slate-800 mb-2">No records found</h3>
-              <p className="text-slate-500 text-sm font-medium max-w-sm mb-6">We couldn't find any agents matching your current search criteria.</p>
-              {!search && (
-                <button onClick={() => setShowAddModal(true)} className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Add Agent
-                </button>
-              )}
+          ) : tableAgents.length === 0 ? (
+            <div className="p-8">
+              <EmptyState 
+                icon={Search}
+                title={search ? 'No records found' : 'No agents yet'}
+                description={search ? "We couldn't find any agents matching your current search criteria." : "Get started by adding a new agent."}
+                action={!search ? (
+                  <button onClick={() => setShowAddModal(true)} className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Add Agent
+                  </button>
+                ) : undefined}
+              />
             </div>
           ) : (
             <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase border-b border-slate-100">
+                    <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100">
                       <th className="py-3 px-5">Agent ID</th>
                       <th className="py-3 px-5">Agent Name</th>
                       <th className="py-3 px-5">Contact Info</th>
-                      <th className="py-3 px-5">GDS System</th>
-                      <th className="py-3 px-5 text-center">Status Badge</th>
-                      <th className="py-3 px-5 text-right">Margin Slabs</th>
-                      <th className="py-3 px-5 text-center">Actions</th>
+                      <th className="py-3 px-5">GDS & PCC</th>
+                      <th className="py-3 px-5">Clients</th>
+                      <th className="py-3 px-5">Margin Tier</th>
+                      <th className="py-3 px-5 text-center">Status</th>
+                      <th className="py-3 px-5 text-center w-24">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                    {paginatedAgents.map(agent => (
+                    {tableAgents.map(agent => (
                       <tr 
                         key={agent.id} 
-                        className="hover:bg-slate-50/40 transition-colors cursor-pointer"
+                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
                         onClick={() => setSelectedAgent(agent)}
                       >
                         <td className="py-3.5 px-5 font-black text-slate-500">#{agent.id.toString().padStart(4, '0')}</td>
@@ -858,13 +875,13 @@ export function AgentsPage() {
                   </tbody>
                 </table>
               </div>
-              {filtered.length > 0 && (
+              {tableAgents.length > 0 && (
                 <Pagination 
                   currentPage={currentPage} 
-                  totalPages={totalPages} 
+                  totalPages={totalTablePages} 
                   onPageChange={setCurrentPage} 
                   itemsPerPage={itemsPerPage} 
-                  totalItems={filtered.length} 
+                  totalItems={totalTableItems} 
                 />
               )}
             </div>

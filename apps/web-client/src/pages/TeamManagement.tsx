@@ -192,18 +192,30 @@ export function TeamManagement() {
   const [showInvite, setShowInvite] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  // Pagination state
+  const [tableUsers, setTableUsers] = useState<User[]>([]);
+  const [totalTableItems, setTotalTableItems] = useState(0);
+  const [totalTablePages, setTotalTablePages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+
+      const paginatedParams = new URLSearchParams(params.toString());
+      paginatedParams.append('page', currentPage.toString());
+      paginatedParams.append('limit', usersPerPage.toString());
+
       const [usersRes, agentsRes] = await Promise.all([
-        api.get('/auth/users'),
-        api.get('/agents')
+        api.get(`/auth/users?${paginatedParams.toString()}`),
+        api.get('/agents?limit=all')
       ]);
-      setUsers(usersRes.data.users || []);
+      setTableUsers(usersRes.data.users || []);
+      setTotalTableItems(usersRes.data.total || 0);
+      setTotalTablePages(usersRes.data.totalPages || 1);
+      
       setAgents(agentsRes.data.agents || []);
     } catch (err) {
       toast.error('Failed to load team data');
@@ -212,7 +224,7 @@ export function TeamManagement() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [currentPage, search]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to remove this user from your company?')) return;
@@ -224,13 +236,6 @@ export function TeamManagement() {
       toast.error('Failed to remove user');
     }
   };
-
-  const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const paginatedUsers = filtered.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
@@ -269,13 +274,12 @@ export function TeamManagement() {
             <div className="p-8">
               <LoadingState message="Loading team members..." />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : tableUsers.length === 0 ? (
             <div className="p-8">
               <EmptyState 
                 icon={Users} 
                 title={search ? 'No team members found' : 'No team members yet'} 
                 description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by inviting a team member.'} 
-                transparent
               />
             </div>
           ) : (
@@ -292,7 +296,7 @@ export function TeamManagement() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100/50 text-[12px] font-medium bg-white/40">
-                    {paginatedUsers.map((user) => (
+                    {tableUsers.map((user) => (
                       <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3 px-6">
                           <div className="flex items-center gap-3">
@@ -355,10 +359,10 @@ export function TeamManagement() {
               </div>
               <Pagination 
                 currentPage={currentPage}
-                totalPages={Math.ceil(filtered.length / usersPerPage)}
+                totalPages={totalTablePages}
                 onPageChange={setCurrentPage}
                 itemsPerPage={usersPerPage}
-                totalItems={filtered.length}
+                totalItems={totalTableItems}
               />
             </>
           )}

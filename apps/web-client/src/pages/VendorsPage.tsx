@@ -33,15 +33,30 @@ export function VendorsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const [tableVendors, setTableVendors] = useState<Vendor[]>([]);
+  const [totalTableItems, setTotalTableItems] = useState(0);
+  const [totalTablePages, setTotalTablePages] = useState(1);
+
   useEffect(() => {
     fetchVendors();
-  }, []);
+  }, [currentPage, search]);
 
   const fetchVendors = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/vendors');
-      setVendors(res.data.vendors || []);
+      
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+
+      const paginatedParams = new URLSearchParams(params.toString());
+      paginatedParams.append('page', currentPage.toString());
+      paginatedParams.append('limit', itemsPerPage.toString());
+
+      const res = await api.get(`/vendors?${paginatedParams.toString()}`);
+      
+      setTableVendors(res.data.vendors || []);
+      setTotalTableItems(res.data.total || 0);
+      setTotalTablePages(res.data.totalPages || 1);
     } catch (error) {
       console.error('Failed to fetch vendors', error);
       toast.error('Failed to load vendors');
@@ -55,8 +70,9 @@ export function VendorsPage() {
     setDeleteLoading(true);
     try {
       await api.delete(`/vendors/${deletingVendorId}`);
-      setVendors(prev => prev.filter(v => v.id !== deletingVendorId));
+      setTableVendors(prev => prev.filter(v => v.id !== deletingVendorId));
       setDeletingVendorId(null);
+      fetchVendors();
       toast.success('Vendor deleted successfully');
     } catch (error) {
       console.error('Failed to delete vendor', error);
@@ -65,13 +81,6 @@ export function VendorsPage() {
       setDeleteLoading(false);
     }
   };
-
-  const filtered = vendors.filter(v => 
-    v.name.toLowerCase().includes(search.toLowerCase()) || 
-    (v.vendorType && v.vendorType.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const paginatedVendors = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const getInitials = (name: string) => {
     return name.substring(0, 2).toUpperCase() || 'V';
@@ -112,13 +121,12 @@ export function VendorsPage() {
             <div className="p-8">
               <LoadingState message="Loading vendors..." />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : tableVendors.length === 0 ? (
             <div className="p-8">
               <EmptyState 
                 icon={Building2} 
                 title={search ? 'No vendors found' : 'No vendors yet'} 
                 description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by adding a new vendor.'} 
-                transparent
               />
             </div>
           ) : (
@@ -135,7 +143,7 @@ export function VendorsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100/50 text-[12px] font-medium bg-white/40">
-                    {paginatedVendors.map((vendor) => (
+                    {tableVendors.map((vendor) => (
                       <tr key={vendor.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3 px-6">
                           <div className="flex items-center gap-3">
@@ -210,10 +218,10 @@ export function VendorsPage() {
               </div>
               <Pagination 
                 currentPage={currentPage}
-                totalPages={Math.ceil(filtered.length / itemsPerPage)}
+                totalPages={totalTablePages}
                 onPageChange={setCurrentPage}
                 itemsPerPage={itemsPerPage}
-                totalItems={filtered.length}
+                totalItems={totalTableItems}
               />
             </>
           )}

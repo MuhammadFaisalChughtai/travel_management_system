@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../api/axios';
 import { TechbarredLogo } from '../components/TechbarredLogo';
@@ -44,6 +44,8 @@ import { VendorsPage } from './VendorsPage';
 import { TeamManagement } from './TeamManagement';
 import { FinancePage } from './FinancePage';
 import { ServiceCatalogPage } from './ServiceCatalogPage';
+import { EmptyState } from '../components/shared/EmptyState';
+import { LoadingState } from '../components/shared/LoadingState';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -83,16 +85,23 @@ const SIDEBAR_ITEMS = [
 export function Dashboard() {
   const { user, logout, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]); // For analytics (all bookings)
+  const [tableBookings, setTableBookings] = useState<any[]>([]); // For paginated table
+  const [totalTableItems, setTotalTableItems] = useState(0);
+  const [totalTablePages, setTotalTablePages] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const [bookingsPage, setBookingsPage] = useState(1);
   const bookingsPerPage = 10;
 
-  useEffect(() => { setBookingsPage(1); }, [bookings]);
+
 
   // Sidebar navigation tab state
-  const [sidebarTab, setSidebarTab] = useState<'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog'>('overview');
+  const { tab } = useParams<{ tab?: string }>();
+  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog';
+  const setSidebarTab = (newTab: string) => {
+    navigate(`/dashboard/${newTab}`);
+  };
 
   // Overview sub-tab state (Overview Analytics vs Agent Analytics)
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'agents'>('overview');
@@ -184,6 +193,7 @@ export function Dashboard() {
     createdAtEnd: ''
   };
   const [filters, setFilters] = useState(defaultFilters);
+  useEffect(() => { setBookingsPage(1); }, [filters]);
   const [activeSearchModal, setActiveSearchModal] = useState<string | null>(null);
   const userRole = localStorage.getItem('userRole') || '';
 
@@ -196,14 +206,36 @@ export function Dashboard() {
           params.append(key, value);
         }
       });
-      const response = await api.get(`/bookings/my-bookings?${params.toString()}`);
-      setBookings(response.data.bookings);
+      
+      const paginatedParams = new URLSearchParams(params.toString());
+      paginatedParams.append('page', bookingsPage.toString());
+      paginatedParams.append('limit', bookingsPerPage.toString());
+
+      const allParams = new URLSearchParams(params.toString());
+      allParams.append('limit', 'all');
+
+      const [paginatedRes, allRes] = await Promise.all([
+        api.get(`/bookings/my-bookings?${paginatedParams.toString()}`),
+        api.get(`/bookings/my-bookings?${allParams.toString()}`)
+      ]);
+
+      setTableBookings(paginatedRes.data.bookings || []);
+      setTotalTableItems(paginatedRes.data.total || 0);
+      setTotalTablePages(paginatedRes.data.totalPages || 1);
+      
+      setBookings(allRes.data.bookings || []);
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchBookings();
+    }
+  }, [isAuthenticated, filters, bookingsPage]);
 
   const toggleLock = async (e: React.MouseEvent, bookingId: number, currentLock: boolean) => {
     e.stopPropagation();
@@ -237,14 +269,6 @@ export function Dashboard() {
     setNewRef(`${prefix}${randomStr}`);
     setShowCreateModal(true);
   };
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
-    fetchBookings();
-  }, [isAuthenticated, navigate, filters]);
 
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1153,8 +1177,8 @@ export function Dashboard() {
               
               <div className="space-y-3">
                 {loading ? (
-                  <div className="flex justify-center p-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                    <Loader2 className="h-6 w-6 text-primary-600 animate-spin" />
+                  <div className="p-8">
+                    <LoadingState message="Loading operations..." />
                   </div>
                 ) : bookings.length > 0 ? (
                   bookings.slice(0, 5).map((trip, idx) => (
@@ -1207,14 +1231,20 @@ export function Dashboard() {
                     </motion.div>
                   ))
                 ) : (
-                  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center">
-                    <p className="text-slate-500 text-xs mb-3">No recent sales operations or bookings recorded.</p>
-                    <button 
-                      onClick={handleOpenCreateModal}
-                      className="bg-primary-50 text-primary-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-primary-100 transition-colors"
-                    >
-                      Record first invoice
-                    </button>
+                  <div className="p-4">
+                    <EmptyState
+                      icon={Activity}
+                      title="No recent operations"
+                      description="No recent sales operations or bookings recorded."
+                      action={
+                        <button 
+                          onClick={handleOpenCreateModal}
+                          className="bg-primary-50 text-primary-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-primary-100 transition-colors"
+                        >
+                          Record first invoice
+                        </button>
+                      }
+                    />
                   </div>
                 )}
               </div>
@@ -1290,22 +1320,24 @@ export function Dashboard() {
               <div className="flex-1 w-full min-w-0">
                 {/* Bookings Table List */}
             {loading ? (
-              <div className="flex justify-center p-12 bg-white rounded-3xl border border-slate-100">
-                <Loader2 className="h-6 w-6 text-primary-500 animate-spin" />
+              <div className="p-8">
+                <LoadingState message="Loading bookings..." />
               </div>
             ) : bookings.length === 0 ? (
-              <div className="bg-white p-16 text-center border border-slate-100 rounded-3xl flex flex-col items-center justify-center min-h-[400px]">
-                <div className="bg-slate-50 w-24 h-24 rounded-full flex items-center justify-center mb-6">
-                  <Search className="w-10 h-10 text-slate-300" />
-                </div>
-                <h3 className="text-xl font-black text-slate-800 mb-2">No records found</h3>
-                <p className="text-slate-500 text-sm font-medium max-w-sm mb-6">We couldn't find any bookings matching your current search criteria. Please try adjusting your filters.</p>
-                <button 
-                  onClick={performClearFilters}
-                  className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
-                >
-                  <X className="w-4 h-4" /> Clear All Filters
-                </button>
+              <div className="p-8">
+                <EmptyState
+                  icon={Search}
+                  title="No records found"
+                  description="We couldn't find any bookings matching your current search criteria. Please try adjusting your filters."
+                  action={
+                    <button 
+                      onClick={performClearFilters}
+                      className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
+                    >
+                      <X className="w-4 h-4" /> Clear All Filters
+                    </button>
+                  }
+                />
               </div>
             ) : (
               <>
@@ -1328,7 +1360,7 @@ export function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                      {bookings.slice((bookingsPage - 1) * bookingsPerPage, bookingsPage * bookingsPerPage).map((b) => {
+                      {tableBookings.map((b) => {
                         const bookingTotal = Number(b.totalPrice) || 0;
                         const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
                         const vendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -1412,13 +1444,13 @@ export function Dashboard() {
                   </table>
                 </div>
               </div>
-              {bookings.length > 0 && (
+              {tableBookings.length > 0 && (
                 <Pagination 
                   currentPage={bookingsPage} 
-                  totalPages={Math.ceil(bookings.length / bookingsPerPage)} 
+                  totalPages={totalTablePages} 
                   onPageChange={setBookingsPage} 
                   itemsPerPage={bookingsPerPage} 
-                  totalItems={bookings.length} 
+                  totalItems={totalTableItems} 
                 />
               )}
               </>

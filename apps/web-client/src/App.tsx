@@ -427,6 +427,7 @@ function App() {
           {/* Agent protected routes */}
           <Route element={<ProtectedRoute />}>
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="dashboard/:tab" element={<Dashboard />} />
             <Route path="bookings/:id" element={<BookingDetailsPage />} />
           </Route>
           

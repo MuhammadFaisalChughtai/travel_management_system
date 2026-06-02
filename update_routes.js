@@ -1,11 +1,14 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const filePath = path.join(__dirname, 'apps', 'web-client', 'src', 'App.tsx');
-let content = fs.readFileSync(filePath, 'utf8');
+const filePath = path.join(__dirname, "apps", "web-client", "src", "App.tsx");
+let content = fs.readFileSync(filePath, "utf8");
 
 const importStatement = `import { ProtectedRoute } from './components/ProtectedRoute';\nimport { AuthRoute } from './components/AuthRoute';\n`;
-content = content.replace("import { motion } from 'framer-motion';", "import { motion } from 'framer-motion';\n" + importStatement);
+content = content.replace(
+  "import { motion } from 'framer-motion';",
+  "import { motion } from 'framer-motion';\n" + importStatement,
+);
 
 const oldRoutes = `<Routes>
         <Route path="/" element={<Layout />}>
@@ -43,5 +46,5 @@ const newRoutes = `<Routes>
       </Routes>`;
 
 content = content.replace(oldRoutes, newRoutes);
-fs.writeFileSync(filePath, content, 'utf8');
+fs.writeFileSync(filePath, content, "utf8");
 console.log("Updated App routes successfully.");

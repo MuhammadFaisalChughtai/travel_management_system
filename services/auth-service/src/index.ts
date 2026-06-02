@@ -536,15 +536,41 @@ app.get('/tenants/profile', requireTenantContext, async (req: any, res: Response
 app.get('/agents', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const agents = await (prisma as any).agent.findMany({
-      where: { tenantId },
-      include: { 
-        marginSegments: { orderBy: { minAmount: 'asc' } },
-        wallet: { include: { transactions: { orderBy: { createdAt: 'desc' } } } }
-      },
-      orderBy: { name: 'asc' }
+    const { page, limit, search } = req.query;
+    const pageNum = parseInt(page as string) || 1;
+    const isAll = limit === 'all';
+    const limitNum = isAll ? undefined : (parseInt(limit as string) || 10);
+    const skip = isAll ? undefined : (pageNum - 1) * limitNum!;
+
+    const where: any = { tenantId };
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { phone: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    const [total, agents] = await Promise.all([
+      (prisma as any).agent.count({ where }),
+      (prisma as any).agent.findMany({
+        where,
+        ...(skip !== undefined && { skip }),
+        ...(limitNum !== undefined && { take: limitNum }),
+        include: { 
+          marginSegments: { orderBy: { minAmount: 'asc' } },
+          wallet: { include: { transactions: { orderBy: { createdAt: 'desc' } } } }
+        },
+        orderBy: { name: 'asc' }
+      })
+    ]);
+    res.status(200).json({ 
+      agents, 
+      total, 
+      page: pageNum, 
+      limit: limitNum, 
+      totalPages: limitNum ? Math.ceil(total / limitNum) : 1 
     });
-    res.status(200).json({ agents });
   } catch (error: any) {
     console.error('List Agents Error:', error);
     res.status(500).json({ error: 'Internal Server Error', message: error?.message });
@@ -597,11 +623,31 @@ app.get('/agents/:id', requireTenantContext, async (req: any, res: Response) => 
 app.get('/users', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
-    const users = await prisma.user.findMany({
-      where: { tenantId },
-      include: { role: true, agent: true },
-      orderBy: { createdAt: 'desc' }
-    });
+    const { page, limit, search } = req.query;
+    const pageNum = parseInt(page as string) || 1;
+    const isAll = limit === 'all';
+    const limitNum = isAll ? undefined : (parseInt(limit as string) || 10);
+    const skip = isAll ? undefined : (pageNum - 1) * limitNum!;
+
+    const where: any = { tenantId };
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { role: { name: { contains: search as string, mode: 'insensitive' } } }
+      ];
+    }
+
+    const [total, users] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        ...(skip !== undefined && { skip }),
+        ...(limitNum !== undefined && { take: limitNum }),
+        include: { role: true, agent: true },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
     
     // Map response to hide password and format role
     const sanitized = users.map(u => ({
@@ -615,7 +661,13 @@ app.get('/users', requireTenantContext, async (req: any, res: Response) => {
       updatedAt: u.updatedAt
     }));
 
-    res.status(200).json({ users: sanitized });
+    res.status(200).json({
+      users: sanitized,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: limitNum ? Math.ceil(total / limitNum) : 1
+    });
   } catch (error) {
     console.error('Fetch Users Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -929,11 +981,38 @@ app.delete('/agents/:id', requireTenantContext, async (req: any, res: Response) 
 app.get('/vendors', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const vendors = await (prisma as any).vendor.findMany({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' }
+    const { page, limit, search } = req.query;
+    const pageNum = parseInt(page as string) || 1;
+    const isAll = limit === 'all';
+    const limitNum = isAll ? undefined : (parseInt(limit as string) || 10);
+    const skip = isAll ? undefined : (pageNum - 1) * limitNum!;
+
+    const where: any = { tenantId };
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { contactEmail: { contains: search as string, mode: 'insensitive' } },
+        { contactPhone: { contains: search as string, mode: 'insensitive' } },
+        { categories: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    const [total, vendors] = await Promise.all([
+      (prisma as any).vendor.count({ where }),
+      (prisma as any).vendor.findMany({
+        where,
+        ...(skip !== undefined && { skip }),
+        ...(limitNum !== undefined && { take: limitNum }),
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+    res.status(200).json({
+      vendors,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: limitNum ? Math.ceil(total / limitNum) : 1
     });
-    res.status(200).json({ vendors });
   } catch (error: any) {
     console.error('Get Vendors Error:', error);
     res.status(500).json({ error: 'Internal Server Error', message: error?.message });

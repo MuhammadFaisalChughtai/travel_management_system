@@ -20,51 +20,41 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   const [actionLoading, setActionLoading] = useState(false);
   const [ledgerLoading, setLedgerLoading] = useState(false);
 
+  // Payments State
+  const [payments, setPayments] = useState<any[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [paymentsTotalPages, setPaymentsTotalPages] = useState(1);
+  const paymentsPerPage = 10;
+
   useEffect(() => {
     if (activeTab === 'ledger') {
       fetchLedgerReport();
+    } else {
+      fetchPayments();
     }
-  }, [activeTab]);
+  }, [activeTab, paymentsPage, search]);
 
-  // Aggregate Client Payments
-  const clientPayments = useMemo(() => {
-    const all: any[] = [];
-    bookings.forEach(b => {
-      if (b.payments) {
-        b.payments.forEach((p: any) => {
-          all.push({ ...p, bookingRef: b.bookingReference, bookingId: b.id, isVendor: false });
-        });
-      }
-    });
-    return all.sort((a, b) => new Date(b.paidOn).getTime() - new Date(a.paidOn).getTime());
-  }, [bookings]);
+  const fetchPayments = async () => {
+    try {
+      setPaymentsLoading(true);
+      const params = new URLSearchParams();
+      params.append('type', activeTab);
+      params.append('page', paymentsPage.toString());
+      params.append('limit', paymentsPerPage.toString());
+      if (search) params.append('search', search);
 
-  // Aggregate Vendor Payments
-  const vendorPayments = useMemo(() => {
-    const all: any[] = [];
-    bookings.forEach(b => {
-      if (b.vendorPayments) {
-        b.vendorPayments.forEach((p: any) => {
-          all.push({ ...p, bookingRef: b.bookingReference, bookingId: b.id, isVendor: true });
-        });
-      }
-    });
-    return all.sort((a, b) => new Date(b.paidOn).getTime() - new Date(a.paidOn).getTime());
-  }, [bookings]);
-
-  const currentList = activeTab === 'client' ? clientPayments : vendorPayments;
-
-  const filtered = currentList.filter(p => 
-    p.bookingRef.toLowerCase().includes(search.toLowerCase()) ||
-    (p.paymentMethod && p.paymentMethod.toLowerCase().includes(search.toLowerCase())) ||
-    (p.vendorName && p.vendorName.toLowerCase().includes(search.toLowerCase())) ||
-    (p.notes && p.notes.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const [paymentsPage, setPaymentsPage] = useState(1);
-  const paymentsPerPage = 10;
-  useEffect(() => { setPaymentsPage(1); }, [activeTab, search]);
-  const paginatedPayments = filtered.slice((paymentsPage - 1) * paymentsPerPage, paymentsPage * paymentsPerPage);
+      const res = await api.get(`/finance/payments?${params.toString()}`);
+      setPayments(res.data.payments || []);
+      setPaymentsTotal(res.data.total || 0);
+      setPaymentsTotalPages(res.data.totalPages || 1);
+    } catch (err) {
+      toast.error('Failed to load payments');
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
 
   const [ledgerPage, setLedgerPage] = useState(1);
   const ledgerPerPage = 10;
@@ -78,6 +68,11 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       await api.delete(`/bookings/${deletingPayment.bookingId}/services/${type}/${deletingPayment.id}`);
       toast.success('Payment deleted successfully');
       setDeletingPayment(null);
+      if (activeTab === 'ledger') {
+        fetchLedgerReport();
+      } else {
+        fetchPayments();
+      }
       onRefresh();
     } catch (err) {
       toast.error('Failed to delete payment');
@@ -293,13 +288,18 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
 
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
         {activeTab !== 'ledger' ? (
-          filtered.length === 0 ? (
-            <EmptyState
-              icon={Search}
-              title="No transactions found"
-              description="Try adjusting your search criteria or filters."
-              transparent
-            />
+          paymentsLoading ? (
+            <div className="p-8">
+              <LoadingState message="Loading transactions..." />
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="p-8">
+              <EmptyState
+                icon={Search}
+                title="No transactions found"
+                description="Try adjusting your search criteria or filters."
+              />
+            </div>
           ) : (
             <>
             <div className="overflow-x-auto">
@@ -316,7 +316,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {paginatedPayments.map(p => (
+                  {payments.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-4 px-6 font-mono text-slate-400 text-xs">TXN-{p.id}</td>
                       <td className="py-4 px-6 font-black text-slate-900">{p.bookingRef}</td>
@@ -343,13 +343,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                 </tbody>
               </table>
             </div>
-            {filtered.length > 0 && (
+            {payments.length > 0 && (
               <Pagination 
                 currentPage={paymentsPage} 
-                totalPages={Math.ceil(filtered.length / paymentsPerPage)} 
+                totalPages={paymentsTotalPages} 
                 onPageChange={setPaymentsPage} 
                 itemsPerPage={paymentsPerPage} 
-                totalItems={filtered.length} 
+                totalItems={paymentsTotal} 
               />
             )}
           </>
@@ -359,12 +359,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
             {ledgerLoading ? (
               <LoadingState message="Loading ledger records..." />
             ) : ledgerTransactions.length === 0 ? (
-              <EmptyState
-                icon={Search}
-                title="No ledger records"
-                description="No double-entry accounting records matched your filters."
-                transparent
-              />
+              <div className="p-8">
+                <EmptyState
+                  icon={Search}
+                  title="No ledger records"
+                  description="No double-entry accounting records matched your filters."
+                />
+              </div>
             ) : (
               <>
               <div className="overflow-x-auto">

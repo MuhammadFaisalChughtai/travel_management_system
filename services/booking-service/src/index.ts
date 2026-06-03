@@ -2217,25 +2217,94 @@ app.get('/finance/vendors/unpaid-bookings', requireGatewayHeaders, async (req: C
   }
 });
 
+app.get('/finance/vendors/wallets', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
+
+    let dbVendors: any[] = [];
+    try {
+      const vendorsRes = await fetch(`${authUrl}/vendors`, {
+        headers: {
+          'x-tenant-id': String(tenantId),
+          'x-user-id': req.headers['x-user-id'] as string || '',
+          'x-user-role': req.headers['x-user-role'] as string || ''
+        }
+      });
+      if (vendorsRes.ok) {
+        const data = await vendorsRes.json();
+        dbVendors = data.vendors || [];
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch vendors from auth-service in wallets route:', err);
+    }
+
+    const accounts = await prisma.ledgerAccount.findMany({
+      where: {
+        tenantId,
+        accountType: 'VENDOR_PAYABLE'
+      }
+    });
+
+    const accountMap = new Map<string, any>();
+    for (const acc of accounts) {
+      if (acc.entityName) {
+        accountMap.set(acc.entityName.toLowerCase().trim(), acc);
+      }
+    }
+
+    const walletsMap = new Map<string, any>();
+
+    for (const v of dbVendors) {
+      const vNameKey = v.name.toLowerCase().trim();
+      const acc = accountMap.get(vNameKey);
+      const ledgerBalance = acc ? parseFloat(acc.balance.toString()) : 0.00;
+      const walletBalance = ledgerBalance < 0 ? Math.abs(ledgerBalance) : 0.00;
+
+      walletsMap.set(vNameKey, {
+        id: v.id,
+        vendorName: v.name,
+        ledgerBalance,
+        walletBalance
+      });
+    }
+
+    for (const acc of accounts) {
+      if (acc.entityName) {
+        const vNameKey = acc.entityName.toLowerCase().trim();
+        if (!walletsMap.has(vNameKey)) {
+          const ledgerBalance = parseFloat(acc.balance.toString());
+          const walletBalance = ledgerBalance < 0 ? Math.abs(ledgerBalance) : 0.00;
+          walletsMap.set(vNameKey, {
+            id: acc.id,
+            vendorName: acc.entityName,
+            ledgerBalance,
+            walletBalance
+          });
+        }
+      }
+    }
+
+    const wallets = Array.from(walletsMap.values());
+    res.status(200).json({ wallets });
+  } catch (error: any) {
+    console.error('Fetch Vendor Wallets Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error.message });
+  }
+});
+
 app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
-    const { vendorName, amount, paymentMethod, paidOn, notes, allocations: manualAllocations } = req.body;
-    let remainingAmount = parseFloat(amount);
+    const { vendorName, amount, paymentMethod, paidOn, notes, allocations: manualAllocations, walletCreditUsed = 0 } = req.body;
+    
+    const cashAmount = parseFloat(amount) || 0;
+    const creditUsedAmount = parseFloat(walletCreditUsed) || 0;
+    let remainingAmount = cashAmount + creditUsedAmount;
 
-    if (!vendorName || isNaN(remainingAmount) || remainingAmount <= 0) {
-      return res.status(400).json({ error: 'Invalid input' });
+    if (!vendorName || remainingAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid input parameters' });
     }
-
-    // 1. Create the main LedgerTransaction (The global payment)
-    const transaction = await prisma.ledgerTransaction.create({
-      data: {
-        tenantId,
-        transactionDate: paidOn ? new Date(paidOn) : new Date(),
-        description: `Bulk payment to vendor ${vendorName}. ${notes || ''}`,
-        type: 'PAYMENT'
-      }
-    });
 
     // Find or create Vendor LedgerAccount
     let account = await prisma.ledgerAccount.findFirst({
@@ -2247,10 +2316,10 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       });
     }
 
-    const allocations = [];
+    const allocations: any[] = [];
 
+    // Process manual allocations
     if (manualAllocations && Array.isArray(manualAllocations) && manualAllocations.length > 0) {
-      // 2. Manual Allocation
       for (const alloc of manualAllocations) {
         const { bookingId, serviceId, serviceType, amountApplied } = alloc;
         const parsedAmount = parseFloat(amountApplied);
@@ -2274,14 +2343,13 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
 
         allocations.push({
           tenantId,
-          transactionId: transaction.id,
           bookingId,
           serviceType,
           serviceId,
           allocatedAmount: parsedAmount
         });
 
-        // Sum allocations to verify if it is fully paid now
+        // Mark as paid if settled
         const previousAllocations = await prisma.bookingAllocation.aggregate({
           where: { tenantId, serviceType, serviceId },
           _sum: { allocatedAmount: true }
@@ -2298,9 +2366,8 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
           });
         }
       }
-      remainingAmount = Math.max(0, remainingAmount - allocations.reduce((sum, a) => sum + a.allocatedAmount, 0));
     } else {
-      // 3. FIFO Allocation Fallback
+      // FIFO Fallback
       const fetchServices = async (model: any, type: string) => {
         const svcs = await model.findMany({
           where: { tenantId, vendorName, isPaidToVendor: false },
@@ -2320,10 +2387,10 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
 
+      let tempRemaining = remainingAmount;
       for (const service of allUnpaid) {
-        if (remainingAmount <= 0) break;
+        if (tempRemaining <= 0) break;
 
-        // Find previously allocated amounts for this service
         const previousAllocations = await prisma.bookingAllocation.aggregate({
           where: { tenantId, serviceType: service.serviceType, serviceId: service.id },
           _sum: { allocatedAmount: true }
@@ -2334,20 +2401,16 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
         const serviceRemainingDue = totalCost - alreadyAllocated;
 
         if (serviceRemainingDue > 0) {
-          const allocateAmt = Math.min(serviceRemainingDue, remainingAmount);
-          
+          const allocateAmt = Math.min(serviceRemainingDue, tempRemaining);
           allocations.push({
             tenantId,
-            transactionId: transaction.id,
             bookingId: service.bookingId,
             serviceType: service.serviceType,
             serviceId: service.id,
             allocatedAmount: allocateAmt
           });
+          tempRemaining -= allocateAmt;
 
-          remainingAmount -= allocateAmt;
-
-          // If fully paid by this allocation, mark the service as paid
           if (allocateAmt >= serviceRemainingDue) {
             const updateData = { isPaidToVendor: true };
             switch(service.serviceType) {
@@ -2362,9 +2425,124 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       }
     }
 
-    // Save allocations
-    if (allocations.length > 0) {
-      await prisma.bookingAllocation.createMany({ data: allocations });
+    const totalAllocation = allocations.reduce((sum, a) => sum + a.allocatedAmount, 0);
+    const allocatedCash = Math.max(0, totalAllocation - creditUsedAmount);
+    const overpaidAmount = Math.max(0, cashAmount - allocatedCash);
+
+    // Get unique booking references for allocation description
+    const uniqueBookingIds = Array.from(new Set(allocations.map(a => a.bookingId)));
+    const bookings = await prisma.booking.findMany({
+      where: { id: { in: uniqueBookingIds } },
+      select: { id: true, bookingReference: true }
+    });
+    const bookingRefMap = new Map<number, string>();
+    for (const b of bookings) {
+      bookingRefMap.set(b.id, b.bookingReference);
+    }
+    const uniqueBookingRefs = Array.from(new Set(bookings.map(b => b.bookingReference)));
+    const bookingRefsStr = uniqueBookingRefs.join(', ');
+
+    let mainTxId: number | null = null;
+
+    // 1. Credit Used Drawdown Transaction (if any)
+    if (creditUsedAmount > 0) {
+      const creditTx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId,
+          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          description: `Wallet credit drawdown applied to bookings. Allocated to ${allocations.length} service(s) on booking(s): ${bookingRefsStr}`,
+          type: 'PAYMENT',
+          referenceNumber: bookingRefsStr || null
+        }
+      });
+      await prisma.ledgerEntry.create({
+        data: {
+          transactionId: creditTx.id,
+          accountId: account.id,
+          debitAmount: 0,
+          creditAmount: creditUsedAmount
+        }
+      });
+    }
+
+    // 2. Allocated Cash Transaction
+    if (allocatedCash > 0) {
+      const notesSuffix = creditUsedAmount > 0 ? ` (£${creditUsedAmount.toFixed(2)} applied from Vendor Wallet)` : '';
+      const cashTx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId,
+          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          description: `Bulk payment to vendor ${vendorName}. Allocated to ${allocations.length} service(s) on booking(s): ${bookingRefsStr}.${notesSuffix} ${notes || ''}`,
+          type: 'PAYMENT',
+          referenceNumber: bookingRefsStr || null
+        }
+      });
+      mainTxId = cashTx.id;
+
+      await prisma.ledgerEntry.create({
+        data: {
+          transactionId: cashTx.id,
+          accountId: account.id,
+          debitAmount: allocatedCash,
+          creditAmount: 0
+        }
+      });
+    }
+
+    // 3. Overpaid Cash Transaction
+    if (overpaidAmount > 0) {
+      const overTx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId,
+          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          description: `Overpayment hold for future use (Vendor Wallet credit) for ${vendorName}. ${notes || ''}`,
+          type: 'PAYMENT',
+          referenceNumber: bookingRefsStr || null
+        }
+      });
+      if (!mainTxId) mainTxId = overTx.id;
+
+      await prisma.ledgerEntry.create({
+        data: {
+          transactionId: overTx.id,
+          accountId: account.id,
+          debitAmount: overpaidAmount,
+          creditAmount: 0
+        }
+      });
+    }
+
+    // If completely unallocated and no cash was paid (only credit used, which is rare/weird, or 0 transaction)
+    if (!mainTxId && cashAmount > 0 && totalAllocation === 0) {
+      const unallocatedTx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId,
+          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          description: `Vendor Wallet Credit / Prepayment to ${vendorName}. ${notes || ''}`,
+          type: 'PAYMENT',
+          referenceNumber: null
+        }
+      });
+      mainTxId = unallocatedTx.id;
+
+      await prisma.ledgerEntry.create({
+        data: {
+          transactionId: unallocatedTx.id,
+          accountId: account.id,
+          debitAmount: cashAmount,
+          creditAmount: 0
+        }
+      });
+    }
+
+    // Save allocations using the main transaction ID if available
+    const allocTxId = mainTxId || 0;
+    if (allocations.length > 0 && allocTxId > 0) {
+      const allocationsWithTx = allocations.map(a => ({
+        ...a,
+        transactionId: allocTxId
+      }));
+      await prisma.bookingAllocation.createMany({ data: allocationsWithTx });
     }
 
     // Group allocations by bookingId to record VendorPayment entities in the registry
@@ -2388,33 +2566,24 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       });
     }
 
-    // 4. Ledger Entry (Double Entry)
-    // Debit Vendor Payable Account (Reducing liability)
-    await prisma.ledgerEntry.create({
-      data: {
-        transactionId: transaction.id,
-        accountId: account.id,
-        debitAmount: parseFloat(amount),
-        creditAmount: 0
-      }
-    });
-
-    // Update account balance (Liability decreases with Debit)
+    // Update account balance (liability decrements with cash payment, increments with allocations)
+    const balanceDelta = totalAllocation - cashAmount;
     await prisma.ledgerAccount.update({
       where: { id: account.id },
-      data: { balance: { decrement: parseFloat(amount) } }
+      data: { balance: { increment: balanceDelta } }
     });
 
     res.status(200).json({ 
-      message: manualAllocations && manualAllocations.length > 0 ? 'Payment logged and allocated manually' : 'Payment logged and allocated via FIFO', 
-      transaction, 
+      message: 'Vendor payment processed successfully',
       allocationsCount: allocations.length,
-      overpaymentCredit: remainingAmount > 0 ? remainingAmount : 0
+      cashAllocated: allocatedCash,
+      walletCreditDeducted: creditUsedAmount,
+      walletCreditGenerated: overpaidAmount
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Vendor Bulk Payment Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: 'Internal Server Error', message: error.message });
   }
 });
 
@@ -2486,7 +2655,51 @@ app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.RE
       where: { tenantId }
     });
 
-    res.status(200).json({ transactions, accounts });
+    // Collect all bookingIds across all allocations to enrich response with booking references
+    const bookingIds = new Set<number>();
+    for (const txn of transactions) {
+      if (txn.allocations) {
+        for (const alloc of txn.allocations) {
+          bookingIds.add(alloc.bookingId);
+        }
+      }
+    }
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        id: { in: Array.from(bookingIds) }
+      },
+      select: {
+        id: true,
+        bookingReference: true
+      }
+    });
+
+    const bookingRefMap = new Map<number, string>();
+    for (const b of bookings) {
+      bookingRefMap.set(b.id, b.bookingReference);
+    }
+
+    const enrichedTransactions = transactions.map((txn: any) => {
+      const enrichedAllocations = txn.allocations?.map((alloc: any) => ({
+        ...alloc,
+        bookingRef: bookingRefMap.get(alloc.bookingId) || `BKG-${alloc.bookingId}`
+      })) || [];
+
+      let referenceNumber = txn.referenceNumber;
+      if (!referenceNumber && enrichedAllocations.length > 0) {
+        const uniqueRefs = Array.from(new Set(enrichedAllocations.map((a: any) => a.bookingRef)));
+        referenceNumber = uniqueRefs.join(', ');
+      }
+
+      return {
+        ...txn,
+        referenceNumber,
+        allocations: enrichedAllocations
+      };
+    });
+
+    res.status(200).json({ transactions: enrichedTransactions, accounts });
   } catch (error) {
     console.error('Ledger Report Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });

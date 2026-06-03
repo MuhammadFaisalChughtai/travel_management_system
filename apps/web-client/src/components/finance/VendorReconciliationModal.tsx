@@ -160,7 +160,8 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings }: Vendor
     try {
       const payload = {
         vendorName: selectedVendor.name,
-        amount: Number(effectivePaymentPower),
+        amount: Number(lumpSum),
+        walletCreditUsed: useWalletCredit ? walletBalance : 0,
         paymentMethod: 'Bank Transfer',
         paidOn,
         notes: notes || `Bulk payment to vendor ${selectedVendor.name}`,

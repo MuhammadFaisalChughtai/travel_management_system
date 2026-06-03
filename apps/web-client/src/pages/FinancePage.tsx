@@ -11,7 +11,7 @@ import { MultiSelectDropdown } from '../components/shared/MultiSelectDropdown';
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'client' | 'vendor' | 'ledger'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'vendor-wallet' | 'agent-wallet'>('ledger');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showVendorModal, setShowVendorModal] = useState(false);
   
@@ -23,41 +23,40 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   const [actionLoading, setActionLoading] = useState(false);
   const [ledgerLoading, setLedgerLoading] = useState(false);
 
-  // Payments State
-  const [payments, setPayments] = useState<any[]>([]);
-  const [paymentsLoading, setPaymentsLoading] = useState(false);
-  const [paymentsPage, setPaymentsPage] = useState(1);
-  const [paymentsTotal, setPaymentsTotal] = useState(0);
-  const [paymentsTotalPages, setPaymentsTotalPages] = useState(1);
-  const paymentsPerPage = 10;
+  // Vendor wallets state
+  const [vendorWallets, setVendorWallets] = useState<any[]>([]);
+  const [vendorWalletsLoading, setVendorWalletsLoading] = useState(false);
+
+  const fetchVendorWallets = async () => {
+    try {
+      setVendorWalletsLoading(true);
+      const res = await api.get('/finance/vendors/wallets');
+      setVendorWallets(res.data.wallets || []);
+    } catch (err) {
+      toast.error('Failed to load vendor wallets');
+    } finally {
+      setVendorWalletsLoading(false);
+    }
+  };
+
+  const fetchAgents = async () => {
+    try {
+      const res = await api.get('/agents');
+      setAgents(res.data.agents || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'ledger') {
       fetchLedgerReport();
-    } else {
-      fetchPayments();
+    } else if (activeTab === 'vendor-wallet') {
+      fetchVendorWallets();
+    } else if (activeTab === 'agent-wallet') {
+      fetchAgents();
     }
-  }, [activeTab, paymentsPage, search]);
-
-  const fetchPayments = async () => {
-    try {
-      setPaymentsLoading(true);
-      const params = new URLSearchParams();
-      params.append('type', activeTab);
-      params.append('page', paymentsPage.toString());
-      params.append('limit', paymentsPerPage.toString());
-      if (search) params.append('search', search);
-
-      const res = await api.get(`/finance/payments?${params.toString()}`);
-      setPayments(res.data.payments || []);
-      setPaymentsTotal(res.data.total || 0);
-      setPaymentsTotalPages(res.data.totalPages || 1);
-    } catch (err) {
-      toast.error('Failed to load payments');
-    } finally {
-      setPaymentsLoading(false);
-    }
-  };
+  }, [activeTab, search]);
 
   const [ledgerPage, setLedgerPage] = useState(1);
   const ledgerPerPage = 10;
@@ -71,11 +70,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       await api.delete(`/bookings/${deletingPayment.bookingId}/services/${type}/${deletingPayment.id}`);
       toast.success('Payment deleted successfully');
       setDeletingPayment(null);
-      if (activeTab === 'ledger') {
-        fetchLedgerReport();
-      } else {
-        fetchPayments();
-      }
+      fetchLedgerReport();
       onRefresh();
     } catch (err) {
       toast.error('Failed to delete payment');
@@ -165,22 +160,22 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
           <button 
-            onClick={() => setActiveTab('client')}
-            className={`px-6 py-2 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'client' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            Client Payments
-          </button>
-          <button 
-            onClick={() => setActiveTab('vendor')}
-            className={`px-6 py-2 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'vendor' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            Vendor Payments
-          </button>
-          <button 
             onClick={() => setActiveTab('ledger')}
             className={`px-6 py-2 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'ledger' ? 'bg-amber-50 text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             Ledger Report
+          </button>
+          <button 
+            onClick={() => setActiveTab('vendor-wallet')}
+            className={`px-6 py-2 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'vendor-wallet' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Vendor Wallets
+          </button>
+          <button 
+            onClick={() => setActiveTab('agent-wallet')}
+            className={`px-6 py-2 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'agent-wallet' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Agent Wallets
           </button>
         </div>
         
@@ -204,7 +199,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Search transactions..." 
+                placeholder="Search by name..." 
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
@@ -293,75 +288,8 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       </AnimatePresence>
 
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
-        {activeTab !== 'ledger' ? (
-          paymentsLoading ? (
-            <div className="p-8">
-              <LoadingState message="Loading transactions..." />
-            </div>
-          ) : payments.length === 0 ? (
-            <div className="p-8">
-              <EmptyState
-                icon={Search}
-                title="No transactions found"
-                description="Try adjusting your search criteria or filters."
-              />
-            </div>
-          ) : (
-            <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
-                    <th className="py-4 px-6">Transaction ID</th>
-                    <th className="py-4 px-6">Booking Ref</th>
-                    {activeTab === 'vendor' && <th className="py-4 px-6">Vendor Name</th>}
-                    <th className="py-4 px-6">Amount Settled</th>
-                    <th className="py-4 px-6">Date Paid</th>
-                    {activeTab === 'client' && <th className="py-4 px-6">Method/Type</th>}
-                    <th className="py-4 px-6 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {payments.map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-4 px-6 font-mono text-slate-400 text-xs">TXN-{p.id}</td>
-                      <td className="py-4 px-6 font-black text-slate-900">{p.bookingRef}</td>
-                      {activeTab === 'vendor' && <td className="py-4 px-6 font-semibold">{p.vendorName}</td>}
-                      <td className={`py-4 px-6 font-black ${activeTab === 'client' ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                        £{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-4 px-6 font-medium text-slate-600">{new Date(p.paidOn).toLocaleDateString()}</td>
-                      {activeTab === 'client' && (
-                        <td className="py-4 px-6">
-                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold text-[10px] uppercase tracking-wide">
-                            {p.paymentMethod} / {p.paymentType}
-                          </span>
-                        </td>
-                      )}
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => setEditingPayment(p)} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"><Edit3 className="w-4 h-4" /></button>
-                          <button onClick={() => setDeletingPayment(p)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {payments.length > 0 && (
-              <Pagination 
-                currentPage={paymentsPage} 
-                totalPages={paymentsTotalPages} 
-                onPageChange={setPaymentsPage} 
-                itemsPerPage={paymentsPerPage} 
-                totalItems={paymentsTotal} 
-              />
-            )}
-          </>
-          )
-        ) : (
-          <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px] mt-6">
+        {activeTab === 'ledger' && (
+          <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
             {ledgerLoading ? (
               <LoadingState message="Loading ledger records..." />
             ) : ledgerTransactions.length === 0 ? (
@@ -387,37 +315,46 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                    {ledgerTransactions.map((txn) => {
-                      const debit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount), 0) || 0;
-                      const credit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount), 0) || 0;
-                      
-                      const dateObj = new Date(txn.transactionDate);
-                      const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${dateObj.toLocaleString('en-GB', { month: 'short' })}/${dateObj.getFullYear()}`;
-                      
-                      return (
-                        <tr key={txn.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-5 align-top font-bold text-slate-900 text-[12px]">{txn.referenceNumber}</td>
-                          <td className="py-3 px-5 align-top">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
-                              txn.type === 'PAYMENT' ? 'bg-indigo-100 text-indigo-700' : 
-                              txn.type === 'FEE' ? 'bg-rose-100 text-rose-700' : 
-                              txn.type === 'REFUND' ? 'bg-amber-100 text-amber-700' :
-                              txn.type === 'DISCOUNT' ? 'bg-cyan-100 text-cyan-700' :
-                              'bg-slate-100 text-slate-600'
-                            }`}>
-                              {txn.type}
-                            </span>
-                          </td>
-                          <td className="py-3 px-5 align-top text-slate-600 font-semibold text-[12px]">{formattedDate}</td>
-                          <td className="py-3 px-5 align-top text-right font-black text-rose-600 text-[12px]">{debit > 0 ? `£${debit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                          <td className="py-3 px-5 align-top text-right font-black text-emerald-600 text-[12px]">{credit > 0 ? `£${credit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                          <td className="py-3 px-5 align-top whitespace-pre-wrap leading-relaxed text-[11px] text-slate-500 font-medium">
-                            {txn.description}
-                            {txn.allocations?.length > 0 && <div className="mt-1 text-slate-400 font-bold">Allocated to {txn.allocations.length} service(s)</div>}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {ledgerTransactions
+                      .slice((ledgerPage - 1) * ledgerPerPage, ledgerPage * ledgerPerPage)
+                      .map((txn) => {
+                        const debit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount), 0) || 0;
+                        const credit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount), 0) || 0;
+                        
+                        const dateObj = new Date(txn.transactionDate);
+                        const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${dateObj.toLocaleString('en-GB', { month: 'short' })}/${dateObj.getFullYear()}`;
+                        
+                        return (
+                          <tr key={txn.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-5 align-top font-bold text-slate-900 text-[12px]">{txn.referenceNumber}</td>
+                            <td className="py-3 px-5 align-top">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                                txn.type === 'PAYMENT' ? 'bg-indigo-100 text-indigo-700' : 
+                                txn.type === 'FEE' ? 'bg-rose-100 text-rose-700' : 
+                                txn.type === 'REFUND' ? 'bg-amber-100 text-amber-700' :
+                                txn.type === 'DISCOUNT' ? 'bg-cyan-100 text-cyan-700' :
+                                'bg-slate-100 text-slate-600'
+                              }`}>
+                                {txn.type}
+                              </span>
+                            </td>
+                            <td className="py-3 px-5 align-top text-slate-600 font-semibold text-[12px]">{formattedDate}</td>
+                            <td className="py-3 px-5 align-top text-right font-black text-rose-600 text-[12px]">{debit > 0 ? `£${debit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="py-3 px-5 align-top text-right font-black text-emerald-600 text-[12px]">{credit > 0 ? `£${credit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="py-3 px-5 align-top whitespace-pre-wrap leading-relaxed text-[11px] text-slate-500 font-medium">
+                              {txn.description}
+                              {txn.allocations?.length > 0 && (
+                                <div className="mt-1 text-slate-400 font-bold flex flex-wrap items-center gap-1">
+                                  <span>Allocated to {txn.allocations.length} service(s) on booking(s):</span>
+                                  <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md font-extrabold text-[10px]">
+                                    {Array.from(new Set(txn.allocations.map((a: any) => a.bookingRef || `BKG-${a.bookingId}`))).join(', ')}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     
                     {(() => {
                       const totalDebit = ledgerTransactions.reduce((acc, txn) => acc + (txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount), 0) || 0), 0);
@@ -461,6 +398,107 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
             </>
             )}
           </div>
+        )}
+
+        {activeTab === 'vendor-wallet' && (
+          vendorWalletsLoading ? (
+            <div className="p-8">
+              <LoadingState message="Loading vendor wallets..." />
+            </div>
+          ) : vendorWallets.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 font-medium">No vendor wallets found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                    <th className="py-4 px-6">Vendor Name</th>
+                    <th className="py-4 px-6 text-right">Ledger Balance</th>
+                    <th className="py-4 px-6 text-right">Available Floating Credit</th>
+                    <th className="py-4 px-6 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {vendorWallets
+                    .filter(w => !search || w.vendorName.toLowerCase().includes(search.toLowerCase()))
+                    .map(w => (
+                      <tr key={w.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-4 px-6 font-bold text-slate-900">{w.vendorName}</td>
+                        <td className="py-4 px-6 text-right font-semibold text-slate-600">
+                          £{w.ledgerBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-4 px-6 text-right font-black text-emerald-600">
+                          {w.walletBalance > 0 ? `£${w.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                        </td>
+                        <td className="py-4 px-6 text-right font-bold">
+                          {w.ledgerBalance < 0 ? (
+                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] border border-emerald-100">
+                              Floating Credit
+                            </span>
+                          ) : w.ledgerBalance > 0 ? (
+                            <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[11px] border border-rose-100">
+                              Owe Vendor
+                            </span>
+                          ) : (
+                            <span className="bg-slate-50 text-slate-500 px-2.5 py-1 rounded-full text-[11px] border border-slate-100">
+                              Settled
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+
+        {activeTab === 'agent-wallet' && (
+          agents.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 font-medium">No agents found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                    <th className="py-4 px-6">Agent Name</th>
+                    <th className="py-4 px-6 text-right">Wallet Balance</th>
+                    <th className="py-4 px-6 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {agents
+                    .filter(a => !search || a.name.toLowerCase().includes(search.toLowerCase()))
+                    .map(a => {
+                      const balance = parseFloat(a.wallet?.currentBalance || 0);
+                      return (
+                        <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-6 font-bold text-slate-900">{a.name}</td>
+                          <td className={`py-4 px-6 text-right font-black ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            £{balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-6 text-right font-bold">
+                            {balance > 0 ? (
+                              <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] border border-emerald-100">
+                                Credit Balance
+                              </span>
+                            ) : balance < 0 ? (
+                              <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[11px] border border-rose-100">
+                                Receivable (Debt)
+                              </span>
+                            ) : (
+                              <span className="bg-slate-50 text-slate-500 px-2.5 py-1 rounded-full text-[11px] border border-slate-100">
+                                Zero Balance
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </div>
 

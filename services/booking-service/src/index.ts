@@ -2103,10 +2103,124 @@ app.delete('/:bookingId/services/:serviceType/:id', requireGatewayHeaders, requi
 
 // ─── LEDGER & FINANCE SYSTEM ───────────────────────────────────────────────────
 
+app.get('/finance/vendors/unpaid-bookings', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const vendorName = req.query.vendorName as string;
+
+    if (!vendorName) {
+      return res.status(400).json({ error: 'vendorName query parameter is required' });
+    }
+
+    // Helper to fetch unpaid services for this vendor
+    const fetchServices = async (model: any) => {
+      return await model.findMany({
+        where: { tenantId, vendorName, isPaidToVendor: false },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              bookingReference: true,
+              totalPrice: true
+            }
+          }
+        }
+      });
+    };
+
+    const flights = await fetchServices(prisma.flightService);
+    const hotels = await fetchServices(prisma.accommodationService);
+    const transports = await fetchServices(prisma.transportService);
+    const visas = await fetchServices(prisma.visaService);
+    const additionals = await fetchServices(prisma.additionalService);
+
+    const allServicesRaw = [
+      ...flights.map((s: any) => ({ ...s, serviceType: 'FLIGHT', category: 'Flights', desc: `Flight ${s.flightNo} (${s.pnr})` })),
+      ...hotels.map((s: any) => ({ ...s, serviceType: 'HOTEL', category: 'Hotels', desc: `Hotel ${s.hotelName} (${s.roomType || 'Standard'})` })),
+      ...transports.map((s: any) => ({ ...s, serviceType: 'TRANSPORT', category: 'Transportation', desc: `Transport ${s.vehicleType} - ${s.departureDestination} to ${s.arrivalDestination}` })),
+      ...visas.map((s: any) => ({ ...s, serviceType: 'VISA', category: 'Visas', desc: `${s.visaType} Visa` })),
+      ...additionals.map((s: any) => ({ ...s, serviceType: 'ADDITIONAL', category: 'Special Services', desc: s.serviceName }))
+    ];
+
+    const flightIds = flights.map((s: any) => s.id);
+    const hotelIds = hotels.map((s: any) => s.id);
+    const transportIds = transports.map((s: any) => s.id);
+    const visaIds = visas.map((s: any) => s.id);
+    const additionalIds = additionals.map((s: any) => s.id);
+
+    const allocations = await prisma.bookingAllocation.findMany({
+      where: {
+        tenantId,
+        OR: [
+          { serviceType: 'FLIGHT', serviceId: { in: flightIds } },
+          { serviceType: 'HOTEL', serviceId: { in: hotelIds } },
+          { serviceType: 'TRANSPORT', serviceId: { in: transportIds } },
+          { serviceType: 'VISA', serviceId: { in: visaIds } },
+          { serviceType: 'ADDITIONAL', serviceId: { in: additionalIds } }
+        ]
+      }
+    });
+
+    const allocMap: Record<string, number> = {};
+    for (const alloc of allocations) {
+      const key = `${alloc.serviceType}_${alloc.serviceId}`;
+      allocMap[key] = (allocMap[key] || 0) + parseFloat(alloc.allocatedAmount.toString());
+    }
+
+    const services = [];
+    const uniqueBookingsMap = new Map();
+
+    for (const s of allServicesRaw) {
+      const key = `${s.serviceType}_${s.id}`;
+      const allocated = allocMap[key] || 0;
+      const totalCost = parseFloat((s.price || s.charges || 0).toString());
+      const pendingAmount = Math.max(0, totalCost - allocated);
+
+      if (pendingAmount > 0 && s.booking) {
+        services.push({
+          id: s.id,
+          bookingId: s.bookingId,
+          bookingRef: s.booking.bookingReference,
+          serviceCategory: s.category,
+          serviceType: s.serviceType,
+          description: s.desc,
+          pendingAmount
+        });
+
+        uniqueBookingsMap.set(s.booking.id, {
+          id: s.booking.id,
+          bookingReference: s.booking.bookingReference,
+          totalPrice: parseFloat(s.booking.totalPrice.toString())
+        });
+      }
+    }
+
+    // Fetch VENDOR_PAYABLE ledger balance for this vendor
+    const account = await prisma.ledgerAccount.findFirst({
+      where: { tenantId, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+    });
+
+    let walletBalance = 0;
+    if (account && parseFloat(account.balance.toString()) < 0) {
+      walletBalance = Math.abs(parseFloat(account.balance.toString()));
+    }
+
+    res.status(200).json({
+      bookings: Array.from(uniqueBookingsMap.values()),
+      services,
+      walletBalance
+    });
+  } catch (error: any) {
+    console.error('Fetch Vendor Unpaid Bookings Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error.message });
+  }
+});
+
 app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
-    const { vendorName, amount, paymentMethod, paidOn, notes } = req.body;
+    const { vendorName, amount, paymentMethod, paidOn, notes, allocations: manualAllocations } = req.body;
     let remainingAmount = parseFloat(amount);
 
     if (!vendorName || isNaN(remainingAmount) || remainingAmount <= 0) {
@@ -2133,64 +2247,116 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       });
     }
 
-    // 2. Fetch all unpaid services for this vendor
-    const fetchServices = async (model: any, type: string) => {
-      const svcs = await model.findMany({
-        where: { tenantId, vendorName, isPaidToVendor: false },
-        orderBy: { createdAt: 'asc' },
-        include: { booking: true }
-      });
-      return svcs.map((s: any) => ({ ...s, serviceType: type }));
-    };
-
-    const flights = await fetchServices(prisma.flightService, 'FLIGHT');
-    const hotels = await fetchServices(prisma.accommodationService, 'HOTEL');
-    const transports = await fetchServices(prisma.transportService, 'TRANSPORT');
-    const visas = await fetchServices(prisma.visaService, 'VISA');
-    const additionals = await fetchServices(prisma.additionalService, 'ADDITIONAL');
-
-    let allUnpaid = [...flights, ...hotels, ...transports, ...visas, ...additionals].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-
-    // 3. FIFO Allocation
     const allocations = [];
-    for (const service of allUnpaid) {
-      if (remainingAmount <= 0) break;
 
-      // Find previously allocated amounts for this service
-      const previousAllocations = await prisma.bookingAllocation.aggregate({
-        where: { tenantId, serviceType: service.serviceType, serviceId: service.id },
-        _sum: { allocatedAmount: true }
-      });
-      
-      const totalCost = parseFloat(service.price) || 0;
-      const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
-      const serviceRemainingDue = totalCost - alreadyAllocated;
+    if (manualAllocations && Array.isArray(manualAllocations) && manualAllocations.length > 0) {
+      // 2. Manual Allocation
+      for (const alloc of manualAllocations) {
+        const { bookingId, serviceId, serviceType, amountApplied } = alloc;
+        const parsedAmount = parseFloat(amountApplied);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) continue;
 
-      if (serviceRemainingDue > 0) {
-        const allocateAmt = Math.min(serviceRemainingDue, remainingAmount);
-        
+        let serviceModel;
+        switch(serviceType) {
+          case 'FLIGHT': serviceModel = prisma.flightService; break;
+          case 'HOTEL': serviceModel = prisma.accommodationService; break;
+          case 'TRANSPORT': serviceModel = prisma.transportService; break;
+          case 'VISA': serviceModel = prisma.visaService; break;
+          case 'ADDITIONAL': serviceModel = prisma.additionalService; break;
+          default: continue;
+        }
+
+        const service = await (serviceModel as any).findUnique({
+          where: { id: serviceId }
+        });
+
+        if (!service || service.tenantId !== tenantId) continue;
+
         allocations.push({
           tenantId,
           transactionId: transaction.id,
-          bookingId: service.bookingId,
-          serviceType: service.serviceType,
-          serviceId: service.id,
-          allocatedAmount: allocateAmt
+          bookingId,
+          serviceType,
+          serviceId,
+          allocatedAmount: parsedAmount
         });
 
-        remainingAmount -= allocateAmt;
+        // Sum allocations to verify if it is fully paid now
+        const previousAllocations = await prisma.bookingAllocation.aggregate({
+          where: { tenantId, serviceType, serviceId },
+          _sum: { allocatedAmount: true }
+        });
+        
+        const totalCost = parseFloat(service.price || service.charges || 0);
+        const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
+        const serviceRemainingDue = totalCost - alreadyAllocated;
 
-        // If fully paid by this allocation, mark the service as paid
-        if (allocateAmt >= serviceRemainingDue) {
-          const updateData = { isPaidToVendor: true };
-          switch(service.serviceType) {
-            case 'FLIGHT': await prisma.flightService.update({ where: { id: service.id }, data: updateData }); break;
-            case 'HOTEL': await prisma.accommodationService.update({ where: { id: service.id }, data: updateData }); break;
-            case 'TRANSPORT': await prisma.transportService.update({ where: { id: service.id }, data: updateData }); break;
-            case 'VISA': await prisma.visaService.update({ where: { id: service.id }, data: updateData }); break;
-            case 'ADDITIONAL': await prisma.additionalService.update({ where: { id: service.id }, data: updateData }); break;
+        if (parsedAmount >= serviceRemainingDue) {
+          await (serviceModel as any).update({
+            where: { id: serviceId },
+            data: { isPaidToVendor: true }
+          });
+        }
+      }
+      remainingAmount = Math.max(0, remainingAmount - allocations.reduce((sum, a) => sum + a.allocatedAmount, 0));
+    } else {
+      // 3. FIFO Allocation Fallback
+      const fetchServices = async (model: any, type: string) => {
+        const svcs = await model.findMany({
+          where: { tenantId, vendorName, isPaidToVendor: false },
+          orderBy: { createdAt: 'asc' },
+          include: { booking: true }
+        });
+        return svcs.map((s: any) => ({ ...s, serviceType: type }));
+      };
+
+      const flights = await fetchServices(prisma.flightService, 'FLIGHT');
+      const hotels = await fetchServices(prisma.accommodationService, 'HOTEL');
+      const transports = await fetchServices(prisma.transportService, 'TRANSPORT');
+      const visas = await fetchServices(prisma.visaService, 'VISA');
+      const additionals = await fetchServices(prisma.additionalService, 'ADDITIONAL');
+
+      let allUnpaid = [...flights, ...hotels, ...transports, ...visas, ...additionals].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      for (const service of allUnpaid) {
+        if (remainingAmount <= 0) break;
+
+        // Find previously allocated amounts for this service
+        const previousAllocations = await prisma.bookingAllocation.aggregate({
+          where: { tenantId, serviceType: service.serviceType, serviceId: service.id },
+          _sum: { allocatedAmount: true }
+        });
+        
+        const totalCost = parseFloat(service.price || service.charges || 0);
+        const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
+        const serviceRemainingDue = totalCost - alreadyAllocated;
+
+        if (serviceRemainingDue > 0) {
+          const allocateAmt = Math.min(serviceRemainingDue, remainingAmount);
+          
+          allocations.push({
+            tenantId,
+            transactionId: transaction.id,
+            bookingId: service.bookingId,
+            serviceType: service.serviceType,
+            serviceId: service.id,
+            allocatedAmount: allocateAmt
+          });
+
+          remainingAmount -= allocateAmt;
+
+          // If fully paid by this allocation, mark the service as paid
+          if (allocateAmt >= serviceRemainingDue) {
+            const updateData = { isPaidToVendor: true };
+            switch(service.serviceType) {
+              case 'FLIGHT': await prisma.flightService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'HOTEL': await prisma.accommodationService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'TRANSPORT': await prisma.transportService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'VISA': await prisma.visaService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'ADDITIONAL': await prisma.additionalService.update({ where: { id: service.id }, data: updateData }); break;
+            }
           }
         }
       }
@@ -2199,6 +2365,27 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
     // Save allocations
     if (allocations.length > 0) {
       await prisma.bookingAllocation.createMany({ data: allocations });
+    }
+
+    // Group allocations by bookingId to record VendorPayment entities in the registry
+    const bookingAmounts: Record<number, number> = {};
+    for (const alloc of allocations) {
+      bookingAmounts[alloc.bookingId] = (bookingAmounts[alloc.bookingId] || 0) + alloc.allocatedAmount;
+    }
+
+    for (const [bIdStr, bAmount] of Object.entries(bookingAmounts)) {
+      const bId = parseInt(bIdStr);
+      await prisma.vendorPayment.create({
+        data: {
+          tenantId,
+          bookingId: bId,
+          vendorName,
+          amount: bAmount,
+          paymentStatus: 'paid',
+          paidOn: paidOn ? new Date(paidOn) : new Date(),
+          notes: `Allocated payment from bulk reconciliation payment. ${notes || ''}`
+        }
+      });
     }
 
     // 4. Ledger Entry (Double Entry)
@@ -2219,7 +2406,7 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
     });
 
     res.status(200).json({ 
-      message: 'Payment logged and allocated via FIFO', 
+      message: manualAllocations && manualAllocations.length > 0 ? 'Payment logged and allocated manually' : 'Payment logged and allocated via FIFO', 
       transaction, 
       allocationsCount: allocations.length,
       overpaymentCredit: remainingAmount > 0 ? remainingAmount : 0

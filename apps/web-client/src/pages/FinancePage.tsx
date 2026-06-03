@@ -6,11 +6,14 @@ import toast from 'react-hot-toast';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { Pagination } from '../components/shared/Pagination';
+import { VendorReconciliationModal } from '../components/finance/VendorReconciliationModal';
+import { MultiSelectDropdown } from '../components/shared/MultiSelectDropdown';
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'client' | 'vendor' | 'ledger'>('ledger');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showVendorModal, setShowVendorModal] = useState(false);
   
   const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
   const [ledgerAccounts, setLedgerAccounts] = useState<any[]>([]);
@@ -150,8 +153,11 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
           <p className="text-slate-500 text-xs mt-0.5">Comprehensive chronological registry of all corporate payment operations.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 transition-all active:scale-95">
-            <Plus className="h-4 w-4" /> Add Record
+          <button 
+            onClick={() => setShowVendorModal(true)} 
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 transition-all active:scale-95"
+          >
+            <Plus className="h-4 w-4" /> Record Vendor Payment
           </button>
         </div>
       </div>
@@ -459,10 +465,19 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       </div>
 
       <AnimatePresence>
+        {showVendorModal && (
+          <VendorReconciliationModal
+            onClose={() => setShowVendorModal(false)}
+            onSaved={onRefresh}
+            bookings={bookings}
+          />
+        )}
+        
         {showAddModal && (
           <PaymentFormModal
             onClose={() => setShowAddModal(false)}
             onSaved={onRefresh}
+            onSwitchToVendor={() => setShowVendorModal(true)}
             bookings={bookings}
           />
         )}
@@ -500,7 +515,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   );
 }
 
-function PaymentFormModal({ onClose, onSaved, bookings, initialData }: { onClose: () => void; onSaved: () => void; bookings: any[]; initialData?: any }) {
+function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initialData }: { onClose: () => void; onSaved: () => void; onSwitchToVendor?: () => void; bookings: any[]; initialData?: any }) {
   const [isVendor, setIsVendor] = useState(initialData ? initialData.isVendor : false);
   const [bookingId, setBookingId] = useState(initialData?.bookingId || (bookings.length > 0 ? bookings[0].id : ''));
   const [amount, setAmount] = useState(String(initialData?.amount || ''));
@@ -593,7 +608,14 @@ function PaymentFormModal({ onClose, onSaved, bookings, initialData }: { onClose
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Transaction Type</label>
               <div className="flex p-1 bg-slate-100 rounded-xl border border-slate-200">
                 <button type="button" onClick={() => setIsVendor(false)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${!isVendor ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Client Payment</button>
-                <button type="button" onClick={() => setIsVendor(true)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${isVendor ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Vendor Payment</button>
+                <button type="button" onClick={() => {
+                  if (onSwitchToVendor) {
+                    onClose();
+                    onSwitchToVendor();
+                  } else {
+                    setIsVendor(true);
+                  }
+                }} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${isVendor ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Vendor Payment</button>
               </div>
             </div>
           )}

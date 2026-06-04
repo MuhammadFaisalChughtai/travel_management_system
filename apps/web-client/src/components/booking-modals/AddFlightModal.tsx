@@ -108,7 +108,8 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
   useEffect(() => {
     if (isOpen) {
       axios.get('/catalog').then(res => {
-        setCatalogItems(res.data.filter((item: any) => item.serviceType === 'FLIGHT'));
+        const items = res.data.items || (Array.isArray(res.data) ? res.data : []);
+        setCatalogItems(items.filter((item: any) => item.serviceType === 'FLIGHT'));
       }).catch(console.error);
     }
   }, [isOpen]);

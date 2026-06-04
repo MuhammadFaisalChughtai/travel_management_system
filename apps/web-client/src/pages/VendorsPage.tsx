@@ -20,7 +20,6 @@ interface Vendor {
 }
 
 export function VendorsPage() {
-  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   

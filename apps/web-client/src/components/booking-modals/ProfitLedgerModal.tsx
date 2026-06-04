@@ -13,7 +13,18 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
   if (!isOpen) return null;
 
   const getVendorPayments = (category: string) => {
-    return booking.payments?.filter(p => p.paymentType === 'Sent to Vendor' && p.notes?.toLowerCase().includes(category.toLowerCase())).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+    const legacy = booking.payments?.filter(p => p.paymentType === 'Sent to Vendor' && p.notes?.toLowerCase().includes(category.toLowerCase())).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+    const modern = booking.vendorPayments?.filter(vp => {
+      const notesMatch = vp.notes?.toLowerCase().includes(category.toLowerCase());
+      if (category === 'flight') {
+        return notesMatch || !!vp.flightPnr;
+      }
+      if (category === 'hotel' || category === 'accommodation') {
+        return notesMatch || !!vp.reservationNumber;
+      }
+      return notesMatch;
+    }).reduce((sum, vp) => sum + (parseFloat(vp.amount.toString()) || 0), 0) || 0;
+    return legacy + modern;
   };
   
   const spendFlight = getVendorPayments('flight');
@@ -21,7 +32,9 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
   const spendVisa = getVendorPayments('visa');
   const spendTransport = getVendorPayments('transport');
   
-  const totalVendorPayments = booking.payments?.filter(p => p.paymentType === 'Sent to Vendor').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const legacyVendorPayments = booking.payments?.filter(p => p.paymentType === 'Sent to Vendor').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const modernVendorPayments = booking.vendorPayments?.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const totalVendorPayments = legacyVendorPayments + modernVendorPayments;
   const spendOther = Math.max(0, totalVendorPayments - (spendFlight + spendHotel + spendVisa + spendTransport));
 
   const totalReceived = booking.payments?.filter(p => p.paymentType === 'Received from Client').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
@@ -33,7 +46,8 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
   const marginClawback = Math.abs(booking.payments?.filter(p => p.paymentType === 'Margin Paid to Agent' && parseFloat(p.amount) < 0).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0);
   const creditCardCharges = booking.payments?.filter(p => p.paymentType === 'Credit Card Charges').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
 
-  const netReceived = totalReceived - clientRefunds;
+  const bookingTotal = parseFloat(booking.totalPrice || '0') || 0;
+  const netReceived = Math.min(totalReceived, bookingTotal) - clientRefunds;
   const netSent = totalVendorPayments - vendorRefunds;
   const netProfit = (netReceived - netSent) + totalDiscounts - marginPaidToAgentGross + marginClawback - creditCardCharges;
 

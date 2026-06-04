@@ -80,7 +80,8 @@ export function AddVisaModal({ isOpen, onClose, onSubmit, initialData, passenger
   useEffect(() => {
     if (isOpen) {
       axios.get('/catalog').then(res => {
-        setCatalogItems(res.data.filter((item: any) => item.serviceType === 'VISA'));
+        const items = res.data.items || (Array.isArray(res.data) ? res.data : []);
+        setCatalogItems(items.filter((item: any) => item.serviceType === 'VISA'));
       }).catch(console.error);
     }
   }, [isOpen]);

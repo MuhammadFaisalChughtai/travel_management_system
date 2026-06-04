@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CreditCard, Search, Plus, Edit3, Trash2, X, Check, AlertCircle } from 'lucide-react';
+import { CreditCard, Search, Plus, Edit3, Trash2, X, Check, AlertCircle, Wallet, Clock, Loader2, ChevronRight } from 'lucide-react';
 import { api } from '../api/axios';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { Pagination } from '../components/shared/Pagination';
 import { VendorReconciliationModal } from '../components/finance/VendorReconciliationModal';
-import { MultiSelectDropdown } from '../components/shared/MultiSelectDropdown';
+
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
@@ -26,6 +26,46 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   // Vendor wallets state
   const [vendorWallets, setVendorWallets] = useState<any[]>([]);
   const [vendorWalletsLoading, setVendorWalletsLoading] = useState(false);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agents, setAgents] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
+
+  // Wallet history states
+  const [selectedVendor, setSelectedVendor] = useState<any | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<any | null>(null);
+  const [walletHistory, setWalletHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const fetchVendorHistory = async (vendorName: string) => {
+    try {
+      setLoadingHistory(true);
+      const res = await api.get(`/ledger/report?vendorName=${encodeURIComponent(vendorName)}`);
+      setWalletHistory(res.data.transactions || []);
+    } catch (err) {
+      toast.error('Failed to load wallet history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleVendorClick = (w: any) => {
+    setSelectedVendor(w);
+    setSelectedAgent(null);
+    fetchVendorHistory(w.vendorName);
+  };
+
+  const handleAgentClick = (a: any) => {
+    setSelectedAgent(a);
+    setSelectedVendor(null);
+    const sortedTrxs = [...(a.wallet?.transactions || [])].sort((t1: any, t2: any) => new Date(t1.createdAt).getTime() - new Date(t2.createdAt).getTime());
+    setWalletHistory(sortedTrxs);
+  };
+
+  const handleCloseDrawer = () => {
+    setSelectedVendor(null);
+    setSelectedAgent(null);
+    setWalletHistory([]);
+  };
 
   const fetchVendorWallets = async () => {
     try {
@@ -41,10 +81,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
 
   const fetchAgents = async () => {
     try {
+      setAgentsLoading(true);
       const res = await api.get('/agents');
       setAgents(res.data.agents || []);
     } catch (err) {
       console.error(err);
+    } finally {
+      setAgentsLoading(false);
     }
   };
 
@@ -61,6 +104,14 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   const [ledgerPage, setLedgerPage] = useState(1);
   const ledgerPerPage = 10;
   useEffect(() => { setLedgerPage(1); }, [ledgerTransactions]);
+
+  const filteredVendorWallets = useMemo(() => {
+    return vendorWallets.filter(w => !search || w.vendorName.toLowerCase().includes(search.toLowerCase()));
+  }, [vendorWallets, search]);
+
+  const filteredAgents = useMemo(() => {
+    return agents.filter(a => !search || a.name.toLowerCase().includes(search.toLowerCase()));
+  }, [agents, search]);
 
   const handleDelete = async () => {
     if (!deletingPayment) return;
@@ -88,8 +139,6 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   });
 
   const [showFiltersModal, setShowFiltersModal] = useState(false);
-  const [agents, setAgents] = useState<any[]>([]);
-  const [vendors, setVendors] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -287,21 +336,20 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         )}
       </AnimatePresence>
 
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
-        {activeTab === 'ledger' && (
-          <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
-            {ledgerLoading ? (
-              <LoadingState message="Loading ledger records..." />
-            ) : ledgerTransactions.length === 0 ? (
-              <div className="p-8">
-                <EmptyState
-                  icon={Search}
-                  title="No ledger records"
-                  description="No double-entry accounting records matched your filters."
-                />
-              </div>
-            ) : (
-              <>
+      {activeTab === 'ledger' && (
+        ledgerLoading ? (
+          <LoadingState message="Loading ledger records..." />
+        ) : ledgerTransactions.length === 0 ? (
+          <div className="p-8">
+            <EmptyState
+              icon={Search}
+              title="No ledger records"
+              description="No double-entry accounting records matched your filters."
+            />
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
+            <div className="text-[11px]">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -322,7 +370,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                         const credit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount), 0) || 0;
                         
                         const dateObj = new Date(txn.transactionDate);
-                        const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${dateObj.toLocaleString('en-GB', { month: 'short' })}/${dateObj.getFullYear()}`;
+                        const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${dateObj.toLocaleString('en-GB', { month: 'short' })}/${dateObj.getFullYear()} ${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
                         
                         return (
                           <tr key={txn.id} className="hover:bg-slate-50/80 transition-colors">
@@ -395,19 +443,24 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   totalItems={ledgerTransactions.length} 
                 />
               )}
-            </>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'vendor-wallet' && (
-          vendorWalletsLoading ? (
-            <div className="p-8">
-              <LoadingState message="Loading vendor wallets..." />
             </div>
-          ) : vendorWallets.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 font-medium">No vendor wallets found.</div>
-          ) : (
+          </div>
+        )
+      )}
+
+      {activeTab === 'vendor-wallet' && (
+        vendorWalletsLoading ? (
+          <LoadingState message="Loading vendor wallets..." />
+        ) : filteredVendorWallets.length === 0 ? (
+          <div className="p-8">
+            <EmptyState
+              icon={Wallet}
+              title="No vendor wallets"
+              description="No vendor wallets found matching your search."
+            />
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -416,47 +469,66 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                     <th className="py-4 px-6 text-right">Ledger Balance</th>
                     <th className="py-4 px-6 text-right">Available Floating Credit</th>
                     <th className="py-4 px-6 text-right">Status</th>
+                    <th className="py-4 px-6 w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {vendorWallets
-                    .filter(w => !search || w.vendorName.toLowerCase().includes(search.toLowerCase()))
-                    .map(w => (
-                      <tr key={w.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-4 px-6 font-bold text-slate-900">{w.vendorName}</td>
-                        <td className="py-4 px-6 text-right font-semibold text-slate-600">
-                          £{w.ledgerBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-4 px-6 text-right font-black text-emerald-600">
-                          {w.walletBalance > 0 ? `£${w.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                        </td>
-                        <td className="py-4 px-6 text-right font-bold">
-                          {w.ledgerBalance < 0 ? (
-                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] border border-emerald-100">
-                              Floating Credit
-                            </span>
-                          ) : w.ledgerBalance > 0 ? (
-                            <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[11px] border border-rose-100">
-                              Owe Vendor
-                            </span>
-                          ) : (
-                            <span className="bg-slate-50 text-slate-500 px-2.5 py-1 rounded-full text-[11px] border border-slate-100">
-                              Settled
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                  {filteredVendorWallets.map(w => (
+                    <tr 
+                      key={w.id || w.vendorName} 
+                      onClick={() => handleVendorClick(w)}
+                      className="hover:bg-slate-50/70 cursor-pointer transition-colors"
+                    >
+                      <td className="py-4 px-6 font-bold text-slate-900 flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-slate-400 shrink-0" />
+                        {w.vendorName}
+                      </td>
+                      <td className="py-4 px-6 text-right font-semibold text-slate-600">
+                        £{w.ledgerBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-4 px-6 text-right font-black text-emerald-600">
+                        {w.walletBalance > 0 ? `£${w.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                      </td>
+                      <td className="py-4 px-6 text-right font-bold">
+                        {w.ledgerBalance < 0 ? (
+                          <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] border border-emerald-100">
+                            Floating Credit
+                          </span>
+                        ) : w.ledgerBalance > 0 ? (
+                          <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[11px] border border-rose-100">
+                            Owe Vendor
+                          </span>
+                        ) : (
+                          <span className="bg-slate-50 text-slate-500 px-2.5 py-1 rounded-full text-[11px] border border-slate-100">
+                            Settled
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-slate-400 text-center w-10">
+                        <ChevronRight className="w-4 h-4 inline" />
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          )
-        )}
+          </div>
+        )
+      )}
 
-        {activeTab === 'agent-wallet' && (
-          agents.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 font-medium">No agents found.</div>
-          ) : (
+      {activeTab === 'agent-wallet' && (
+        agentsLoading ? (
+          <LoadingState message="Loading agent wallets..." />
+        ) : filteredAgents.length === 0 ? (
+          <div className="p-8">
+            <EmptyState
+              icon={Wallet}
+              title="No agent wallets"
+              description="No agent wallets found matching your search."
+            />
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -464,43 +536,52 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                     <th className="py-4 px-6">Agent Name</th>
                     <th className="py-4 px-6 text-right">Wallet Balance</th>
                     <th className="py-4 px-6 text-right">Status</th>
+                    <th className="py-4 px-6 w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {agents
-                    .filter(a => !search || a.name.toLowerCase().includes(search.toLowerCase()))
-                    .map(a => {
-                      const balance = parseFloat(a.wallet?.currentBalance || 0);
-                      return (
-                        <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 px-6 font-bold text-slate-900">{a.name}</td>
-                          <td className={`py-4 px-6 text-right font-black ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            £{balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-4 px-6 text-right font-bold">
-                            {balance > 0 ? (
-                              <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] border border-emerald-100">
-                                Credit Balance
-                              </span>
-                            ) : balance < 0 ? (
-                              <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[11px] border border-rose-100">
-                                Receivable (Debt)
-                              </span>
-                            ) : (
-                              <span className="bg-slate-50 text-slate-500 px-2.5 py-1 rounded-full text-[11px] border border-slate-100">
-                                Zero Balance
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  {filteredAgents.map(a => {
+                    const balance = parseFloat(a.wallet?.currentBalance || 0);
+                    return (
+                      <tr 
+                        key={a.id} 
+                        onClick={() => handleAgentClick(a)}
+                        className="hover:bg-slate-50/70 cursor-pointer transition-colors"
+                      >
+                        <td className="py-4 px-6 font-bold text-slate-900 flex items-center gap-2">
+                          <Wallet className="w-4 h-4 text-slate-400 shrink-0" />
+                          {a.name}
+                        </td>
+                        <td className={`py-4 px-6 text-right font-black ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          £{balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-4 px-6 text-right font-bold">
+                          {balance > 0 ? (
+                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] border border-emerald-100">
+                              Credit Balance
+                            </span>
+                          ) : balance < 0 ? (
+                            <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[11px] border border-rose-100">
+                              Receivable (Debt)
+                            </span>
+                          ) : (
+                            <span className="bg-slate-50 text-slate-500 px-2.5 py-1 rounded-full text-[11px] border border-slate-100">
+                              Zero Balance
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-slate-400 text-center w-10">
+                          <ChevronRight className="w-4 h-4 inline" />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          )
-        )}
-      </div>
+          </div>
+        )
+      )}
 
       <AnimatePresence>
         {showVendorModal && (
@@ -544,6 +625,222 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                 <button onClick={handleDelete} disabled={actionLoading} className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-[13px] font-bold shadow-md transition-all flex items-center justify-center gap-2">
                   {actionLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Delete'}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Wallet Detailed History Drawer */}
+        {(selectedVendor || selectedAgent) && (
+          <div className="fixed inset-0 z-[100] flex justify-end">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCloseDrawer}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-lg h-full bg-white/95 backdrop-blur-md shadow-2xl border-l border-slate-200/50 flex flex-col z-10"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">
+                      {selectedVendor ? selectedVendor.vendorName : selectedAgent?.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      {selectedVendor ? 'Vendor Wallet Ledger' : 'Agent Commission Wallet'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseDrawer}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 border-b border-slate-100 bg-gradient-to-br from-slate-50 to-white">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Current Balance
+                    </span>
+                    <span className={`text-3xl font-extrabold tracking-tight ${
+                      (selectedVendor ? selectedVendor.ledgerBalance <= 0 : parseFloat(selectedAgent?.wallet?.currentBalance || 0) >= 0)
+                        ? 'text-emerald-600'
+                        : 'text-rose-600'
+                    }`}>
+                      £{selectedVendor 
+                        ? Math.abs(selectedVendor.ledgerBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })
+                        : parseFloat(selectedAgent?.wallet?.currentBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })
+                      }
+                    </span>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                    selectedVendor 
+                      ? selectedVendor.ledgerBalance < 0 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        : selectedVendor.ledgerBalance > 0
+                        ? 'bg-rose-50 text-rose-700 border-rose-100'
+                        : 'bg-slate-50 text-slate-500 border-slate-100'
+                      : parseFloat(selectedAgent?.wallet?.currentBalance || 0) > 0
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                      : parseFloat(selectedAgent?.wallet?.currentBalance || 0) < 0
+                      ? 'bg-rose-50 text-rose-700 border-rose-100'
+                      : 'bg-slate-50 text-slate-500 border-slate-100'
+                  }`}>
+                    {selectedVendor 
+                      ? selectedVendor.ledgerBalance < 0 
+                        ? 'Available Floating Credit'
+                        : selectedVendor.ledgerBalance > 0
+                        ? 'Owe Vendor'
+                        : 'Settled'
+                      : parseFloat(selectedAgent?.wallet?.currentBalance || 0) > 0
+                      ? 'Credit Balance'
+                      : parseFloat(selectedAgent?.wallet?.currentBalance || 0) < 0
+                      ? 'Receivable (Debt)'
+                      : 'Zero Balance'
+                    }
+                  </span>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" /> Transaction History
+                </span>
+                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-bold">
+                  {walletHistory.length} Record{walletHistory.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto min-h-0 bg-slate-50/20">
+                {loadingHistory ? (
+                  <div className="h-48 flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                    <span className="text-xs font-semibold">Loading transactions...</span>
+                  </div>
+                ) : walletHistory.length === 0 ? (
+                  <div className="p-8">
+                    <EmptyState
+                      icon={Clock}
+                      title="No transactions found"
+                      description="No recorded history for this wallet."
+                      size="sm"
+                      transparent={true}
+                    />
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {selectedVendor ? (
+                      walletHistory.map((txn: any) => {
+                        const vendorEntries = txn.entries?.filter((e: any) => 
+                          e.account?.accountType === 'VENDOR_PAYABLE' &&
+                          e.account?.entityName?.toLowerCase() === selectedVendor.vendorName.toLowerCase()
+                        ) || [];
+                        
+                        const debit = vendorEntries.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount || 0), 0);
+                        const credit = vendorEntries.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount || 0), 0);
+                        
+                        const isPayment = debit > 0;
+                        const amount = isPayment ? debit : credit;
+                        
+                        const dateObj = new Date(txn.transactionDate);
+                        const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${dateObj.toLocaleString('en-GB', { month: 'short' })}/${dateObj.getFullYear()} ${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
+
+                        return (
+                          <div key={txn.id} className="p-4 hover:bg-slate-50 transition-colors flex gap-4 items-start">
+                            <div className={`p-2 rounded-lg shrink-0 ${
+                              isPayment ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50/80 text-rose-600'
+                            }`}>
+                              <Wallet className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-bold text-slate-800 text-[13px]">
+                                  {txn.referenceNumber}
+                                </span>
+                                <span className={`font-black text-[13px] ${
+                                  isPayment ? 'text-emerald-600' : 'text-slate-700'
+                                }`}>
+                                  {isPayment ? '+' : '-'}£{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <p className="text-slate-500 text-xs leading-relaxed font-medium">
+                                {txn.description}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[10px] text-slate-400 font-semibold">
+                                  {formattedDate}
+                                </span>
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                                  txn.type === 'PAYMENT' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {txn.type}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      walletHistory.map((txn: any) => {
+                        const amount = parseFloat(txn.amount);
+                        const isCredit = amount >= 0;
+                        
+                        const dateObj = new Date(txn.createdAt);
+                        const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${dateObj.toLocaleString('en-GB', { month: 'short' })}/${dateObj.getFullYear()} ${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
+
+                        return (
+                          <div key={txn.id} className="p-4 hover:bg-slate-50 transition-colors flex gap-4 items-start">
+                            <div className={`p-2 rounded-lg shrink-0 ${
+                              isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50/80 text-rose-600'
+                            }`}>
+                              <Wallet className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-bold text-slate-800 text-[13px]">
+                                  {txn.referenceId || 'Wallet Trx'}
+                                </span>
+                                <span className={`font-black text-[13px] ${
+                                  isCredit ? 'text-emerald-600' : 'text-rose-600'
+                                }`}>
+                                  {isCredit ? '+' : ''}£{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <p className="text-slate-500 text-xs leading-relaxed font-medium">
+                                {txn.notes || 'Agent wallet update'}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[10px] text-slate-400 font-semibold">
+                                  {formattedDate}
+                                </span>
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                                  txn.transactionType === 'MARGIN_CLAWBACK' ? 'bg-rose-50 text-rose-700' :
+                                  txn.transactionType === 'MARGIN_EARNED' ? 'bg-emerald-50 text-emerald-700' :
+                                  'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {txn.transactionType}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

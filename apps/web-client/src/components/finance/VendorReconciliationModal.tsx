@@ -21,7 +21,7 @@ interface VendorReconciliationModalProps {
   bookings?: any[];
 }
 
-export function VendorReconciliationModal({ onClose, onSaved, bookings }: VendorReconciliationModalProps) {
+export function VendorReconciliationModal({ onClose, onSaved, bookings: _bookings }: VendorReconciliationModalProps) {
   // 1. TIER 1 - Basic Inputs
   const [lumpSum, setLumpSum] = useState<number | ''>('');
   const [paidOn, setPaidOn] = useState(new Date().toISOString().split('T')[0]);
@@ -150,7 +150,6 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings }: Vendor
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (effectivePaymentPower <= 0) { toast.error("Please enter a valid amount."); return; }
-    if (overAllocated) { toast.error("Allocation exceeds your effective payment power!"); return; }
     if (selectedServiceIds.length === 0) { toast.error("Please select services to allocate to."); return; }
 
     const selectedVendor = dbVendors.find(v => String(v.id) === String(selectedVendorId));
@@ -326,10 +325,10 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings }: Vendor
             />
           </div>
 
-          <div className={`p-4 rounded-xl border ${overAllocated ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className={`p-4 rounded-xl border ${overAllocated ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
             <div className="flex justify-between items-end mb-1">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Allocation Tally</span>
-              <span className={`text-lg font-black ${overAllocated ? 'text-rose-600' : 'text-indigo-900'}`}>
+              <span className={`text-lg font-black ${overAllocated ? 'text-amber-600' : 'text-indigo-900'}`}>
                 £{totalAllocation.toFixed(2)} <span className="text-sm text-slate-400">/ £{effectivePaymentPower.toFixed(2)}</span>
               </span>
             </div>
@@ -337,8 +336,8 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings }: Vendor
               <p className="text-[10px] font-bold text-emerald-600 mb-2">Includes £{walletBalance.toFixed(2)} wallet credit</p>
             )}
             {overAllocated ? (
-              <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" /> Exceeds payment power by £{Math.abs(remainingLumpSum).toFixed(2)}
+              <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" /> Note: Partial payment. Newest booking(s) will be marked as partially paid.
               </p>
             ) : (
               remainingLumpSum > 0 && <p className="text-[11px] font-bold text-emerald-600">£{remainingLumpSum.toFixed(2)} remaining to allocate</p>
@@ -349,7 +348,7 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings }: Vendor
             <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
             <button 
               type="submit" 
-              disabled={saving || overAllocated || totalAllocation === 0} 
+              disabled={saving || totalAllocation === 0 || effectivePaymentPower <= 0} 
               className="px-6 py-2.5 rounded-xl text-white text-[13px] font-bold shadow-md shadow-indigo-600/25 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 disabled:shadow-none disabled:text-slate-500 transition-all flex items-center gap-2 active:scale-95"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

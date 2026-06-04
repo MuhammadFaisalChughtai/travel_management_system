@@ -184,7 +184,6 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
 }
 
 export function TeamManagement() {
-  const [users, setUsers] = useState<User[]>([]);
   const [agents, setAgents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

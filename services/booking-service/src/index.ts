@@ -66,6 +66,16 @@ const authorizeRoles = (...allowedRoles: string[]) => {
   };
 };
 
+const parseDateWithCurrentTime = (dateInput: any): Date => {
+  if (!dateInput) return new Date();
+  const dateObj = new Date(dateInput);
+  if (isNaN(dateObj.getTime())) return new Date();
+  
+  const now = new Date();
+  dateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+  return dateObj;
+};
+
 const createBookingSchema = z.object({
   bookingReference: z.string().min(5),
   date: z.string(),
@@ -313,7 +323,7 @@ app.get('/catalog', requireGatewayHeaders, async (req: CustomRequest, res: Respo
 });
 
 // POST /catalog (Admin Only)
-app.post('/catalog', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+app.post('/catalog', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
   try {
     const item = await prisma.serviceCatalog.create({
       data: {
@@ -333,7 +343,7 @@ app.post('/catalog', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAI
 });
 
 // PUT /catalog/:id (Admin Only)
-app.patch('/catalog/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+app.patch('/catalog/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
   try {
     const item = await prisma.serviceCatalog.update({
       where: { id: parseInt(req.params.id) },
@@ -354,7 +364,7 @@ app.patch('/catalog/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN',
 });
 
 // DELETE /catalog/:id (Admin Only)
-app.delete('/catalog/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+app.delete('/catalog/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
   try {
     await prisma.serviceCatalog.delete({
       where: { id: parseInt(req.params.id) }
@@ -948,7 +958,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
         amount: parsedData.amount,
         paymentMethod: parsedData.paymentMethod,
         paymentType: parsedData.paymentType,
-        paidOn: new Date(parsedData.paidOn),
+        paidOn: parseDateWithCurrentTime(parsedData.paidOn),
         notes: finalNotes || null
       }
     });
@@ -968,7 +978,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
       const mainTx = await prisma.ledgerTransaction.create({
         data: {
           tenantId: tenantIdNumeric,
-          transactionDate: new Date(parsedData.paidOn),
+          transactionDate: parseDateWithCurrentTime(parsedData.paidOn),
           referenceNumber: booking.bookingReference,
           description: `Vendor Payment via ${parsedData.paymentMethod}. ${parsedData.notes || ''}`,
           type: 'PAYMENT'
@@ -1002,7 +1012,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
       const mainTx = await prisma.ledgerTransaction.create({
         data: {
           tenantId: tenantIdNumeric,
-          transactionDate: new Date(parsedData.paidOn),
+          transactionDate: parseDateWithCurrentTime(parsedData.paidOn),
           referenceNumber: booking.bookingReference,
           description: `Client Payment via ${parsedData.paymentMethod}. ${parsedData.notes || ''}`,
           type: 'PAYMENT'
@@ -1028,7 +1038,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
         const feeTx = await prisma.ledgerTransaction.create({
           data: {
             tenantId: tenantIdNumeric,
-            transactionDate: new Date(parsedData.paidOn),
+            transactionDate: parseDateWithCurrentTime(parsedData.paidOn),
             referenceNumber: booking.bookingReference,
             description: `Credit Card Processing Fee`,
             type: 'FEE'
@@ -1179,7 +1189,7 @@ app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permis
         vendorName: parsedData.vendorName,
         amount: parsedData.amount,
         paymentStatus: parsedData.paymentStatus,
-        paidOn: parsedData.paidOn ? new Date(parsedData.paidOn) : null,
+        paidOn: parsedData.paidOn ? parseDateWithCurrentTime(parsedData.paidOn) : null,
         flightPnr: parsedData.flightPnr || null,
         issueDate: parsedData.issueDate ? new Date(parsedData.issueDate) : null,
         reservationNumber: parsedData.reservationNumber || null,
@@ -1203,7 +1213,7 @@ app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permis
     const tx = await prisma.ledgerTransaction.create({
       data: {
         tenantId: tenantIdNumeric,
-        transactionDate: parsedData.paidOn ? new Date(parsedData.paidOn) : new Date(),
+        transactionDate: parsedData.paidOn ? parseDateWithCurrentTime(parsedData.paidOn) : new Date(),
         referenceNumber: booking.bookingReference,
         description: `Vendor Payment to ${parsedData.vendorName}. ${parsedData.notes || ''}`,
         type: 'PAYMENT'
@@ -1612,7 +1622,7 @@ app.post('/:id/discounts', requireGatewayHeaders, requirePermission(Permission.C
         serviceName: serviceName || null,
         amount: parseFloat(amount),
         notes: notes || null,
-        date: new Date(date)
+        date: parseDateWithCurrentTime(date)
       }
     });
 
@@ -1630,7 +1640,7 @@ app.post('/:id/discounts', requireGatewayHeaders, requirePermission(Permission.C
     const tx = await prisma.ledgerTransaction.create({
       data: {
         tenantId: tenantIdNumeric,
-        transactionDate: new Date(date),
+        transactionDate: parseDateWithCurrentTime(date),
         referenceNumber: booking.bookingReference,
         description: `Discount applied to ${vendorCategory} - ${serviceName || ''}. ${notes || ''}`,
         type: 'DISCOUNT'
@@ -1682,7 +1692,7 @@ app.post('/:id/refunds', requireGatewayHeaders, requirePermission(Permission.CRE
         serviceName: serviceName || null,
         amount: parseFloat(amount),
         notes: notes || null,
-        date: new Date(date)
+        date: parseDateWithCurrentTime(date)
       }
     });
 
@@ -1690,7 +1700,7 @@ app.post('/:id/refunds', requireGatewayHeaders, requirePermission(Permission.CRE
     const tx = await prisma.ledgerTransaction.create({
       data: {
         tenantId: tenantIdNumeric,
-        transactionDate: new Date(date),
+        transactionDate: parseDateWithCurrentTime(date),
         referenceNumber: booking.bookingReference,
         description: `${direction} for ${vendorCategory} - ${serviceName || ''}. ${notes || ''}`,
         type: 'REFUND'
@@ -2320,6 +2330,7 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
 
     // Process manual allocations
     if (manualAllocations && Array.isArray(manualAllocations) && manualAllocations.length > 0) {
+      const enrichedAllocations = [];
       for (const alloc of manualAllocations) {
         const { bookingId, serviceId, serviceType, amountApplied } = alloc;
         const parsedAmount = parseFloat(amountApplied);
@@ -2336,34 +2347,67 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
         }
 
         const service = await (serviceModel as any).findUnique({
-          where: { id: serviceId }
+          where: { id: serviceId },
+          include: { booking: true }
         });
 
         if (!service || service.tenantId !== tenantId) continue;
 
-        allocations.push({
-          tenantId,
+        enrichedAllocations.push({
           bookingId,
-          serviceType,
           serviceId,
-          allocatedAmount: parsedAmount
+          serviceType,
+          requestedAmount: parsedAmount,
+          service,
+          booking: service.booking,
+          serviceModel
         });
+      }
 
-        // Mark as paid if settled
+      // Sort: older bookings first (by createdAt or ID), then older services first
+      enrichedAllocations.sort((a, b) => {
+        const aDate = new Date(a.booking?.createdAt || a.booking?.date || 0).getTime();
+        const bDate = new Date(b.booking?.createdAt || b.booking?.date || 0).getTime();
+        if (aDate !== bDate) return aDate - bDate;
+        
+        const aSvcDate = new Date(a.service?.createdAt || 0).getTime();
+        const bSvcDate = new Date(b.service?.createdAt || 0).getTime();
+        return aSvcDate - bSvcDate;
+      });
+
+      let tempRemaining = remainingAmount;
+      for (const item of enrichedAllocations) {
+        if (tempRemaining <= 0) break;
+
         const previousAllocations = await prisma.bookingAllocation.aggregate({
-          where: { tenantId, serviceType, serviceId },
+          where: { tenantId, serviceType: item.serviceType, serviceId: item.serviceId },
           _sum: { allocatedAmount: true }
         });
         
-        const totalCost = parseFloat(service.price || service.charges || 0);
+        const totalCost = parseFloat(item.service.price || item.service.charges || 0);
         const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
         const serviceRemainingDue = totalCost - alreadyAllocated;
 
-        if (parsedAmount >= serviceRemainingDue) {
-          await (serviceModel as any).update({
-            where: { id: serviceId },
-            data: { isPaidToVendor: true }
+        if (serviceRemainingDue > 0) {
+          const allocateAmt = Math.min(serviceRemainingDue, tempRemaining, item.requestedAmount);
+          if (allocateAmt <= 0) continue;
+
+          allocations.push({
+            tenantId,
+            bookingId: item.bookingId,
+            serviceType: item.serviceType,
+            serviceId: item.serviceId,
+            allocatedAmount: allocateAmt
           });
+
+          tempRemaining -= allocateAmt;
+
+          if (allocateAmt >= serviceRemainingDue) {
+            await (item.serviceModel as any).update({
+              where: { id: item.serviceId },
+              data: { isPaidToVendor: true }
+            });
+          }
         }
       }
     } else {
@@ -2449,7 +2493,7 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       const creditTx = await prisma.ledgerTransaction.create({
         data: {
           tenantId,
-          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          transactionDate: parseDateWithCurrentTime(paidOn),
           description: `Wallet credit drawdown applied to bookings. Allocated to ${allocations.length} service(s) on booking(s): ${bookingRefsStr}`,
           type: 'PAYMENT',
           referenceNumber: bookingRefsStr || null
@@ -2471,7 +2515,7 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       const cashTx = await prisma.ledgerTransaction.create({
         data: {
           tenantId,
-          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          transactionDate: parseDateWithCurrentTime(paidOn),
           description: `Bulk payment to vendor ${vendorName}. Allocated to ${allocations.length} service(s) on booking(s): ${bookingRefsStr}.${notesSuffix} ${notes || ''}`,
           type: 'PAYMENT',
           referenceNumber: bookingRefsStr || null
@@ -2494,7 +2538,7 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       const overTx = await prisma.ledgerTransaction.create({
         data: {
           tenantId,
-          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          transactionDate: parseDateWithCurrentTime(paidOn),
           description: `Overpayment hold for future use (Vendor Wallet credit) for ${vendorName}. ${notes || ''}`,
           type: 'PAYMENT',
           referenceNumber: bookingRefsStr || null
@@ -2517,7 +2561,7 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
       const unallocatedTx = await prisma.ledgerTransaction.create({
         data: {
           tenantId,
-          transactionDate: paidOn ? new Date(paidOn) : new Date(),
+          transactionDate: parseDateWithCurrentTime(paidOn),
           description: `Vendor Wallet Credit / Prepayment to ${vendorName}. ${notes || ''}`,
           type: 'PAYMENT',
           referenceNumber: null
@@ -2553,14 +2597,27 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
 
     for (const [bIdStr, bAmount] of Object.entries(bookingAmounts)) {
       const bId = parseInt(bIdStr);
+
+      const [flights, hotels, transports, visas, additionals] = await Promise.all([
+        prisma.flightService.findMany({ where: { bookingId: bId, vendorName } }),
+        prisma.accommodationService.findMany({ where: { bookingId: bId, vendorName } }),
+        prisma.transportService.findMany({ where: { bookingId: bId, vendorName } }),
+        prisma.visaService.findMany({ where: { bookingId: bId, vendorName } }),
+        prisma.additionalService.findMany({ where: { bookingId: bId, vendorName } })
+      ]);
+      const allSrvs = [...flights, ...hotels, ...transports, ...visas, ...additionals];
+      const allPaid = allSrvs.length > 0 && allSrvs.every(s => s.isPaidToVendor);
+
+      const pStatus = allPaid ? 'paid' : 'partially_paid';
+
       await prisma.vendorPayment.create({
         data: {
           tenantId,
           bookingId: bId,
           vendorName,
           amount: bAmount,
-          paymentStatus: 'paid',
-          paidOn: paidOn ? new Date(paidOn) : new Date(),
+          paymentStatus: pStatus,
+          paidOn: parseDateWithCurrentTime(paidOn),
           notes: `Allocated payment from bulk reconciliation payment. ${notes || ''}`
         }
       });
@@ -2647,7 +2704,10 @@ app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.RE
           }
         }
       },
-      orderBy: { transactionDate: 'desc' }
+      orderBy: [
+        { transactionDate: 'asc' },
+        { id: 'asc' }
+      ]
     });
 
     // Also fetch all accounts for closing balances

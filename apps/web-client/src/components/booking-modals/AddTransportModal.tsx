@@ -91,7 +91,8 @@ export function AddTransportModal({ isOpen, onClose, onSubmit, flights, accommod
   useEffect(() => {
     if (isOpen) {
       axios.get('/catalog').then(res => {
-        setCatalogItems(res.data.filter((item: any) => item.serviceType === 'TRANSPORT'));
+        const items = res.data.items || (Array.isArray(res.data) ? res.data : []);
+        setCatalogItems(items.filter((item: any) => item.serviceType === 'TRANSPORT'));
       }).catch(console.error);
     }
   }, [isOpen]);

@@ -134,7 +134,8 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
   useEffect(() => {
     if (isOpen) {
       axios.get('/catalog').then(res => {
-        setCatalogItems(res.data.filter((item: any) => item.serviceType === 'HOTEL'));
+        const items = res.data.items || (Array.isArray(res.data) ? res.data : []);
+        setCatalogItems(items.filter((item: any) => item.serviceType === 'HOTEL'));
       }).catch(console.error);
     }
   }, [isOpen]);

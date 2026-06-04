@@ -52,10 +52,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
   const refundsToClient = booking.refunds?.filter(r => r.direction === 'Refund to Client').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
   const refundsFromVendor = booking.refunds?.filter(r => r.direction === 'Refund from Vendor').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
 
-  // Strict Net Accounting (Contra-accounts) for Profit calculation
-  // CLIENT_REFUND is a contra-revenue (subtracts from Total Received)
-  // VENDOR_REFUND is a contra-expense (subtracts from Total Sent)
-  const netReceived = clientPayments - refundsToClient;
+  const netReceived = Math.min(clientPayments, bookingTotal) - refundsToClient;
   const netSent = vendorPayments - refundsFromVendor;
   
   // Remaining Balance should ONLY look at what the client was supposed to pay vs what they physically paid in gross.

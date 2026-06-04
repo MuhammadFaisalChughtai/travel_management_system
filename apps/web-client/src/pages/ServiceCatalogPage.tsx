@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { VendorSelect } from '../components/shared/VendorSelect';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
+import { Pagination } from '../components/shared/Pagination';
 
 interface CatalogItem {
   id: number;

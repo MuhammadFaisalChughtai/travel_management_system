@@ -5,7 +5,6 @@ import {
   CreditCard, 
   Settings, 
   LogOut, 
-  Loader2, 
   Plus, 
   X, 
   TrendingUp, 
@@ -1363,12 +1362,14 @@ export function Dashboard() {
                       {tableBookings.map((b) => {
                         const bookingTotal = Number(b.totalPrice) || 0;
                         const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
-                        const vendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+                        const legacyVendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+                        const modernVendorPayments = b.vendorPayments?.reduce((sum: number, vp: any) => sum + (Number(vp.amount) || 0), 0) || 0;
+                        const vendorPayments = legacyVendorPayments + modernVendorPayments;
                         const totalDiscounts = b.discounts?.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0) || 0;
                         const refundsToClient = b.refunds?.filter((r: any) => r.direction === 'Refund to Client').reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0) || 0;
                         const refundsFromVendor = b.refunds?.filter((r: any) => r.direction === 'Refund from Vendor').reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0) || 0;
 
-                        const totalReceived = clientPayments - refundsToClient;
+                        const totalReceived = Math.min(clientPayments, bookingTotal) - refundsToClient;
                         const totalSent = vendorPayments - refundsFromVendor;
                         const remainingAmount = bookingTotal - clientPayments;
                         

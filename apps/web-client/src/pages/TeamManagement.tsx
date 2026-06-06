@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users, Lock } from 'lucide-react';
+import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users, Lock, Compass, Briefcase, FolderOpen, Landmark, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/axios';
 import { EmptyState } from '../components/shared/EmptyState';
@@ -17,25 +17,167 @@ interface User {
   createdAt: string;
 }
 
-const PERMISSIONS_MATRIX = [
-  { module: 'Bookings & Itineraries', agent: 'Create, Read, Update', companyAdmin: 'Create, Read, Update, Delete', mainAdmin: 'Create, Read, Update, Delete' },
-  { module: 'Client Records', agent: 'Create, Read, Update', companyAdmin: 'Create, Read, Update, Delete', mainAdmin: 'Create, Read, Update, Delete' },
-  { module: 'Vendor Records', agent: 'Read Only', companyAdmin: 'Create, Read, Update, Delete', mainAdmin: 'Create, Read, Update, Delete' },
-  { module: 'Agency Dashboard', agent: 'No Access', companyAdmin: 'Read Only', mainAdmin: 'Full Access' },
-  { module: 'Team Management', agent: 'No Access', companyAdmin: 'Create, Read, Update, Delete', mainAdmin: 'Create, Read, Update, Delete' },
-  { module: 'Financials (Refunds/Profit)', agent: 'No Access', companyAdmin: 'Read Only', mainAdmin: 'Create, Read, Update, Delete' },
-  { module: 'System Settings', agent: 'No Access', companyAdmin: 'No Access', mainAdmin: 'Full Access' }
+import { useAuthStore } from '../store/authStore';
+
+const MODULE_PERMISSIONS = [
+  {
+    module: 'Bookings & Itineraries',
+    permissions: [
+      { label: 'Create', permission: 'CREATE_BOOKING' },
+      { label: 'Read', permission: 'READ_BOOKING' },
+      { label: 'Update', permission: 'UPDATE_BOOKING' },
+      { label: 'Delete', permission: 'DELETE_BOOKING' }
+    ]
+  },
+  {
+    module: 'Client Records',
+    permissions: [
+      { label: 'Create', permission: 'CREATE_CLIENT' },
+      { label: 'Read', permission: 'READ_CLIENT' },
+      { label: 'Update', permission: 'UPDATE_CLIENT' },
+      { label: 'Delete', permission: 'DELETE_CLIENT' }
+    ]
+  },
+  {
+    module: 'Vendor Records',
+    permissions: [
+      { label: 'Create', permission: 'CREATE_VENDOR' },
+      { label: 'Read', permission: 'READ_VENDOR' },
+      { label: 'Update', permission: 'UPDATE_VENDOR' },
+      { label: 'Delete', permission: 'DELETE_VENDOR' }
+    ]
+  },
+  {
+    module: 'Agency Dashboard',
+    permissions: [
+      { label: 'Access', permission: 'READ_DASHBOARD' }
+    ]
+  },
+  {
+    module: 'Team Management',
+    permissions: [
+      { label: 'Create', permission: 'CREATE_USER' },
+      { label: 'Read', permission: 'READ_USER' },
+      { label: 'Update', permission: 'UPDATE_USER' },
+      { label: 'Delete', permission: 'DELETE_USER' }
+    ]
+  },
+  {
+    module: 'Financials (Refunds/Profit)',
+    permissions: [
+      { label: 'Create', permission: 'CREATE_TRANSACTION' },
+      { label: 'Read', permission: 'READ_TRANSACTION' },
+      { label: 'Update', permission: 'UPDATE_TRANSACTION' },
+      { label: 'Delete', permission: 'DELETE_TRANSACTION' }
+    ]
+  },
+  {
+    module: 'System Settings',
+    permissions: [
+      { label: 'Access', permission: 'MANAGE_SETTINGS' }
+    ]
+  }
 ];
 
+interface MatrixRow {
+  module: string;
+  AGENT: string;
+  COMPANY_ADMIN: string;
+  MAIN_COMPANY_ADMIN: string;
+}
+
 function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
+  const [matrix, setMatrix] = useState<MatrixRow[]>([]);
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({
+    AGENT: [],
+    COMPANY_ADMIN: [],
+    MAIN_COMPANY_ADMIN: []
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchMatrix = async () => {
+      try {
+        const res = await api.get('/auth/roles/permissions/matrix');
+        setMatrix(res.data.matrix || []);
+        setRolePermissions(res.data.permissions || {
+          AGENT: [],
+          COMPANY_ADMIN: [],
+          MAIN_COMPANY_ADMIN: []
+        });
+      } catch (err) {
+        console.error('Failed to fetch permissions matrix:', err);
+        toast.error('Failed to load permissions matrix');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMatrix();
+  }, []);
+
+  const handleCheckboxChange = (role: 'AGENT' | 'COMPANY_ADMIN', permission: string, checked: boolean) => {
+    setRolePermissions(prev => {
+      const currentList = prev[role] || [];
+      const newList = checked 
+        ? [...currentList, permission] 
+        : currentList.filter(p => p !== permission);
+      return {
+        ...prev,
+        [role]: newList
+      };
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.put('/auth/roles/permissions/matrix', { permissions: rolePermissions });
+      toast.success('Permissions matrix updated successfully');
+      
+      const syncRes = await api.get('/auth/my-permissions');
+      if (syncRes.data.permissions) {
+        useAuthStore.getState().setPermissions(syncRes.data.permissions);
+      }
+      
+      onClose();
+    } catch (err) {
+      console.error('Failed to save permissions matrix:', err);
+      toast.error('Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getModuleIcon = (moduleName: string) => {
+    switch (moduleName) {
+      case 'Bookings & Itineraries':
+        return <Compass className="w-4 h-4 text-sky-500" />;
+      case 'Client Records':
+        return <Users className="w-4 h-4 text-teal-500" />;
+      case 'Vendor Records':
+        return <Briefcase className="w-4 h-4 text-amber-500" />;
+      case 'Agency Dashboard':
+        return <FolderOpen className="w-4 h-4 text-indigo-500" />;
+      case 'Team Management':
+        return <ShieldAlert className="w-4 h-4 text-rose-500" />;
+      case 'Financials (Refunds/Profit)':
+        return <Landmark className="w-4 h-4 text-emerald-500" />;
+      case 'System Settings':
+        return <Settings2 className="w-4 h-4 text-slate-500" />;
+      default:
+        return <Shield className="w-4 h-4 text-slate-400" />;
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-4xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
+        className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-7xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
         <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-6 py-5 flex justify-between items-center shadow-lg relative overflow-hidden shrink-0">
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-          <div className="absolute bottom-0 left-16 w-32 h-32 bg-indigo-500/30 rounded-full blur-2xl -mb-10"></div>
+          <div className="absolute bottom-0 left-16 w-32 h-32 bg-indigo-50/30 rounded-full blur-2xl -mb-10"></div>
           
           <div className="relative z-10 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
@@ -43,32 +185,155 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h3 className="font-extrabold text-white text-[16px] tracking-wide">Permissions Matrix</h3>
-              <p className="text-[12px] text-indigo-200 font-medium">Golden Security Rules enforced by the API</p>
+              <p className="text-[12px] text-indigo-200 font-medium">Enforce and edit workspace role-based restrictions</p>
             </div>
           </div>
           <button onClick={onClose} className="relative z-10 w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"><X className="w-4 h-4" /></button>
         </div>
-        <div className="p-0 overflow-y-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
-                <th className="p-4 pl-6 font-bold">Module / Section</th>
-                <th className="p-4 border-l border-slate-200 text-center">Agent</th>
-                <th className="p-4 border-l border-slate-200 text-center">Company Admin</th>
-                <th className="p-4 border-l border-slate-200 text-center text-indigo-600 bg-indigo-50/30">Main Company Admin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {PERMISSIONS_MATRIX.map((row, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 pl-6 text-[13px] font-bold text-slate-800">{row.module}</td>
-                  <td className={`p-4 border-l border-slate-100 text-[12px] font-medium text-center ${row.agent === 'No Access' ? 'text-slate-400 italic' : 'text-slate-600'}`}>{row.agent}</td>
-                  <td className={`p-4 border-l border-slate-100 text-[12px] font-medium text-center ${row.companyAdmin === 'No Access' ? 'text-slate-400 italic' : 'text-slate-600'}`}>{row.companyAdmin}</td>
-                  <td className="p-4 border-l border-slate-100 text-[12px] font-bold text-indigo-600 text-center bg-indigo-50/10">{row.mainAdmin}</td>
+        <div className="p-0 overflow-x-auto overflow-y-auto flex-1 min-h-[200px] flex flex-col">
+          {loading ? (
+            <div className="flex items-center justify-center py-12 flex-1">
+              <LoadingState />
+            </div>
+          ) : matrix.length === 0 ? (
+            <div className="flex items-center justify-center py-12 flex-1">
+              <EmptyState title="No Permissions Loaded" description="Failed to fetch permissions configuration." icon={ShieldAlert} />
+            </div>
+          ) : (
+            <table className="min-w-[1050px] w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
+                  <th className="p-4 pl-6 font-semibold w-[22%] text-slate-600">Module / Section</th>
+                  <th className="p-4 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Users className="w-4 h-4 text-slate-400" />
+                      <span>Agent</span>
+                    </div>
+                  </th>
+                  <th className="p-4 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Shield className="w-4 h-4 text-primary-500" />
+                      <span>Company Admin</span>
+                    </div>
+                  </th>
+                  <th className="p-4 border-l border-slate-200 text-center text-indigo-700 bg-indigo-50/40 font-extrabold w-[26%]">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Main Company Admin (Locked)</span>
+                    </div>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {matrix.map((row, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4 pl-6 text-[13px] font-bold text-slate-800">
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shadow-xs">
+                          {getModuleIcon(row.module)}
+                        </div>
+                        <span>{row.module}</span>
+                      </div>
+                    </td>
+                    
+                    {/* AGENT */}
+                    <td className="p-4 border-l border-slate-100">
+                      <div className="flex flex-wrap gap-2 justify-center items-center max-w-[340px] mx-auto">
+                        {MODULE_PERMISSIONS.find(m => m.module === row.module)?.permissions.map(perm => {
+                          const isChecked = rolePermissions.AGENT?.includes(perm.permission) || false;
+                          return (
+                            <label 
+                              key={perm.permission} 
+                              className={`
+                                inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer select-none
+                                ${isChecked 
+                                  ? 'bg-primary-50/80 border-primary-200 text-primary-700 shadow-xs' 
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300'
+                                }
+                              `}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => handleCheckboxChange('AGENT', perm.permission, e.target.checked)}
+                                className="rounded-md w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                              />
+                              <span>{perm.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </td>
+
+                    {/* COMPANY ADMIN */}
+                    <td className="p-4 border-l border-slate-100">
+                      <div className="flex flex-wrap gap-2 justify-center items-center max-w-[340px] mx-auto">
+                        {MODULE_PERMISSIONS.find(m => m.module === row.module)?.permissions.map(perm => {
+                          const isChecked = rolePermissions.COMPANY_ADMIN?.includes(perm.permission) || false;
+                          return (
+                            <label 
+                              key={perm.permission} 
+                              className={`
+                                inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer select-none
+                                ${isChecked 
+                                  ? 'bg-primary-50/80 border-primary-200 text-primary-700 shadow-xs' 
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300'
+                                }
+                              `}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => handleCheckboxChange('COMPANY_ADMIN', perm.permission, e.target.checked)}
+                                className="rounded-md w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                              />
+                              <span>{perm.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </td>
+
+                    {/* MAIN COMPANY ADMIN (LOCKED) */}
+                    <td className="p-4 border-l border-slate-100 bg-indigo-50/10">
+                      <div className="flex flex-wrap gap-2 justify-center items-center max-w-[340px] mx-auto">
+                        {MODULE_PERMISSIONS.find(m => m.module === row.module)?.permissions.map(perm => {
+                          const isChecked = rolePermissions.MAIN_COMPANY_ADMIN?.includes(perm.permission) || false;
+                          return (
+                            <label 
+                              key={perm.permission} 
+                              className={`
+                                inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-not-allowed select-none
+                                ${isChecked 
+                                  ? 'bg-indigo-50/50 border-indigo-100 text-indigo-700/60 font-bold shadow-xs' 
+                                  : 'bg-slate-50/50 border-slate-100 text-slate-300'
+                                }
+                              `}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                disabled
+                                className="rounded-md w-3.5 h-3.5 border-slate-200 text-indigo-400 bg-slate-100 cursor-not-allowed focus:ring-0"
+                              />
+                              <span>{perm.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end gap-3 shrink-0">
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
+          <button onClick={handleSave} disabled={saving || loading} className="px-6 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-[13px] font-bold shadow-md transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50">
+            {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
+            Save Changes
+          </button>
         </div>
       </motion.div>
     </div>

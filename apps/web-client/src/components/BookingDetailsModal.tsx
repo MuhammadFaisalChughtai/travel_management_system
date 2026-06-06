@@ -15,6 +15,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../api/axios";
 import type { BookingDetail } from "../types/booking";
+import { useAuthStore } from "../store/authStore";
 
 import { AccordionSection } from "./AccordionSection";
 import { SummaryLedgerSection } from "./booking-sections/SummaryLedgerSection";
@@ -57,6 +58,36 @@ export function BookingDetailsModal({
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const { user } = useAuthStore();
+
+  const hasPermission = (permission: string) => {
+    if (!user) return false;
+    if (user.role === "SUPER_ADMIN" || user.role === "MAIN_COMPANY_ADMIN") return true;
+    if (user.permissions) {
+      return user.permissions.includes(permission);
+    }
+    const defaults: Record<string, string[]> = {
+      AGENT: [
+        "CREATE_BOOKING", "READ_BOOKING", "UPDATE_BOOKING",
+        "CREATE_CLIENT", "READ_CLIENT", "UPDATE_CLIENT",
+        "READ_VENDOR", "READ_TRANSACTION"
+      ],
+      COMPANY_ADMIN: [
+        "CREATE_BOOKING", "READ_BOOKING", "UPDATE_BOOKING", "DELETE_BOOKING",
+        "CREATE_CLIENT", "READ_CLIENT", "UPDATE_CLIENT", "DELETE_CLIENT",
+        "CREATE_VENDOR", "READ_VENDOR", "UPDATE_VENDOR", "DELETE_VENDOR",
+        "READ_DASHBOARD",
+        "CREATE_USER", "READ_USER", "UPDATE_USER", "DELETE_USER",
+        "CREATE_TRANSACTION", "READ_TRANSACTION", "UPDATE_TRANSACTION", "DELETE_TRANSACTION"
+      ]
+    };
+    return defaults[user.role || ""]?.includes(permission) || false;
+  };
+
+  const canUpdateBooking = hasPermission("UPDATE_BOOKING");
+  const canCreateTransaction = hasPermission("CREATE_TRANSACTION");
+  const canUpdateTransaction = hasPermission("UPDATE_TRANSACTION");
 
   // Accordion state
   const [openSections, setOpenSections] = useState<string[]>(["summary"]);
@@ -532,8 +563,11 @@ export function BookingDetailsModal({
   const handleUpdateCoreField = async (field: string, value: string) => {
     if (!bookingId) return;
     try {
+      const numericFields = ['totalPrice', 'paidAmount', 'refundAmount', 'cardPaymentCharges', 'cancellationCharges', 'remainingAmount'];
+      const parsedValue = numericFields.includes(field) ? parseFloat(value) : value;
+
       await api.patch(`/bookings/${bookingId}`, {
-        [field]: value,
+        [field]: parsedValue,
       });
       fetchDetails();
       if (onUpdate) onUpdate();
@@ -670,48 +704,53 @@ export function BookingDetailsModal({
             </div>
           ) : booking ? (
             <div className="relative z-10 max-w-6xl mx-auto space-y-4">
-              <AccordionSection
-                title="Financial Dashboard & Ledger"
-                icon={<Calculator className="w-4 h-4" />}
-                isOpen={openSections.includes("summary")}
-                onToggle={() => toggleSection("summary")}
-                action={
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowLogRefund(true)}
-                      className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                    >
-                      <RefreshCcw className="w-3 h-3" /> Refund
-                    </button>
-                    <button
-                      onClick={() => setShowAddDiscount(true)}
-                      className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                    >
-                      <Plus className="w-3 h-3" /> Discount
-                    </button>
-                    <button
-                      onClick={() => setShowLogTransaction(true)}
-                      className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                    >
-                      <Plus className="w-3 h-3" /> Log Transaction
-                    </button>
+              {hasPermission("READ_TRANSACTION") && (
+                <AccordionSection
+                  title="Financial Dashboard & Ledger"
+                  icon={<Calculator className="w-4 h-4" />}
+                  isOpen={openSections.includes("summary")}
+                  onToggle={() => toggleSection("summary")}
+                  action={
+                    canCreateTransaction ? (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowLogRefund(true)}
+                          className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                        >
+                          <RefreshCcw className="w-3 h-3" /> Refund
+                        </button>
+                        <button
+                          onClick={() => setShowAddDiscount(true)}
+                          className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                        >
+                          <Plus className="w-3 h-3" /> Discount
+                        </button>
+                        <button
+                          onClick={() => setShowLogTransaction(true)}
+                          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                        >
+                          <Plus className="w-3 h-3" /> Log Transaction
+                        </button>
+                      </div>
+                    ) : undefined
+                  }
+                >
+                  <div className="space-y-4">
+                    <SummaryLedgerSection
+                      booking={booking || undefined}
+                      onUpdate={canUpdateBooking ? handleUpdateCoreField : undefined}
+                    />
+                    <TransactionsSection
+                      booking={booking || undefined}
+                      onAddDiscount={canCreateTransaction ? () => setShowAddDiscount(true) : undefined}
+                      onLogRefund={canCreateTransaction ? handleSaveRefund : undefined}
+                      onClawbackMargin={canUpdateTransaction ? handleClawbackMargin : undefined}
+                      onFinalizeMargin={canCreateTransaction ? handleFinalizeMargin : undefined}
+                      onUpdateInvoicePrice={canUpdateTransaction ? (price) => handleUpdateCoreField("totalPrice", price) : undefined}
+                    />
                   </div>
-                }
-              >
-                <div className="space-y-4">
-                  <SummaryLedgerSection
-                    booking={booking || undefined}
-                    onUpdate={handleUpdateCoreField}
-                  />
-                  <TransactionsSection
-                    booking={booking || undefined}
-                    onAddDiscount={() => setShowAddDiscount(true)}
-                    onLogRefund={() => setShowLogRefund(true)}
-                    onClawbackMargin={handleClawbackMargin}
-                    onFinalizeMargin={handleFinalizeMargin}
-                  />
-                </div>
-              </AccordionSection>
+                </AccordionSection>
+              )}
 
               <AccordionSection
                 title="Passengers"
@@ -719,19 +758,21 @@ export function BookingDetailsModal({
                 isOpen={openSections.includes("passengers")}
                 onToggle={() => toggleSection("passengers")}
                 action={
-                  <button
-                    onClick={() => setShowAddPassenger(true)}
-                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                  >
-                    <Plus className="w-3 h-3" /> Add
-                  </button>
+                  canUpdateBooking ? (
+                    <button
+                      onClick={() => setShowAddPassenger(true)}
+                      className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  ) : undefined
                 }
               >
                 <PassengersSection
                   passengers={booking.customers}
-                  onAdd={() => setShowAddPassenger(true)}
-                  onEdit={(p) => setEditingPassenger(p)}
-                  onDelete={(s: any) => handleDeleteService("passenger", s.id)}
+                  onAdd={canUpdateBooking ? () => setShowAddPassenger(true) : undefined}
+                  onEdit={canUpdateBooking ? (p) => setEditingPassenger(p) : undefined}
+                  onDelete={canUpdateBooking ? (s: any) => handleDeleteService("passenger", s.id) : undefined}
                 />
               </AccordionSection>
 
@@ -741,19 +782,21 @@ export function BookingDetailsModal({
                 isOpen={openSections.includes("flights")}
                 onToggle={() => toggleSection("flights")}
                 action={
-                  <button
-                    onClick={() => setShowAddFlight(true)}
-                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                  >
-                    <Plus className="w-3 h-3" /> Add
-                  </button>
+                  canUpdateBooking ? (
+                    <button
+                      onClick={() => setShowAddFlight(true)}
+                      className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  ) : undefined
                 }
               >
                 <FlightServicesSection
                   flights={booking.flightServices}
-                  onEdit={setEditingFlight}
-                  onAdd={() => setShowAddFlight(true)}
-                  onDelete={(s: any) => handleDeleteService("flight", s.id)}
+                  onEdit={canUpdateBooking ? setEditingFlight : undefined}
+                  onAdd={canUpdateBooking ? () => setShowAddFlight(true) : undefined}
+                  onDelete={canUpdateBooking ? (s: any) => handleDeleteService("flight", s.id) : undefined}
                 />
               </AccordionSection>
 
@@ -763,21 +806,21 @@ export function BookingDetailsModal({
                 isOpen={openSections.includes("stays")}
                 onToggle={() => toggleSection("stays")}
                 action={
-                  <button
-                    onClick={() => setShowAddHotel(true)}
-                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                  >
-                    <Plus className="w-3 h-3" /> Add
-                  </button>
+                  canUpdateBooking ? (
+                    <button
+                      onClick={() => setShowAddHotel(true)}
+                      className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  ) : undefined
                 }
               >
                 <StaysSection
                   stays={booking.accommodations}
-                  onAdd={() => setShowAddHotel(true)}
-                  onEdit={(s: any) => setEditingAccommodation(s)}
-                  onDelete={(s: any) =>
-                    handleDeleteService("accommodation", s.id)
-                  }
+                  onAdd={canUpdateBooking ? () => setShowAddHotel(true) : undefined}
+                  onEdit={canUpdateBooking ? (s: any) => setEditingAccommodation(s) : undefined}
+                  onDelete={canUpdateBooking ? (s: any) => handleDeleteService("accommodation", s.id) : undefined}
                 />
               </AccordionSection>
 
@@ -787,19 +830,21 @@ export function BookingDetailsModal({
                 isOpen={openSections.includes("transport")}
                 onToggle={() => toggleSection("transport")}
                 action={
-                  <button
-                    onClick={() => setShowAddTransport(true)}
-                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                  >
-                    <Plus className="w-3 h-3" /> Add
-                  </button>
+                  canUpdateBooking ? (
+                    <button
+                      onClick={() => setShowAddTransport(true)}
+                      className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  ) : undefined
                 }
               >
                 <TransportServicesSection
                   transports={booking.transportServices}
-                  onEdit={setEditingTransport}
-                  onAdd={() => setShowAddTransport(true)}
-                  onDelete={(s: any) => handleDeleteService("transport", s.id)}
+                  onEdit={canUpdateBooking ? setEditingTransport : undefined}
+                  onAdd={canUpdateBooking ? () => setShowAddTransport(true) : undefined}
+                  onDelete={canUpdateBooking ? (s: any) => handleDeleteService("transport", s.id) : undefined}
                 />
               </AccordionSection>
 
@@ -809,19 +854,21 @@ export function BookingDetailsModal({
                 isOpen={openSections.includes("visas")}
                 onToggle={() => toggleSection("visas")}
                 action={
-                  <button
-                    onClick={() => setShowAddVisa(true)}
-                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                  >
-                    <Plus className="w-3 h-3" /> Add
-                  </button>
+                  canUpdateBooking ? (
+                    <button
+                      onClick={() => setShowAddVisa(true)}
+                      className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  ) : undefined
                 }
               >
                 <VisaServicesSection
                   visas={booking.visaServices}
-                  onEdit={setEditingVisa}
-                  onAdd={() => setShowAddVisa(true)}
-                  onDelete={(s: any) => handleDeleteService("visa", s.id)}
+                  onEdit={canUpdateBooking ? setEditingVisa : undefined}
+                  onAdd={canUpdateBooking ? () => setShowAddVisa(true) : undefined}
+                  onDelete={canUpdateBooking ? (s: any) => handleDeleteService("visa", s.id) : undefined}
                 />
               </AccordionSection>
 
@@ -831,19 +878,21 @@ export function BookingDetailsModal({
                 isOpen={openSections.includes("additional")}
                 onToggle={() => toggleSection("additional")}
                 action={
-                  <button
-                    onClick={() => setShowAddAdditionalService(true)}
-                    className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                  >
-                    <Plus className="w-3 h-3" /> Add
-                  </button>
+                  canUpdateBooking ? (
+                    <button
+                      onClick={() => setShowAddAdditionalService(true)}
+                      className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  ) : undefined
                 }
               >
                 <AdditionalServicesSection
                   services={booking.additionalServices}
-                  onEdit={setEditingAdditionalService}
-                  onAdd={() => setShowAddAdditionalService(true)}
-                  onDelete={(s: any) => handleDeleteService("additional", s.id)}
+                  onEdit={canUpdateBooking ? setEditingAdditionalService : undefined}
+                  onAdd={canUpdateBooking ? () => setShowAddAdditionalService(true) : undefined}
+                  onDelete={canUpdateBooking ? (s: any) => handleDeleteService("additional", s.id) : undefined}
                 />
               </AccordionSection>
             </div>

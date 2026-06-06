@@ -8,19 +8,21 @@ import { ClientTransactionsModal } from '../booking-modals/ClientTransactionsMod
 import { ProfitLedgerModal } from '../booking-modals/ProfitLedgerModal';
 import { LogRefundModal } from '../booking-modals/LogRefundModal';
 import { ClawbackMarginModal } from '../booking-modals/ClawbackMarginModal';
-import { PieChart, CheckCircle2 } from 'lucide-react';
+import { UpdateInvoicePriceModal } from '../booking-modals/UpdateInvoicePriceModal';
+import { PieChart, CheckCircle2, Edit2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Pagination } from '../shared/Pagination';
 
 interface TransactionsSectionProps {
   booking: BookingDetail;
   onAddDiscount?: () => void;
-  onLogRefund: (refund: Partial<Refund>) => void;
-  onClawbackMargin: (data: { amount: string; reason: string }) => void;
-  onFinalizeMargin: (data: { amount: string; notes: string }) => void;
+  onLogRefund?: (refund: Partial<Refund>) => void;
+  onClawbackMargin?: (data: { amount: string; reason: string }) => void;
+  onFinalizeMargin?: (data: { amount: string; notes: string }) => void;
+  onUpdateInvoicePrice?: (price: string) => Promise<void>;
 }
 
-export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onClawbackMargin, onFinalizeMargin }: TransactionsSectionProps) {
+export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onClawbackMargin, onFinalizeMargin, onUpdateInvoicePrice }: TransactionsSectionProps) {
   const [filter, setFilter] = useState<'All' | 'Received from Client' | 'Sent to Vendor' | 'Margin Paid to Agent'>('All');
   const [customMarginPercentage, setCustomMarginPercentage] = useState<string>('0');
   const [marginPercentage, setMarginPercentage] = useState<number>(0);
@@ -31,6 +33,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
   const [showLogRefundModal, setShowLogRefundModal] = useState(false);
   const [showClawbackModal, setShowClawbackModal] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
+  const [showUpdatePriceModal, setShowUpdatePriceModal] = useState(false);
 
   // Parse Booking Total
   const bookingTotal = parseFloat(booking.totalPrice) || 0;
@@ -52,12 +55,11 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
   const refundsToClient = booking.refunds?.filter(r => r.direction === 'Refund to Client').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
   const refundsFromVendor = booking.refunds?.filter(r => r.direction === 'Refund from Vendor').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
 
-  const netReceived = Math.min(clientPayments, bookingTotal) - refundsToClient;
+  const netReceived = Math.min(clientPayments - refundsToClient, bookingTotal);
   const netSent = vendorPayments - refundsFromVendor;
   
-  // Remaining Balance should ONLY look at what the client was supposed to pay vs what they physically paid in gross.
-  // Refunds do not make the client owe us more money.
-  const clientBalance = bookingTotal - clientPayments;
+  // Remaining Balance compares the Invoice Price against the net payments received (payments minus refunds)
+  const clientBalance = bookingTotal - (clientPayments - refundsToClient);
   
   const marginPaidToAgent = booking.payments?.filter(p => p.paymentType === 'Margin Paid to Agent').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const creditCardCharges = booking.payments?.filter(p => p.paymentType === 'Credit Card Charges').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
@@ -106,8 +108,8 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
   const totalAgentMargin = ((netProfit + marginPaidToAgent) * marginPercentage) / 100;
   const remainingAgentMargin = Math.max(0, totalAgentMargin - marginPaidToAgent);
 
-  // Gross margin % (profit as a % of total received — shown as informational)
-  const grossMarginPct = clientPayments > 0 ? (netProfit / clientPayments) * 100 : 0;
+  // Gross margin % (profit as a % of net total received — shown as informational)
+  const grossMarginPct = (clientPayments - refundsToClient) > 0 ? (netProfit / (clientPayments - refundsToClient)) * 100 : 0;
 
   // Identify Pending Vendor Payments
   const hasServices = (booking.flightServices?.length || 0) + (booking.accommodations?.length || 0) + (booking.transportServices?.length || 0) > 0;
@@ -141,6 +143,14 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
 
   const paginatedTxs = filteredTransactions.slice((txPage - 1) * txPerPage, txPage * txPerPage);
 
+  const isOverpaid = (clientPayments - refundsToClient) > bookingTotal;
+  const isFinalizeDisabled = (vendorPayments < totalVendorCost) || isOverpaid;
+  const finalizeTitle = isOverpaid 
+    ? "Unallocated funds detected. Please either Log a Refund or Update the Invoice Price to proceed." 
+    : vendorPayments < totalVendorCost 
+      ? "Cannot finalize until all vendor payments meet or exceed booking cost" 
+      : "Finalize margin and credit agent";
+
   return (
     <div className="space-y-6">
       {/* Financial Summary Card */}
@@ -155,41 +165,64 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
               <p className="text-indigo-200 text-[11px] uppercase tracking-wide font-bold mt-1">Real-time Booking Profitability</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={onAddDiscount} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1.5">
-                <Percent className="w-3 h-3" /> Add Discount
-              </button>
-              <button onClick={() => setShowLogRefundModal(true)} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1.5">
-                <RefreshCcw className="w-3 h-3" /> Log Refund
-              </button>
-              {booking.marginStatus !== 'Finalized' && booking.marginStatus !== 'Paid' && (
+              {onAddDiscount && (
+                <button onClick={onAddDiscount} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1.5">
+                  <Percent className="w-3 h-3" /> Add Discount
+                </button>
+              )}
+              {onLogRefund && (
+                <button onClick={() => setShowLogRefundModal(true)} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1.5">
+                  <RefreshCcw className="w-3 h-3" /> Log Refund
+                </button>
+              )}
+              {onFinalizeMargin && booking.marginStatus !== 'Finalized' && booking.marginStatus !== 'Paid' && (
                 <button 
                   onClick={() => onFinalizeMargin({ amount: remainingAgentMargin.toString(), notes: '' })} 
-                  disabled={vendorPayments < totalVendorCost}
-                  title={vendorPayments < totalVendorCost ? 'Cannot finalize until all vendor payments meet or exceed booking cost' : 'Finalize margin and credit agent'}
+                  disabled={isFinalizeDisabled}
+                  title={finalizeTitle}
                   className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-100 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-emerald-500/30 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                   <CheckCircle2 className="w-3 h-3" /> Finalize Margin
                 </button>
               )}
-              <button onClick={() => setShowClawbackModal(true)} className="bg-purple-500/20 hover:bg-purple-500/40 text-purple-100 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-purple-500/30 flex items-center gap-1.5">
-                <ArrowDownCircle className="w-3 h-3" /> Clawback Margin
-              </button>
+              {onClawbackMargin && (
+                <button onClick={() => setShowClawbackModal(true)} className="bg-purple-500/20 hover:bg-purple-500/40 text-purple-100 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-purple-500/30 flex items-center gap-1.5">
+                  <ArrowDownCircle className="w-3 h-3" /> Clawback Margin
+                </button>
+              )}
             </div>
           </div>
 
+          {isOverpaid && (
+            <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Unallocated funds detected. Please either Log a Refund or Update the Invoice Price to proceed.</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-9 gap-3">
-            {/* Total Cost */}
-            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Invoice Price</p>
+            {/* Invoice Price */}
+            <div 
+              className={`bg-white/5 rounded-xl p-3 border border-white/10 ${onUpdateInvoicePrice ? 'group cursor-pointer hover:bg-white/10 hover:border-indigo-400/30 transition-all shadow-sm' : ''}`}
+              onClick={() => {
+                if (onUpdateInvoicePrice) {
+                  setShowUpdatePriceModal(true);
+                }
+              }}
+            >
+              <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1 flex items-center justify-between">
+                <span>Invoice Price</span>
+                {onUpdateInvoicePrice && <Edit2 className="w-3 h-3 text-indigo-300 opacity-60 group-hover:opacity-100 transition-opacity" />}
+              </p>
               <p className="font-black text-white text-lg">£{bookingTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
-            {/* Total Received (Gross) */}
+            {/* Total Received (Net) */}
             <div 
               className="bg-white/5 rounded-xl p-3 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
               onClick={() => setShowClientTransactions(true)}
             >
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1 flex items-center justify-between">Total Received <ArrowDownLeft className="w-3 h-3 text-emerald-400 opacity-50" /></p>
-              <p className="font-black text-emerald-400 text-lg">£{clientPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-black text-emerald-400 text-lg">£{(clientPayments - refundsToClient).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
             {/* Refunds to Client */}
@@ -474,7 +507,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
             booking={booking}
           />
         )}
-        {showLogRefundModal && (
+        {showLogRefundModal && onLogRefund && (
           <LogRefundModal
             booking={booking}
             isOpen={showLogRefundModal}
@@ -482,12 +515,20 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
             onSubmit={onLogRefund}
           />
         )}
-        {showClawbackModal && (
+        {showClawbackModal && onClawbackMargin && (
           <ClawbackMarginModal
             booking={booking}
             isOpen={showClawbackModal}
             onClose={() => setShowClawbackModal(false)}
             onSubmit={onClawbackMargin}
+          />
+        )}
+        {showUpdatePriceModal && onUpdateInvoicePrice && (
+          <UpdateInvoicePriceModal
+            booking={booking}
+            isOpen={showUpdatePriceModal}
+            onClose={() => setShowUpdatePriceModal(false)}
+            onSubmit={onUpdateInvoicePrice}
           />
         )}
       </AnimatePresence>

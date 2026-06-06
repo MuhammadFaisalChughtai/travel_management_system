@@ -5,7 +5,7 @@ import { EmptyState } from '../shared/EmptyState';
 
 interface AdditionalServicesSectionProps {
   services: AdditionalService[] | undefined;
-  onAdd: () => void;
+  onAdd?: () => void;
   onEdit?: (item: any) => void;
   onDelete?: (item: any) => void;
   onMarkPaid?: (item: AdditionalService) => void;
@@ -20,9 +20,11 @@ export function AdditionalServicesSection({ services, onAdd, onEdit, onDelete, o
         description="No extra services logged for this booking yet."
         size="sm"
         action={
-          <button onClick={onAdd} className="bg-white border border-slate-200 hover:border-primary-300 text-primary-600 px-4 py-2 rounded-lg text-xs font-bold transition-colors mt-2">
-            Add Service
-          </button>
+          onAdd ? (
+            <button onClick={onAdd} className="bg-white border border-slate-200 hover:border-primary-300 text-primary-600 px-4 py-2 rounded-lg text-xs font-bold transition-colors mt-2">
+              Add Service
+            </button>
+          ) : undefined
         }
       />
     );

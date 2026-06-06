@@ -2087,7 +2087,7 @@ app.delete('/:bookingId/services/:serviceType/:id', requireGatewayHeaders, requi
     if (['payment', 'vendor-payment'].includes(serviceType)) {
       const userRole = req.headers['x-user-role'] as string;
       if (!req.isPlatformAdmin && userRole !== Role.MAIN_COMPANY_ADMIN && userRole !== Role.COMPANY_ADMIN && userRole !== Role.ADMIN) {
-        return res.status(403).json({ error: 'Forbidden', message: 'You lack the DELETE_TRANSACTION permission required to delete financial records.' });
+        return res.status(403).json({ error: 'Forbidden', message: 'Access Denied: You do not have permission to delete financial records.' });
       }
     }
 

@@ -62,12 +62,16 @@ export function TransportServicesSection({ transports, onEdit, onDelete}: Transp
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => onEdit?.(t)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => onDelete?.(t)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {onEdit && (
+                          <button onClick={() => onEdit(t)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button onClick={() => onDelete(t)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

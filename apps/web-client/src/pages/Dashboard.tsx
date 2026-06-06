@@ -70,6 +70,42 @@ import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { AgentsPage } from './AgentsPage';
 import { Pagination } from '../components/shared/Pagination';
 
+function hasPermission(user: any, permission: string): boolean {
+  if (!user) return false;
+  if (user.role === 'SUPER_ADMIN' || user.role === 'MAIN_COMPANY_ADMIN') return true;
+  if (user.permissions) {
+    return user.permissions.includes(permission);
+  }
+  const defaults: Record<string, string[]> = {
+    AGENT: [
+      'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING',
+      'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT',
+      'READ_VENDOR', 'READ_TRANSACTION', 'READ_DASHBOARD'
+    ],
+    COMPANY_ADMIN: [
+      'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
+      'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT', 'DELETE_CLIENT',
+      'CREATE_VENDOR', 'READ_VENDOR', 'UPDATE_VENDOR', 'DELETE_VENDOR',
+      'READ_DASHBOARD',
+      'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
+      'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION'
+    ]
+  };
+  const rolePerms = defaults[user.role] || [];
+  return rolePerms.includes(permission);
+}
+
+const TAB_PERMISSIONS: Record<string, string> = {
+  overview: 'READ_DASHBOARD',
+  bookings: 'READ_BOOKING',
+  agents: 'READ_USER',
+  vendors: 'READ_VENDOR',
+  payments: 'READ_TRANSACTION',
+  catalog: 'READ_BOOKING',
+  team: 'READ_USER',
+  settings: 'MANAGE_SETTINGS'
+};
+
 const SIDEBAR_ITEMS = [
   { id: 'overview', icon: Home, label: 'Overview' },
   { id: 'bookings', icon: Calendar, label: 'My Bookings' },
@@ -84,6 +120,48 @@ const SIDEBAR_ITEMS = [
 export function Dashboard() {
   const { user, logout, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
+
+  // Sync user permissions
+  useEffect(() => {
+    const syncPermissions = async () => {
+      try {
+        const res = await api.get('/auth/my-permissions');
+        if (res.data.permissions) {
+          useAuthStore.getState().setPermissions(res.data.permissions);
+        }
+      } catch (err) {
+        console.error('Failed to sync user permissions:', err);
+      }
+    };
+    if (isAuthenticated) {
+      syncPermissions();
+    }
+  }, [isAuthenticated]);
+
+  const permittedItems = SIDEBAR_ITEMS.filter(item => {
+    if (user?.role === 'AGENT' && item.id === 'payments') {
+      return false;
+    }
+    const requiredPerm = TAB_PERMISSIONS[item.id];
+    if (requiredPerm) {
+      return hasPermission(user, requiredPerm);
+    }
+    return true;
+  });
+
+  // Sidebar navigation tab state
+  const { tab } = useParams<{ tab?: string }>();
+  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog';
+  
+  useEffect(() => {
+    if (user && permittedItems.length > 0) {
+      const isPermitted = permittedItems.some(item => item.id === sidebarTab);
+      if (!isPermitted) {
+        const defaultItem = permittedItems.find(item => item.id === 'bookings') || permittedItems[0];
+        navigate(`/dashboard/${defaultItem.id}`, { replace: true });
+      }
+    }
+  }, [sidebarTab, user, permittedItems, navigate]);
   const [bookings, setBookings] = useState<any[]>([]); // For analytics (all bookings)
   const [tableBookings, setTableBookings] = useState<any[]>([]); // For paginated table
   const [totalTableItems, setTotalTableItems] = useState(0);
@@ -95,9 +173,6 @@ export function Dashboard() {
 
 
 
-  // Sidebar navigation tab state
-  const { tab } = useParams<{ tab?: string }>();
-  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog';
   const setSidebarTab = (newTab: string) => {
     navigate(`/dashboard/${newTab}`);
   };
@@ -132,6 +207,13 @@ export function Dashboard() {
     };
     fetchAgentsList();
   }, []);
+
+  useEffect(() => {
+    if (user && user.role === 'AGENT') {
+      setFilters(prev => ({ ...prev, agentName: user.name || '' }));
+      setNewAgent(user.name || '');
+    }
+  }, [user]);
 
   // Simulated company settings state
   const [companyInfo, setCompanyInfo] = useState({
@@ -205,6 +287,9 @@ export function Dashboard() {
           params.append(key, value);
         }
       });
+      if (user?.role === 'AGENT') {
+        params.set('agentName', user.name || '');
+      }
       
       const paginatedParams = new URLSearchParams(params.toString());
       paginatedParams.append('page', bookingsPage.toString());
@@ -250,11 +335,18 @@ export function Dashboard() {
 
 
   const performClearFilters = async () => {
-    setFilters(defaultFilters);
+    const cleared = { ...defaultFilters };
+    if (user && user.role === 'AGENT') {
+      cleared.agentName = user.name || '';
+    }
+    setFilters(cleared);
     try {
       setLoading(true);
-      const response = await api.get('/bookings/my-bookings');
-      setBookings(response.data.bookings);
+      const url = user && user.role === 'AGENT'
+        ? `/bookings/my-bookings?agentName=${encodeURIComponent(user.name || '')}`
+        : '/bookings/my-bookings';
+      const response = await api.get(url);
+      setBookings(response.data.bookings || []);
     } catch (error) {
       console.error('Failed to clear filters:', error);
     } finally {
@@ -541,6 +633,8 @@ export function Dashboard() {
     };
   }, [bookings]);
 
+  const targetProgressValue = user?.role === 'AGENT' ? 100000 : 400000;
+
   if (!user) return null;
 
   return (
@@ -560,10 +654,7 @@ export function Dashboard() {
           </div>
           
           <nav className="space-y-1.5">
-            {SIDEBAR_ITEMS.map((item) => {
-              // Hide Team & Permissions from Agents
-              if ((item.id === 'team' || item.adminOnly) && user?.role === 'AGENT') return null;
-
+            {permittedItems.map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -621,33 +712,41 @@ export function Dashboard() {
             {/* Navigation & Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Sales & Operations Intelligence</h1>
-                <p className="text-slate-500 text-xs mt-0.5">Real-time ledger analytics, bookings statistics, and multi-agent performance.</p>
+                <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                  {user?.role === 'AGENT' ? 'My Sales & Operations Performance' : 'Sales & Operations Intelligence'}
+                </h1>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  {user?.role === 'AGENT' 
+                    ? 'Real-time personal ledger analytics, bookings statistics, and individual performance.' 
+                    : 'Real-time ledger analytics, bookings statistics, and multi-agent performance.'}
+                </p>
               </div>
               
               <div className="flex items-center gap-3">
-                <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/40 text-[10px] font-bold">
-                  <button 
-                    onClick={() => setDashboardTab('overview')}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all duration-200 ${
-                      dashboardTab === 'overview' 
-                        ? 'bg-white text-primary-600 shadow-sm' 
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    <Activity className="w-3.5 h-3.5" /> Company Overview
-                  </button>
-                  <button 
-                    onClick={() => setDashboardTab('agents')}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all duration-200 ${
-                      dashboardTab === 'agents' 
-                        ? 'bg-white text-primary-600 shadow-sm' 
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" /> Agent Performance
-                  </button>
-                </div>
+                {user?.role !== 'AGENT' && (
+                  <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/40 text-[10px] font-bold">
+                    <button 
+                      onClick={() => setDashboardTab('overview')}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all duration-200 ${
+                        dashboardTab === 'overview' 
+                          ? 'bg-white text-primary-600 shadow-sm' 
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Activity className="w-3.5 h-3.5" /> Company Overview
+                    </button>
+                    <button 
+                      onClick={() => setDashboardTab('agents')}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all duration-200 ${
+                        dashboardTab === 'agents' 
+                          ? 'bg-white text-primary-600 shadow-sm' 
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" /> Agent Performance
+                    </button>
+                  </div>
+                )}
 
                 <button 
                   onClick={handleOpenCreateModal}
@@ -669,7 +768,7 @@ export function Dashboard() {
                   >
                     <div className="absolute right-0 top-0 h-24 w-24 bg-primary-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">Gross Booking Revenue</span>
+                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Booking Revenue' : 'Gross Booking Revenue'}</span>
                       <div className="h-8 w-8 bg-primary-100 text-primary-600 rounded-xl flex items-center justify-center">
                         <DollarSign className="w-4 h-4" />
                       </div>
@@ -693,7 +792,7 @@ export function Dashboard() {
                   >
                     <div className="absolute right-0 top-0 h-24 w-24 bg-primary-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">Average Order Value (AOV)</span>
+                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Average Order Value' : 'Average Order Value (AOV)'}</span>
                       <div className="h-8 w-8 bg-primary-100 text-primary-600 rounded-xl flex items-center justify-center">
                         <ShoppingBag className="w-4 h-4" />
                       </div>
@@ -717,7 +816,7 @@ export function Dashboard() {
                   >
                     <div className="absolute right-0 top-0 h-24 w-24 bg-indigo-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">Orders Processed</span>
+                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Orders Processed' : 'Orders Processed'}</span>
                       <div className="h-8 w-8 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
                         <Activity className="w-4 h-4" />
                       </div>
@@ -741,18 +840,18 @@ export function Dashboard() {
                   >
                     <div className="absolute right-0 top-0 h-24 w-24 bg-amber-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">Q2 Target Progress</span>
+                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Q2 Target Progress' : 'Q2 Target Progress'}</span>
                       <div className="h-8 w-8 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
                         <Target className="w-4 h-4" />
                       </div>
                     </div>
                     <p className="text-xl font-black text-slate-900 mt-3">
-                      {Math.min(100, Math.round((stats.totalRevenue / 400000) * 100))}%
+                      {Math.min(100, Math.round((stats.totalRevenue / targetProgressValue) * 100))}%
                     </p>
                     <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2.5 overflow-hidden">
                       <div 
                         className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-1000"
-                        style={{ width: `${Math.min(100, Math.round((stats.totalRevenue / 400000) * 100))}%` }}
+                        style={{ width: `${Math.min(100, Math.round((stats.totalRevenue / targetProgressValue) * 100))}%` }}
                       />
                     </div>
                   </motion.div>
@@ -768,9 +867,13 @@ export function Dashboard() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-50 pb-4">
                     <div>
                       <h3 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
-                        <CalendarRange className="h-4.5 w-4.5 text-primary-500" /> Sales Revenue History
+                        <CalendarRange className="h-4.5 w-4.5 text-primary-500" /> {user?.role === 'AGENT' ? 'My Sales Revenue History' : 'Sales Revenue History'}
                       </h3>
-                      <p className="text-[11px] text-slate-500">Track company invoicing, sales pipeline, and platform growth timelines.</p>
+                      <p className="text-[11px] text-slate-500">
+                        {user?.role === 'AGENT' 
+                          ? 'Track personal invoicing, sales pipeline, and growth timelines.' 
+                          : 'Track company invoicing, sales pipeline, and platform growth timelines.'}
+                      </p>
                     </div>
 
                     <div className="flex flex-wrap gap-1 bg-slate-100/80 p-0.5 rounded-xl border border-slate-200/40 text-[10px] font-bold">
@@ -849,7 +952,7 @@ export function Dashboard() {
                       </ResponsiveContainer>
                       <div className="absolute text-center">
                         <span className="block text-[8px] uppercase font-bold text-slate-400">Total</span>
-                        <span className="text-base font-black text-slate-800">{bookings.length + 158}</span>
+                        <span className="text-base font-black text-slate-800">{user?.role === 'AGENT' ? bookings.length : bookings.length + 158}</span>
                       </div>
                     </div>
 
@@ -1286,9 +1389,11 @@ export function Dashboard() {
                   <button onClick={() => setActiveSearchModal('customer')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.customerName || filters.customerPhone || filters.customerEmail ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
                     <User className="w-3.5 h-3.5 inline mr-1.5" /> Customer: {filters.customerName || filters.customerPhone || filters.customerEmail || 'All'}
                   </button>
-                  <button onClick={() => setActiveSearchModal('agent')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.agentName !== 'Any' ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
-                    <Users className="w-3.5 h-3.5 inline mr-1.5" /> Agent: {filters.agentName}
-                  </button>
+                  {user?.role !== 'AGENT' && (
+                    <button onClick={() => setActiveSearchModal('agent')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.agentName !== 'Any' ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
+                      <Users className="w-3.5 h-3.5 inline mr-1.5" /> Agent: {filters.agentName}
+                    </button>
+                  )}
                   <button onClick={() => setActiveSearchModal('departure')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.departureDateStart || filters.departureDateEnd ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
                     <Calendar className="w-3.5 h-3.5 inline mr-1.5" /> Departure
                   </button>
@@ -1299,7 +1404,10 @@ export function Dashboard() {
                     <CreditCard className="w-3.5 h-3.5 inline mr-1.5" /> Status: {filters.paymentStatus.replace('_', ' ').toUpperCase()}
                   </button>
                   
-                  {Object.values(filters).some(v => v && v !== 'Any') && (
+                  {Object.entries(filters).some(([key, val]) => {
+                    if (user?.role === 'AGENT' && key === 'agentName') return false;
+                    return val && val !== 'Any';
+                  }) && (
                     <button onClick={() => { performClearFilters(); }} className="ml-auto text-rose-500 hover:text-rose-600 text-[10px] uppercase tracking-wide font-black underline transition-colors">
                       Clear All
                     </button>
@@ -1619,12 +1727,19 @@ export function Dashboard() {
                   <select 
                     value={newAgent}
                     onChange={e => setNewAgent(e.target.value)}
-                    className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-medium outline-none transition-all cursor-pointer"
+                    disabled={user?.role === 'AGENT'}
+                    className={`w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-medium outline-none transition-all cursor-pointer ${user?.role === 'AGENT' ? 'opacity-70 cursor-not-allowed bg-slate-50' : ''}`}
                   >
-                    <option value="System / Auto">System / Auto</option>
-                    {dbAgents.map(agent => (
-                      <option key={agent.id} value={agent.name}>{agent.name}</option>
-                    ))}
+                    {user?.role === 'AGENT' ? (
+                      <option value={user.name || ''}>{user.name}</option>
+                    ) : (
+                      <>
+                        <option value="System / Auto">System / Auto</option>
+                        {dbAgents.map(agent => (
+                          <option key={agent.id} value={agent.name}>{agent.name}</option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </div>
 

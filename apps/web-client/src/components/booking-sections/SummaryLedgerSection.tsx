@@ -5,7 +5,7 @@ import { api } from '../../api/axios';
 
 interface SummaryLedgerSectionProps {
   booking: BookingDetail;
-  onUpdate: (field: string, value: string) => Promise<void>;
+  onUpdate?: (field: string, value: string) => Promise<void>;
 }
 
 export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSectionProps) {
@@ -27,11 +27,13 @@ export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSection
   }, []);
 
   const handleEdit = (field: string, initialValue: string) => {
+    if (!onUpdate) return;
     setEditingField(field);
     setEditValue(initialValue);
   };
 
   const handleSave = async (field: string) => {
+    if (!onUpdate) return;
     try {
       setLoading(true);
       await onUpdate(field, editValue);
@@ -73,11 +75,11 @@ export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSection
                 <button onClick={cancelEdit} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 group cursor-pointer w-fit mt-1" onClick={() => handleEdit('status', booking.status)}>
+              <div className={`flex items-center gap-1.5 mt-1 ${onUpdate ? 'group cursor-pointer w-fit' : ''}`} onClick={() => onUpdate && handleEdit('status', booking.status)}>
                 <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold text-[9px] uppercase">
                   {booking.status}
                 </span>
-                <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                {onUpdate && <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
               </div>
             )}
           </div>
@@ -92,11 +94,11 @@ export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSection
                 <button onClick={cancelEdit} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 group cursor-pointer w-fit mt-1" onClick={() => handleEdit('date', booking.date.split('T')[0])}>
+              <div className={`flex items-center gap-1.5 mt-1 ${onUpdate ? 'group cursor-pointer w-fit' : ''}`} onClick={() => onUpdate && handleEdit('date', booking.date.split('T')[0])}>
                 <p className="font-semibold text-slate-600">
                   {new Date(booking.date).toLocaleDateString()}
                 </p>
-                <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                {onUpdate && <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
               </div>
             )}
           </div>
@@ -111,11 +113,11 @@ export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSection
                 <button onClick={cancelEdit} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 group cursor-pointer w-fit mt-1" onClick={() => handleEdit('departureDate', booking.departureDate ? booking.departureDate.split('T')[0] : '')}>
+              <div className={`flex items-center gap-1.5 mt-1 ${onUpdate ? 'group cursor-pointer w-fit' : ''}`} onClick={() => onUpdate && handleEdit('departureDate', booking.departureDate ? booking.departureDate.split('T')[0] : '')}>
                 <p className="font-semibold text-slate-600">
                   {booking.departureDate ? new Date(booking.departureDate).toLocaleDateString() : 'N/A'}
                 </p>
-                <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                {onUpdate && <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
               </div>
             )}
           </div>
@@ -136,11 +138,11 @@ export function SummaryLedgerSection({ booking, onUpdate }: SummaryLedgerSection
                 <button onClick={cancelEdit} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 group cursor-pointer w-fit mt-1" onClick={() => handleEdit('agentName', booking.agentName || '')}>
+              <div className={`flex items-center gap-1.5 mt-1 ${onUpdate ? 'group cursor-pointer w-fit' : ''}`} onClick={() => onUpdate && handleEdit('agentName', booking.agentName || '')}>
                 <p className="font-semibold text-slate-600">
                   {booking.agentName || 'N/A'}
                 </p>
-                <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                {onUpdate && <Edit2 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
               </div>
             )}
           </div>

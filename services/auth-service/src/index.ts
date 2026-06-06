@@ -75,7 +75,7 @@ const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB max
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: any, file: any, cb: any) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -162,7 +162,7 @@ app.post('/upload', upload.single('file'), async (req: any, res: Response) => {
       'Content-Type': file.mimetype,
     });
 
-    const externalUrl = process.env.MINIO_EXTERNAL_URL || 'http://localhost:9000';
+    const externalUrl = process.env.MINIO_EXTERNAL_URL || 'http://localhost:9010';
     const fileUrl = `${externalUrl}/${BUCKET_NAME}/${fileName}`;
 
     res.status(200).json({ url: fileUrl });
@@ -220,7 +220,7 @@ app.post('/register', async (req: any, res: Response) => {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: (error as any).errors });
     }
     console.error('Registration Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -257,7 +257,7 @@ app.post('/super-admin/register', async (req: any, res: Response) => {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: (error as any).errors });
     }
     console.error('Platform Registration Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -335,6 +335,19 @@ app.post('/login', async (req: any, res: Response) => {
     // Role resolving
     const userRole = user.role?.name || 'COMPANY_USER';
 
+    // Ensure role permissions are seeded for the tenant
+    await ensureRolePermissionsSeeded(user.tenantId);
+
+    // Get permissions for the user's role
+    let permissions: string[] = [];
+    if (user.roleId) {
+      const rolePerms = await prisma.rolePermission.findMany({
+        where: { roleId: user.roleId },
+        include: { permission: true }
+      });
+      permissions = rolePerms.map((rp: any) => rp.permission.name);
+    }
+
     const token = jwt.sign(
       { id: user.id, email: user.email, tenantId: user.tenantId, role: userRole, isPlatformLevel: false },
       JWT_SECRET,
@@ -344,11 +357,11 @@ app.post('/login', async (req: any, res: Response) => {
     res.status(200).json({ 
       message: 'Login successful',
       token, 
-      user: { id: user.id, email: user.email, name: user.name, tenantId: user.tenantId, role: userRole } 
+      user: { id: user.id, email: user.email, name: user.name, tenantId: user.tenantId, role: userRole, permissions } 
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: (error as any).errors });
     }
     console.error('Login Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -417,7 +430,7 @@ app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
     }
 
     // Execute in a transaction to guarantee both tenant & admin user are successfully created
-    const newTenant = await prisma.$transaction(async (tx) => {
+    const newTenant = await prisma.$transaction(async (tx: any) => {
       // 1. Create Tenant
       const tenant = await tx.tenant.create({
         data: {
@@ -465,7 +478,7 @@ app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
     res.status(201).json({ message: 'Tenant and admin user created successfully', tenant: newTenant });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: (error as any).errors });
     }
     console.error('Create Tenant Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -499,7 +512,7 @@ app.put('/tenants/:id', requirePlatformAdmin, async (req: any, res: Response) =>
     res.status(200).json({ message: 'Tenant updated successfully', tenant: updatedTenant });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: (error as any).errors });
     }
     console.error('Update Tenant Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -650,7 +663,7 @@ app.get('/users', requireTenantContext, async (req: any, res: Response) => {
     ]);
     
     // Map response to hide password and format role
-    const sanitized = users.map(u => ({
+    const sanitized = users.map((u: any) => ({
       id: u.id,
       name: u.name,
       email: u.email,
@@ -1246,10 +1259,10 @@ app.post('/request-demo', async (req: Request, res: Response) => {
     };
 
     // Send emails in background, but log failures
-    transporter.sendMail(adminMailOptions).catch(err => {
+    transporter.sendMail(adminMailOptions).catch((err: any) => {
       console.error('Failed to send admin notification email:', err);
     });
-    transporter.sendMail(userMailOptions).catch(err => {
+    transporter.sendMail(userMailOptions).catch((err: any) => {
       console.error('Failed to send user confirmation email:', err);
     });
 
@@ -1357,7 +1370,376 @@ app.patch('/demo-requests/:id', requirePlatformAdmin, async (req: any, res: Resp
   }
 });
 
-app.listen(PORT, () => {
+// ─── ROLE & PERMISSION MATRIX CONFIGURATION ───────────────────────────────────
+
+const SYSTEM_PERMISSIONS = [
+  { name: 'CREATE_BOOKING', module: 'Bookings & Itineraries' },
+  { name: 'READ_BOOKING', module: 'Bookings & Itineraries' },
+  { name: 'UPDATE_BOOKING', module: 'Bookings & Itineraries' },
+  { name: 'DELETE_BOOKING', module: 'Bookings & Itineraries' },
+
+  { name: 'CREATE_CLIENT', module: 'Client Records' },
+  { name: 'READ_CLIENT', module: 'Client Records' },
+  { name: 'UPDATE_CLIENT', module: 'Client Records' },
+  { name: 'DELETE_CLIENT', module: 'Client Records' },
+
+  { name: 'CREATE_VENDOR', module: 'Vendor Records' },
+  { name: 'READ_VENDOR', module: 'Vendor Records' },
+  { name: 'UPDATE_VENDOR', module: 'Vendor Records' },
+  { name: 'DELETE_VENDOR', module: 'Vendor Records' },
+
+  { name: 'READ_DASHBOARD', module: 'Agency Dashboard' },
+
+  { name: 'CREATE_USER', module: 'Team Management' },
+  { name: 'READ_USER', module: 'Team Management' },
+  { name: 'UPDATE_USER', module: 'Team Management' },
+  { name: 'DELETE_USER', module: 'Team Management' },
+
+  { name: 'CREATE_TRANSACTION', module: 'Financials (Refunds/Profit)' },
+  { name: 'READ_TRANSACTION', module: 'Financials (Refunds/Profit)' },
+  { name: 'UPDATE_TRANSACTION', module: 'Financials (Refunds/Profit)' },
+  { name: 'DELETE_TRANSACTION', module: 'Financials (Refunds/Profit)' },
+
+  { name: 'MANAGE_SETTINGS', module: 'System Settings' }
+];
+
+const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
+  AGENT: [
+    'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING',
+    'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT',
+    'READ_VENDOR', 'READ_TRANSACTION', 'READ_DASHBOARD'
+  ],
+  COMPANY_ADMIN: [
+    'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
+    'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT', 'DELETE_CLIENT',
+    'CREATE_VENDOR', 'READ_VENDOR', 'UPDATE_VENDOR', 'DELETE_VENDOR',
+    'READ_DASHBOARD',
+    'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
+    'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION'
+  ],
+  MAIN_COMPANY_ADMIN: [
+    'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
+    'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT', 'DELETE_CLIENT',
+    'CREATE_VENDOR', 'READ_VENDOR', 'UPDATE_VENDOR', 'DELETE_VENDOR',
+    'READ_DASHBOARD',
+    'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
+    'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION',
+    'MANAGE_SETTINGS'
+  ]
+};
+
+async function initPermissions() {
+  try {
+    for (const p of SYSTEM_PERMISSIONS) {
+      const existing = await prisma.permission.findFirst({
+        where: { name: p.name }
+      });
+      if (!existing) {
+        await prisma.permission.create({
+          data: { name: p.name, module: p.module }
+        });
+      }
+    }
+    console.log('System permissions initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize system permissions:', error);
+  }
+}
+
+async function seedDefaultRolePermissions(roleId: number, roleName: string) {
+  try {
+    const permissionNames = DEFAULT_ROLE_PERMISSIONS[roleName] || [];
+    if (permissionNames.length === 0) return;
+
+    const dbPermissions = await prisma.permission.findMany({
+      where: { name: { in: permissionNames } }
+    });
+
+    for (const perm of dbPermissions) {
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId,
+            permissionId: perm.id
+          }
+        },
+        create: {
+          roleId,
+          permissionId: perm.id
+        },
+        update: {}
+      });
+    }
+  } catch (error) {
+    console.error(`Error seeding default permissions for role ${roleName}:`, error);
+  }
+}
+
+async function ensureRolePermissionsSeeded(tenantId: number) {
+  const roles = ['AGENT', 'COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN'];
+  for (const name of roles) {
+    let role = await prisma.role.findFirst({
+      where: { tenantId, name }
+    });
+    if (!role) {
+      role = await prisma.role.create({
+        data: { name, tenantId }
+      });
+    }
+    
+    await seedDefaultRolePermissions(role.id, name);
+  }
+}
+
+function getAccessLevel(module: string, permissions: string[]): string {
+  if (module === 'Agency Dashboard') {
+    return permissions.includes('READ_DASHBOARD') ? 'Full Access' : 'No Access';
+  }
+  if (module === 'System Settings') {
+    return permissions.includes('MANAGE_SETTINGS') ? 'Full Access' : 'No Access';
+  }
+  
+  let prefix = '';
+  if (module === 'Bookings & Itineraries') prefix = 'BOOKING';
+  else if (module === 'Client Records') prefix = 'CLIENT';
+  else if (module === 'Vendor Records') prefix = 'VENDOR';
+  else if (module === 'Team Management') prefix = 'USER';
+  else if (module === 'Financials (Refunds/Profit)') prefix = 'TRANSACTION';
+  
+  const hasCreate = permissions.includes(`CREATE_${prefix}`);
+  const hasRead = permissions.includes(`READ_${prefix}`);
+  const hasUpdate = permissions.includes(`UPDATE_${prefix}`);
+  const hasDelete = permissions.includes(`DELETE_${prefix}`);
+  
+  if (hasCreate && hasRead && hasUpdate && hasDelete) return 'Create, Read, Update, Delete';
+  if (hasCreate && hasRead && hasUpdate) return 'Create, Read, Update';
+  if (hasRead) return 'Read Only';
+  return 'No Access';
+}
+
+function getPermissionsForAccessLevel(module: string, accessLevel: string): string[] {
+  if (module === 'Agency Dashboard') {
+    return accessLevel !== 'No Access' ? ['READ_DASHBOARD'] : [];
+  }
+  if (module === 'System Settings') {
+    return accessLevel !== 'No Access' ? ['MANAGE_SETTINGS'] : [];
+  }
+  
+  let prefix = '';
+  if (module === 'Bookings & Itineraries') prefix = 'BOOKING';
+  else if (module === 'Client Records') prefix = 'CLIENT';
+  else if (module === 'Vendor Records') prefix = 'VENDOR';
+  else if (module === 'Team Management') prefix = 'USER';
+  else if (module === 'Financials (Refunds/Profit)') prefix = 'TRANSACTION';
+  
+  if (accessLevel === 'Create, Read, Update, Delete') {
+    return [`CREATE_${prefix}`, `READ_${prefix}`, `UPDATE_${prefix}`, `DELETE_${prefix}`];
+  }
+  if (accessLevel === 'Create, Read, Update') {
+    return [`CREATE_${prefix}`, `READ_${prefix}`, `UPDATE_${prefix}`];
+  }
+  if (accessLevel === 'Read Only') {
+    return [`READ_${prefix}`];
+  }
+  return []; // No Access
+}
+
+// ─── ENDPOINTS ───────────────────────────────────────────────────────────────
+
+app.get('/roles/permissions/matrix', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    await ensureRolePermissionsSeeded(tenantId);
+    
+    const roles = await prisma.role.findMany({
+      where: { tenantId },
+      include: {
+        permissions: {
+          include: {
+            permission: true
+          }
+        }
+      }
+    });
+    
+    const rolePermissionsMap: Record<string, string[]> = {};
+    for (const role of roles) {
+      rolePermissionsMap[role.name] = role.permissions.map((p: any) => p.permission.name);
+    }
+    
+    const modules = [
+      'Bookings & Itineraries',
+      'Client Records',
+      'Vendor Records',
+      'Agency Dashboard',
+      'Team Management',
+      'Financials (Refunds/Profit)',
+      'System Settings'
+    ];
+    
+    const matrix = modules.map(mod => ({
+      module: mod,
+      AGENT: getAccessLevel(mod, rolePermissionsMap['AGENT'] || []),
+      COMPANY_ADMIN: getAccessLevel(mod, rolePermissionsMap['COMPANY_ADMIN'] || []),
+      MAIN_COMPANY_ADMIN: getAccessLevel(mod, rolePermissionsMap['MAIN_COMPANY_ADMIN'] || [])
+    }));
+    
+    res.status(200).json({ matrix, permissions: rolePermissionsMap });
+  } catch (error) {
+    console.error('Fetch Permissions Matrix Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.put('/roles/permissions/matrix', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { permissions } = req.body;
+    
+    if (!permissions || typeof permissions !== 'object') {
+      return res.status(400).json({ error: 'Invalid payload: permissions map required' });
+    }
+    
+    await ensureRolePermissionsSeeded(tenantId);
+    
+    const roles = await prisma.role.findMany({
+      where: { tenantId }
+    });
+    
+    const roleMap = roles.reduce((acc: any, r: any) => {
+      acc[r.name] = r.id;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const allPermissions = await prisma.permission.findMany();
+    const permMap = allPermissions.reduce((acc: any, p: any) => {
+      acc[p.name] = p.id;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // Lock MAIN_COMPANY_ADMIN permissions - only update AGENT and COMPANY_ADMIN
+    for (const roleName of ['AGENT', 'COMPANY_ADMIN']) {
+      const roleId = roleMap[roleName];
+      if (!roleId) continue;
+      
+      const targetPermissionsList = permissions[roleName];
+      if (!Array.isArray(targetPermissionsList)) continue;
+      
+      await prisma.rolePermission.deleteMany({
+        where: { roleId }
+      });
+      
+      const createData = targetPermissionsList
+        .map((pName: string) => permMap[pName])
+        .filter(pId => pId !== undefined)
+        .map(pId => ({
+          roleId,
+          permissionId: pId
+        }));
+        
+      if (createData.length > 0) {
+        await prisma.rolePermission.createMany({
+          data: createData
+        });
+      }
+    }
+    
+    res.status(200).json({ message: 'Permissions matrix updated successfully' });
+  } catch (error) {
+    console.error('Update Permissions Matrix Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/roles/permissions/check', async (req: any, res: Response) => {
+  try {
+    const roleName = req.query.role as string;
+    const tenantId = parseInt(req.query.tenantId as string);
+    const permissionName = req.query.permission as string;
+    
+    if (!roleName || isNaN(tenantId) || !permissionName) {
+      return res.status(400).json({ error: 'Missing required query parameters' });
+    }
+    
+    const isPlatformAdmin = req.headers['x-is-platform-admin'] === 'true';
+    if (isPlatformAdmin || roleName === 'SUPER_ADMIN') {
+      return res.status(200).json({ allowed: true });
+    }
+    
+    const role = await prisma.role.findFirst({
+      where: { tenantId, name: roleName }
+    });
+    
+    if (!role) {
+      return res.status(200).json({ allowed: false, message: 'Role not found' });
+    }
+    
+    const permission = await prisma.permission.findFirst({
+      where: { name: permissionName }
+    });
+    
+    if (!permission) {
+      return res.status(200).json({ allowed: false, message: 'Permission not found' });
+    }
+    
+    const hasPermission = await prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: {
+          roleId: role.id,
+          permissionId: permission.id
+        }
+      }
+    });
+    
+    res.status(200).json({ allowed: !!hasPermission });
+  } catch (error) {
+    console.error('Check Permission Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/my-permissions', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const userId = parseInt(req.headers['x-user-id'] as string);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'User context required' });
+    }
+    
+    const isPlatformAdmin = req.headers['x-is-platform-admin'] === 'true';
+    if (isPlatformAdmin) {
+      const allPerms = await prisma.permission.findMany();
+      return res.status(200).json({ permissions: allPerms.map((p: any) => p.name) });
+    }
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: {
+                permission: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const permissions = user.role?.permissions.map((p: any) => p.permission.name) || [];
+    res.status(200).json({ permissions });
+  } catch (error) {
+    console.error('Fetch My Permissions Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.listen(PORT, async () => {
+  await initPermissions();
   console.log(`Auth Service is running on port ${PORT}`);
 });
 

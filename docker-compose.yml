@@ -134,6 +134,18 @@ services:
     networks:
       - travel_network
 
+  frontend:
+    build:
+      context: ./apps/web-client
+      dockerfile: Dockerfile
+    container_name: travel_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - travel_network
+
 volumes:
   postgres_data:
   minio_data:

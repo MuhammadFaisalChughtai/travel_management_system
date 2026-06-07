@@ -98,6 +98,12 @@ model BookingPayment {
   paymentType   String   @db.VarChar(100) // e.g. instalment
   paidOn        DateTime @db.Date
   notes         String?  @db.Text
+  status        String   @default("approved") @db.VarChar(50)
+  evidenceUrl   String?  @db.Text
+  loggedByRole  String?  @db.VarChar(50)
+  loggedById    Int?
+  loggedByName  String?  @db.VarChar(255)
+  cardCharges   Decimal? @default(0.00) @db.Decimal(10, 2)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -339,4 +345,16 @@ model BookingAllocation {
   createdAt       DateTime @default(now())
 
   transaction     LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  title       String   @db.VarChar(255)
+  message     String   @db.Text
+  type        String   @db.VarChar(50) // e.g. "PAYMENT_APPROVAL"
+  referenceId String?  @db.VarChar(100) // bookingPayment ID or Booking ID
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

@@ -12,7 +12,7 @@ interface ClientTransactionsModalProps {
 export function ClientTransactionsModal({ isOpen, onClose, booking }: ClientTransactionsModalProps) {
   if (!isOpen) return null;
 
-  const clientPayments = booking.payments?.filter(p => p.paymentType === 'Received from Client') || [];
+  const clientPayments = booking.payments?.filter(p => p.paymentType === 'Received from Client' && (!p.status || p.status === 'approved')) || [];
   const clientRefunds = booking.refunds?.filter(r => r.direction === 'Refund to Client') || [];
 
   const combined = [

@@ -80,12 +80,14 @@ function hasPermission(user: any, permission: string): boolean {
     AGENT: [
       'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING',
       'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT',
-      'READ_VENDOR', 'READ_TRANSACTION', 'READ_DASHBOARD'
+      'READ_VENDOR', 'READ_AGENT', 'READ_SERVICE', 'READ_TRANSACTION', 'READ_DASHBOARD'
     ],
     COMPANY_ADMIN: [
       'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
       'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT', 'DELETE_CLIENT',
       'CREATE_VENDOR', 'READ_VENDOR', 'UPDATE_VENDOR', 'DELETE_VENDOR',
+      'CREATE_AGENT', 'READ_AGENT', 'UPDATE_AGENT', 'DELETE_AGENT',
+      'CREATE_SERVICE', 'READ_SERVICE', 'UPDATE_SERVICE', 'DELETE_SERVICE',
       'READ_DASHBOARD',
       'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
       'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION'
@@ -98,10 +100,10 @@ function hasPermission(user: any, permission: string): boolean {
 const TAB_PERMISSIONS: Record<string, string> = {
   overview: 'READ_DASHBOARD',
   bookings: 'READ_BOOKING',
-  agents: 'READ_USER',
+  agents: 'READ_AGENT',
   vendors: 'READ_VENDOR',
   payments: 'READ_TRANSACTION',
-  catalog: 'READ_BOOKING',
+  catalog: 'READ_SERVICE',
   team: 'READ_USER',
   settings: 'MANAGE_SETTINGS'
 };
@@ -1481,7 +1483,7 @@ export function Dashboard() {
                     <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
                       {tableBookings.map((b) => {
                         const bookingTotal = Number(b.totalPrice) || 0;
-                        const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+                        const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client' && (!p.status || p.status === 'approved')).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
                         const legacyVendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
                         const modernVendorPayments = b.vendorPayments?.reduce((sum: number, vp: any) => sum + (Number(vp.amount) || 0), 0) || 0;
                         const vendorPayments = legacyVendorPayments + modernVendorPayments;

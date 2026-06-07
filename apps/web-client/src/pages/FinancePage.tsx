@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CreditCard, Search, Plus, Edit3, Trash2, X, Check, AlertCircle, Wallet, Clock, Loader2, ChevronRight } from 'lucide-react';
+import { CreditCard, Search, Plus, Edit3, Trash2, X, Check, AlertCircle, Wallet, Clock, Loader2, ChevronRight, Upload, Receipt, Bell, Eye } from 'lucide-react';
 import { api } from '../api/axios';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '../store/authStore';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { Pagination } from '../components/shared/Pagination';
@@ -11,7 +12,7 @@ import { VendorReconciliationModal } from '../components/finance/VendorReconcili
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'ledger' | 'vendor-wallet' | 'agent-wallet'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'vendor-wallet' | 'agent-wallet' | 'approval-requests'>('ledger');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showVendorModal, setShowVendorModal] = useState(false);
   
@@ -22,6 +23,14 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   const [deletingPayment, setDeletingPayment] = useState<any | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  // Approval requests state
+  const [approvalPayments, setApprovalPayments] = useState<any[]>([]);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalPage, setApprovalPage] = useState(1);
+  const approvalPerPage = 10;
+  const [activeApproval, setActiveApproval] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Vendor wallets state
   const [vendorWallets, setVendorWallets] = useState<any[]>([]);
@@ -91,6 +100,51 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
     }
   };
 
+  const fetchApprovalPayments = async () => {
+    try {
+      setApprovalLoading(true);
+      const qs = search ? `?search=${encodeURIComponent(search)}&limit=100` : '?limit=100';
+      const res = await api.get(`/finance/payments${qs}`);
+      setApprovalPayments(res.data.payments || []);
+    } catch (err) {
+      console.error('Failed to fetch approval payments:', err);
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const handleApprove = async (paymentId: number) => {
+    setSubmitting(true);
+    try {
+      await api.post(`/finance/payments/${paymentId}/approve`);
+      toast.success('Transaction approved successfully');
+      setActiveApproval(null);
+      fetchApprovalPayments();
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to approve transaction');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReject = async (paymentId: number) => {
+    setSubmitting(true);
+    try {
+      await api.post(`/finance/payments/${paymentId}/reject`);
+      toast.success('Transaction rejected successfully');
+      setActiveApproval(null);
+      fetchApprovalPayments();
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to reject transaction');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'ledger') {
       fetchLedgerReport();
@@ -98,12 +152,16 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       fetchVendorWallets();
     } else if (activeTab === 'agent-wallet') {
       fetchAgents();
+    } else if (activeTab === 'approval-requests') {
+      fetchApprovalPayments();
     }
   }, [activeTab, search]);
 
   const [ledgerPage, setLedgerPage] = useState(1);
   const ledgerPerPage = 10;
   useEffect(() => { setLedgerPage(1); }, [ledgerTransactions]);
+
+  useEffect(() => { setApprovalPage(1); }, [approvalPayments]);
 
   const filteredVendorWallets = useMemo(() => {
     return vendorWallets.filter(w => !search || w.vendorName.toLowerCase().includes(search.toLowerCase()));
@@ -207,12 +265,18 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
+        <div className="flex flex-wrap bg-white rounded-xl border border-slate-200 p-1 shadow-sm gap-y-1">
           <button 
             onClick={() => setActiveTab('ledger')}
             className={`px-6 py-2 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'ledger' ? 'bg-amber-50 text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             Ledger Report
+          </button>
+          <button 
+            onClick={() => setActiveTab('approval-requests')}
+            className={`px-6 py-2 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'approval-requests' ? 'bg-violet-50 text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Approval Requests
           </button>
           <button 
             onClick={() => setActiveTab('vendor-wallet')}
@@ -248,7 +312,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Search by name..." 
+                placeholder={activeTab === 'approval-requests' ? "Search reference or notes..." : "Search by name..."} 
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
@@ -340,15 +404,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         ledgerLoading ? (
           <LoadingState message="Loading ledger records..." />
         ) : ledgerTransactions.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mt-6">
-            <EmptyState
-              icon={Search}
-              title="No ledger records"
-              description="No double-entry accounting records matched your filters."
-              size="sm"
-              transparent={true}
-            />
-          </div>
+          <EmptyState
+            icon={Search}
+            title="No ledger records"
+            description="No double-entry accounting records matched your filters."
+            size="sm"
+            transparent={true}
+          />
         ) : (
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
             <div className="text-[11px]">
@@ -378,29 +440,61 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                           <tr key={txn.id} className="hover:bg-slate-50/80 transition-colors">
                             <td className="py-3 px-5 align-top font-bold text-slate-900 text-[12px]">{txn.referenceNumber}</td>
                             <td className="py-3 px-5 align-top">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
-                                txn.type === 'PAYMENT' ? 'bg-indigo-100 text-indigo-700' : 
-                                txn.type === 'FEE' ? 'bg-rose-100 text-rose-700' : 
-                                txn.type === 'REFUND' ? 'bg-amber-100 text-amber-700' :
-                                txn.type === 'DISCOUNT' ? 'bg-cyan-100 text-cyan-700' :
-                                'bg-slate-100 text-slate-600'
-                              }`}>
-                                {txn.type}
-                              </span>
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                                  txn.type === 'PAYMENT' ? 'bg-indigo-100 text-indigo-700' : 
+                                  txn.type === 'FEE' ? 'bg-rose-100 text-rose-700' : 
+                                  txn.type === 'REFUND' ? 'bg-amber-100 text-amber-700' :
+                                  txn.type === 'DISCOUNT' ? 'bg-cyan-100 text-cyan-700' :
+                                  'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {txn.type}
+                                </span>
+                                {txn.type === 'PAYMENT' && (
+                                  <span className={`inline-block px-1.5 py-0.2 rounded text-[8px] font-extrabold tracking-wide uppercase ${
+                                    txn.status === 'pending'
+                                      ? 'bg-amber-50 text-amber-600 border border-amber-100/50'
+                                      : txn.status === 'rejected'
+                                      ? 'bg-rose-50 text-rose-600 border border-rose-100/50'
+                                      : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'
+                                  }`}>
+                                    {txn.status || 'approved'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3 px-5 align-top text-slate-600 font-semibold text-[12px]">{formattedDate}</td>
                             <td className="py-3 px-5 align-top text-right font-black text-rose-600 text-[12px]">{debit > 0 ? `£${debit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
                             <td className="py-3 px-5 align-top text-right font-black text-emerald-600 text-[12px]">{credit > 0 ? `£${credit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
                             <td className="py-3 px-5 align-top whitespace-pre-wrap leading-relaxed text-[11px] text-slate-500 font-medium">
-                              {txn.description}
-                              {txn.allocations?.length > 0 && (
-                                <div className="mt-1 text-slate-400 font-bold flex flex-wrap items-center gap-1">
-                                  <span>Allocated to {txn.allocations.length} service(s) on booking(s):</span>
-                                  <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md font-extrabold text-[10px]">
-                                    {Array.from(new Set(txn.allocations.map((a: any) => a.bookingRef || `BKG-${a.bookingId}`))).join(', ')}
-                                  </span>
+                              <div className="flex flex-col gap-1">
+                                <div>
+                                  {txn.description}
+                                  {txn.loggedByName && (
+                                    <span className="text-[10px] text-slate-400 font-bold ml-1.5">({txn.loggedByName})</span>
+                                  )}
                                 </div>
-                              )}
+                                {txn.allocations?.length > 0 && (
+                                  <div className="mt-1 text-slate-400 font-bold flex flex-wrap items-center gap-1">
+                                    <span>Allocated to {txn.allocations.length} service(s) on booking(s):</span>
+                                    <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md font-extrabold text-[10px]">
+                                      {Array.from(new Set(txn.allocations.map((a: any) => a.bookingRef || `BKG-${a.bookingId}`))).join(', ')}
+                                    </span>
+                                  </div>
+                                )}
+                                {txn.evidenceUrl && (
+                                  <div className="mt-1.5 flex">
+                                    <a 
+                                      href={txn.evidenceUrl} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="inline-flex items-center gap-1 text-[9px] font-extrabold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-100/50 transition-colors"
+                                    >
+                                      <Receipt className="w-3 h-3 text-indigo-500" /> Receipt Screenshot
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -454,15 +548,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         vendorWalletsLoading ? (
           <LoadingState message="Loading vendor wallets..." />
         ) : filteredVendorWallets.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <EmptyState
-              icon={Wallet}
-              title="No vendor wallets"
-              description="No vendor wallets found matching your search."
-              size="sm"
-              transparent={true}
-            />
-          </div>
+          <EmptyState
+            icon={Wallet}
+            title="No vendor wallets"
+            description="No vendor wallets found matching your search."
+            size="sm"
+            transparent={true}
+          />
         ) : (
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
             <div className="overflow-x-auto">
@@ -524,15 +616,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         agentsLoading ? (
           <LoadingState message="Loading agent wallets..." />
         ) : filteredAgents.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <EmptyState
-              icon={Wallet}
-              title="No agent wallets"
-              description="No agent wallets found matching your search."
-              size="sm"
-              transparent={true}
-            />
-          </div>
+          <EmptyState
+            icon={Wallet}
+            title="No agent wallets"
+            description="No agent wallets found matching your search."
+            size="sm"
+            transparent={true}
+          />
         ) : (
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
             <div className="overflow-x-auto">
@@ -589,7 +679,238 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         )
       )}
 
+      {activeTab === 'approval-requests' && (
+        approvalLoading ? (
+          <LoadingState message="Loading approval requests..." />
+        ) : approvalPayments.length === 0 ? (
+          <EmptyState
+            icon={Clock}
+            title="No approval requests"
+            description="There are no transaction log approval requests."
+            size="sm"
+            transparent={true}
+          />
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-[13px]">
+            <div className="text-[11px]">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                      <th className="py-4 px-6">Booking Ref</th>
+                      <th className="py-4 px-6">Amount</th>
+                      <th className="py-4 px-6">Method / Type</th>
+                      <th className="py-4 px-6">Logged By</th>
+                      <th className="py-4 px-6">Date</th>
+                      <th className="py-4 px-6 text-center">Status</th>
+                      <th className="py-4 px-6 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {approvalPayments
+                      .slice((approvalPage - 1) * approvalPerPage, approvalPage * approvalPerPage)
+                      .map((p) => {
+                        const dateObj = new Date(p.paidOn);
+                        const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${dateObj.toLocaleString('en-GB', { month: 'short' })}/${dateObj.getFullYear()} ${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
+                        
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-4 px-6 font-bold text-slate-900 text-[12px]">{p.bookingRef || 'N/A'}</td>
+                            <td className="py-4 px-6 font-black text-slate-900 text-[12px]">£{Number(p.amount).toFixed(2)}</td>
+                            <td className="py-4 px-6 text-slate-800 font-semibold">{p.paymentMethod} • {p.paymentType}</td>
+                            <td className="py-4 px-6">
+                              <span className="font-bold text-slate-800">{p.loggedByName || 'Agent'}</span>
+                              <span className="text-[10px] text-slate-400 font-bold ml-1.5 bg-slate-100 px-1.5 py-0.5 rounded">
+                                {p.loggedByRole || 'AGENT'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-slate-500 font-semibold">{formattedDate}</td>
+                            <td className="py-4 px-6 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
+                                p.status === 'approved' 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                  : p.status === 'rejected'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                  : 'bg-amber-50 text-amber-700 border-amber-100'
+                              }`}>
+                                {p.status || 'pending'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              <button
+                                onClick={() => setActiveApproval({ payment: p })}
+                                className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm transition-all active:scale-95 uppercase tracking-wider"
+                              >
+                                Review
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+              {approvalPayments.length > 0 && (
+                <Pagination 
+                  currentPage={approvalPage} 
+                  totalPages={Math.ceil(approvalPayments.length / approvalPerPage)} 
+                  onPageChange={setApprovalPage} 
+                  itemsPerPage={approvalPerPage} 
+                  totalItems={approvalPayments.length} 
+                />
+              )}
+            </div>
+          </div>
+        )
+      )}
+
       <AnimatePresence>
+        {activeApproval && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveApproval(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Dynamic Header color and text based on status */}
+              {(() => {
+                const status = activeApproval.payment?.status;
+                let bgClass = "from-amber-600 to-amber-700";
+                let iconColor = "text-amber-200";
+                let headerText = "Review Transaction Log";
+                let subText = "Pending approval request submitted by Agent";
+                let Icon = Bell;
+                let animateClass = "animate-bounce";
+
+                if (status === 'approved') {
+                  bgClass = "from-emerald-600 to-emerald-700";
+                  iconColor = "text-emerald-200";
+                  headerText = "Transaction Approved ✓";
+                  subText = "This transaction has been successfully processed and logged to ledger";
+                  Icon = Check;
+                  animateClass = "";
+                } else if (status === 'rejected') {
+                  bgClass = "from-red-600 to-red-700";
+                  iconColor = "text-red-200";
+                  headerText = "Transaction Rejected ✗";
+                  subText = "This transaction request has been rejected";
+                  Icon = X;
+                  animateClass = "";
+                }
+
+                return (
+                  <div className={`bg-gradient-to-r ${bgClass} text-white px-6 py-4 flex justify-between items-center shadow-inner shrink-0 transition-all duration-300`}>
+                    <div className="flex items-center gap-2.5">
+                      <Icon className={`w-5 h-5 ${iconColor} ${animateClass}`} />
+                      <div>
+                        <h3 className="font-extrabold text-white text-sm tracking-wide uppercase leading-none">{headerText}</h3>
+                        <p className={`${status === 'approved' ? 'text-emerald-100' : status === 'rejected' ? 'text-red-100' : 'text-amber-100'} text-[10px] mt-1 font-normal`}>{subText}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setActiveApproval(null)} className="text-white/60 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+                  </div>
+                );
+              })()}
+
+              <div className="p-6 overflow-y-auto space-y-5 flex-1 bg-white/50 text-xs">
+                <div className="grid grid-cols-2 gap-4 bg-slate-50 border border-slate-100 rounded-2xl p-4 font-semibold text-slate-600">
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Booking Reference</span>
+                    <span className="text-slate-800 font-mono text-sm bg-white border border-slate-100 px-2 py-0.5 rounded">{activeApproval.payment?.bookingRef || activeApproval.payment?.booking?.bookingReference || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Payment Amount</span>
+                    <span className="text-slate-900 font-bold text-base">£{Number(activeApproval.payment?.amount).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Payment Method / Type</span>
+                    <span className="text-slate-800">{activeApproval.payment?.paymentMethod} • {activeApproval.payment?.paymentType}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Logged By</span>
+                    <span className="text-slate-800 font-bold">{activeApproval.payment?.loggedByName || 'Agent'} ({activeApproval.payment?.loggedByRole})</span>
+                  </div>
+                  {activeApproval.payment?.status && (
+                    <div className="col-span-2 border-t border-slate-100 pt-3">
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Approval Status</span>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                        activeApproval.payment.status === 'approved' 
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                          : activeApproval.payment.status === 'rejected'
+                          ? 'bg-red-50 text-red-700 border border-red-100'
+                          : 'bg-amber-50 text-amber-700 border border-amber-100'
+                      }`}>
+                        {activeApproval.payment.status === 'approved' && <Check className="w-3 h-3 text-emerald-600" />}
+                        {activeApproval.payment.status === 'rejected' && <X className="w-3 h-3 text-red-600" />}
+                        {activeApproval.payment.status === 'pending' && <Clock className="w-3 h-3 text-amber-500 animate-spin" />}
+                        {activeApproval.payment.status}
+                      </span>
+                    </div>
+                  )}
+                  <div className="col-span-2 border-t border-slate-100 pt-3">
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Notes / Description</span>
+                    <p className="text-slate-700 italic font-medium">{activeApproval.payment?.notes || 'No description provided.'}</p>
+                  </div>
+                </div>
+
+                {activeApproval.payment?.evidenceUrl && (
+                  <div className="space-y-2">
+                    <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wide">Bank Transaction Evidence</span>
+                    <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-slate-50 flex items-center justify-center max-h-60 relative group shadow-sm">
+                      <img 
+                        src={activeApproval.payment.evidenceUrl} 
+                        alt="Bank evidence" 
+                        className="object-contain max-h-60 w-full hover:scale-[1.02] transition-transform duration-300"
+                      />
+                      <a 
+                        href={activeApproval.payment.evidenceUrl} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="absolute bottom-3 right-3 bg-slate-900/80 hover:bg-slate-900 text-white p-2 rounded-xl flex items-center gap-1.5 shadow backdrop-blur-xs text-[10px] font-bold transition-all hover:scale-105 active:scale-95"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Full Size
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className={`bg-slate-50 border-t border-slate-200/60 p-4 shrink-0 flex items-center gap-3 ${
+                activeApproval.payment?.status === 'approved' || activeApproval.payment?.status === 'rejected'
+                  ? 'justify-end'
+                  : 'justify-between'
+              }`}>
+                {(activeApproval.payment?.status !== 'approved' && activeApproval.payment?.status !== 'rejected') && (
+                  <button 
+                    onClick={() => handleReject(activeApproval.payment.id)} 
+                    disabled={submitting}
+                    className="px-5 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+                  >
+                    Reject & Log
+                  </button>
+                )}
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setActiveApproval(null)} 
+                    disabled={submitting}
+                    className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-[11px] font-bold"
+                  >
+                    Cancel
+                  </button>
+                  {(activeApproval.payment?.status !== 'approved' && activeApproval.payment?.status !== 'rejected') && (
+                    <button 
+                      onClick={() => handleApprove(activeApproval.payment.id)} 
+                      disabled={submitting}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 uppercase tracking-wider disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      Approve Log
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
         {showVendorModal && (
           <VendorReconciliationModal
             onClose={() => setShowVendorModal(false)}
@@ -855,6 +1176,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
 }
 
 function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initialData }: { onClose: () => void; onSaved: () => void; onSwitchToVendor?: () => void; bookings: any[]; initialData?: any }) {
+  const { user } = useAuthStore();
   const [isVendor, setIsVendor] = useState(initialData ? initialData.isVendor : false);
   const [bookingId, setBookingId] = useState(initialData?.bookingId || (bookings.length > 0 ? bookings[0].id : ''));
   const [amount, setAmount] = useState(String(initialData?.amount || ''));
@@ -865,12 +1187,38 @@ function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initia
   // Client specific
   const [paymentMethod, setPaymentMethod] = useState(initialData?.paymentMethod || 'Bank Transfer');
   const [paymentType, setPaymentType] = useState(initialData?.paymentType || 'Deposit');
+  const [evidenceUrl, setEvidenceUrl] = useState(initialData?.evidenceUrl || '');
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
   
   // Vendor specific
   const [vendorName, setVendorName] = useState(initialData?.vendorName || '');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const handleEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingEvidence(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await api.post('/auth/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      setEvidenceUrl(response.data.url);
+      toast.success('Evidence uploaded successfully');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to upload evidence');
+    } finally {
+      setUploadingEvidence(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -896,6 +1244,8 @@ function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initia
       } else {
         payload.paymentMethod = paymentMethod;
         payload.paymentType = paymentType;
+        payload.evidenceUrl = evidenceUrl || undefined;
+        payload.loggedByName = user?.name || undefined;
         if (paymentMethod === 'Credit Card' && cardCharges) {
           payload.cardCharges = parseFloat(cardCharges);
         }
@@ -908,7 +1258,7 @@ function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initia
         await api.post(endpoint, payload);
       }
       
-      toast.success(`Payment ${initialData ? 'updated' : 'recorded'} successfully`);
+      toast.success(user?.role === 'AGENT' && !isVendor ? 'Transaction logged for admin approval' : `Payment ${initialData ? 'updated' : 'recorded'} successfully`);
       onSaved();
       onClose();
     } catch (err: any) {
@@ -1021,6 +1371,63 @@ function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initia
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Notes (Optional)</label>
             <input type="text" value={notes} onChange={e => setNotes(e.target.value)} className="w-full bg-white border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400" placeholder="Any reference numbers or notes..." />
           </div>
+
+          {!isVendor && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Evidence / Receipt Screenshot {user?.role === 'AGENT' && <span className="text-rose-500 font-bold">*</span>}
+              </label>
+              
+              {evidenceUrl ? (
+                <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="flex items-center gap-2.5 truncate">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
+                      <img src={evidenceUrl} alt="Receipt preview" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-bold text-slate-700 truncate text-left">Evidence uploaded successfully</p>
+                      <a href={evidenceUrl} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-600 hover:text-indigo-700 underline font-medium">View Full Image</a>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setEvidenceUrl('')}
+                    className="p-1 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                    title="Remove upload"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-xl p-4 transition-colors bg-slate-50/50 flex flex-col items-center justify-center text-center cursor-pointer">
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={handleEvidenceUpload}
+                    disabled={uploadingEvidence}
+                    required={user?.role === 'AGENT'}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  {uploadingEvidence ? (
+                    <div className="flex flex-col items-center gap-2 py-1">
+                      <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+                      <span className="text-[11px] font-semibold text-slate-500">Uploading screenshot...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="p-2 bg-slate-100 text-slate-500 rounded-lg border border-slate-200">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-700 block">Click to upload bank transfer screenshot</span>
+                        <span className="text-[9px] text-slate-400 block mt-0.5">JPEG, PNG up to 10MB</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end gap-3 -mx-6 -mb-6 mt-6 shrink-0">
             <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>

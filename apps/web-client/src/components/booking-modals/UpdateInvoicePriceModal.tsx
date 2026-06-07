@@ -26,7 +26,7 @@ export function UpdateInvoicePriceModal({ booking, isOpen, onClose, onSubmit }: 
   if (!isOpen || !booking) return null;
 
   // Calculate overpayment details
-  const clientPayments = booking.payments?.filter(p => p.paymentType === 'Received from Client').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const clientPayments = booking.payments?.filter(p => p.paymentType === 'Received from Client' && (!p.status || p.status === 'approved')).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const refundsToClient = booking.refunds?.filter(r => r.direction === 'Refund to Client').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;
   const netReceived = clientPayments - refundsToClient;
   const currentInvoicePrice = parseFloat(booking.totalPrice) || 0;

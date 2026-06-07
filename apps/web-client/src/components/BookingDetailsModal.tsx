@@ -288,6 +288,8 @@ export function BookingDetailsModal({
           paymentType: data.paymentType,
           paidOn: data.paidOn || data.date,
           notes: data.notes || null,
+          evidenceUrl: data.evidenceUrl || undefined,
+          loggedByName: user?.name || undefined,
         });
       }
 
@@ -608,7 +610,7 @@ export function BookingDetailsModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="relative w-full max-w-[95vw] xl:max-w-7xl h-[96vh] bg-slate-50 shadow-2xl flex flex-col z-10 rounded-2xl overflow-hidden"
+        className="relative w-full max-w-[95vw] xl:max-w-7xl h-[90vh] bg-slate-50 shadow-2xl flex flex-col z-10 rounded-2xl overflow-hidden"
       >
         {/* Premium Header */}
         <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-8 py-6 flex justify-between items-center shadow-lg relative overflow-hidden">
@@ -703,7 +705,7 @@ export function BookingDetailsModal({
               <p className="font-bold">{error}</p>
             </div>
           ) : booking ? (
-            <div className="relative z-10 max-w-6xl mx-auto space-y-4">
+            <div className="relative z-10 max-w-full mx-auto space-y-4">
               {hasPermission("READ_TRANSACTION") && (
                 <AccordionSection
                   title="Financial Dashboard & Ledger"

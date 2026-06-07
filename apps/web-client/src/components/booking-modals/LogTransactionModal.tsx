@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { X, Receipt, AlertCircle } from 'lucide-react';
+import { X, Receipt, AlertCircle, Upload, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { api } from '../../api/axios';
+import toast from 'react-hot-toast';
 import type { Payment, BookingDetail } from '../../types/booking';
 
 interface LogTransactionModalProps {
   booking?: BookingDetail;
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (transaction: Partial<Payment> & { serviceCategory?: string; serviceId?: string; ccCharges?: string; serviceName?: string }) => void;
+  onSubmit: (transaction: Partial<Payment> & { serviceCategory?: string; serviceId?: string; ccCharges?: string; serviceName?: string; evidenceUrl?: string }) => void;
 }
 
 export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogTransactionModalProps) {
@@ -20,6 +22,27 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
     ccCharges: '',
     serviceName: ''
   });
+  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+
+  const handleEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingEvidence(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post('/auth/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setEvidenceUrl(response.data.url);
+      toast.success('Evidence uploaded successfully');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to upload evidence');
+    } finally {
+      setUploadingEvidence(false);
+    }
+  };
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
 
@@ -198,6 +221,60 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Notes / Reference</label>
               <textarea value={form.notes || ''} onChange={e => setForm({...form, notes: e.target.value})} className="w-full h-20 border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold text-slate-700 resize-none" placeholder="Add transaction reference or notes here..." />
             </div>
+
+            {/* Evidence Upload */}
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">
+                Bank Transfer Evidence / Screenshot
+              </label>
+              {evidenceUrl ? (
+                <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <div className="flex items-center gap-2.5 truncate">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
+                      <img src={evidenceUrl} alt="Receipt preview" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-bold text-emerald-700 truncate">Evidence uploaded ✓</p>
+                      <a href={evidenceUrl} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-600 hover:underline font-medium">View full image</a>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEvidenceUrl('')}
+                    className="p-1 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                    title="Remove upload"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-xl p-4 transition-colors bg-slate-50/50 flex flex-col items-center justify-center text-center cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEvidenceUpload}
+                    disabled={uploadingEvidence}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  {uploadingEvidence ? (
+                    <div className="flex flex-col items-center gap-2 py-1">
+                      <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+                      <span className="text-[11px] font-semibold text-slate-500">Uploading screenshot...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="p-2 bg-slate-100 text-slate-500 rounded-lg border border-slate-200">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-700 block">Click to upload bank transfer screenshot</span>
+                        <span className="text-[9px] text-slate-400 block mt-0.5">JPEG, PNG up to 10MB</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -205,7 +282,7 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
           <button 
             disabled={form.paymentType === 'Sent to Vendor' && isDuplicate}
-            onClick={() => { onSubmit({ ...form, serviceCategory: selectedCategory, serviceId: selectedServiceId }); onClose(); }} 
+            onClick={() => { onSubmit({ ...form, serviceCategory: selectedCategory, serviceId: selectedServiceId, evidenceUrl: evidenceUrl || undefined }); onClose(); }} 
             className={`px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg transition-all uppercase tracking-wide ${form.paymentType === 'Sent to Vendor' && isDuplicate ? 'bg-slate-400 text-slate-200 cursor-not-allowed shadow-none' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-95'}`}
           >
             Log Transaction

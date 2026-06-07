@@ -696,6 +696,23 @@ app.get('/users', requireTenantContext, async (req: any, res: Response) => {
   }
 });
 
+app.get('/users/:id', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const userId = parseInt(req.params.id);
+    const user = await prisma.user.findFirst({
+      where: { id: userId, tenantId }
+    });
+    if (!user) {
+      return res.status(404).json({ error: 'Not Found', message: 'User not found' });
+    }
+    res.status(200).json({ id: user.id, name: user.name, email: user.email });
+  } catch (error) {
+    console.error('Get User Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.post('/users', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
@@ -1397,6 +1414,16 @@ const SYSTEM_PERMISSIONS = [
   { name: 'UPDATE_VENDOR', module: 'Vendor Records' },
   { name: 'DELETE_VENDOR', module: 'Vendor Records' },
 
+  { name: 'CREATE_AGENT', module: 'Agent Registry' },
+  { name: 'READ_AGENT', module: 'Agent Registry' },
+  { name: 'UPDATE_AGENT', module: 'Agent Registry' },
+  { name: 'DELETE_AGENT', module: 'Agent Registry' },
+
+  { name: 'CREATE_SERVICE', module: 'Service Catalog' },
+  { name: 'READ_SERVICE', module: 'Service Catalog' },
+  { name: 'UPDATE_SERVICE', module: 'Service Catalog' },
+  { name: 'DELETE_SERVICE', module: 'Service Catalog' },
+
   { name: 'READ_DASHBOARD', module: 'Agency Dashboard' },
 
   { name: 'CREATE_USER', module: 'Team Management' },
@@ -1416,12 +1443,14 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   AGENT: [
     'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING',
     'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT',
-    'READ_VENDOR', 'READ_TRANSACTION', 'READ_DASHBOARD'
+    'READ_VENDOR', 'READ_AGENT', 'READ_SERVICE', 'READ_TRANSACTION', 'READ_DASHBOARD'
   ],
   COMPANY_ADMIN: [
     'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
     'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT', 'DELETE_CLIENT',
     'CREATE_VENDOR', 'READ_VENDOR', 'UPDATE_VENDOR', 'DELETE_VENDOR',
+    'CREATE_AGENT', 'READ_AGENT', 'UPDATE_AGENT', 'DELETE_AGENT',
+    'CREATE_SERVICE', 'READ_SERVICE', 'UPDATE_SERVICE', 'DELETE_SERVICE',
     'READ_DASHBOARD',
     'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
     'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION'
@@ -1430,6 +1459,8 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
     'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT', 'DELETE_CLIENT',
     'CREATE_VENDOR', 'READ_VENDOR', 'UPDATE_VENDOR', 'DELETE_VENDOR',
+    'CREATE_AGENT', 'READ_AGENT', 'UPDATE_AGENT', 'DELETE_AGENT',
+    'CREATE_SERVICE', 'READ_SERVICE', 'UPDATE_SERVICE', 'DELETE_SERVICE',
     'READ_DASHBOARD',
     'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
     'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION',
@@ -1446,6 +1477,11 @@ async function initPermissions() {
       if (!existing) {
         await prisma.permission.create({
           data: { name: p.name, module: p.module }
+        });
+      } else if (existing.module !== p.module) {
+        await prisma.permission.update({
+          where: { id: existing.id },
+          data: { module: p.module }
         });
       }
     }
@@ -1553,6 +1589,18 @@ function getPermissionsForAccessLevel(module: string, accessLevel: string): stri
   return []; // No Access
 }
 
+const getPermissionLabel = (name: string): string => {
+  if (name.startsWith('CREATE_')) return 'Create';
+  if (name.startsWith('READ_')) {
+    if (name === 'READ_DASHBOARD') return 'Access';
+    return 'Read';
+  }
+  if (name.startsWith('UPDATE_')) return 'Update';
+  if (name.startsWith('DELETE_')) return 'Delete';
+  if (name.startsWith('MANAGE_')) return 'Manage';
+  return name;
+};
+
 // ─── ENDPOINTS ───────────────────────────────────────────────────────────────
 
 app.get('/roles/permissions/matrix', requireTenantContext, async (req: any, res: Response) => {
@@ -1576,21 +1624,27 @@ app.get('/roles/permissions/matrix', requireTenantContext, async (req: any, res:
       rolePermissionsMap[role.name] = role.permissions.map((p: any) => p.permission.name);
     }
     
-    const modules = [
-      'Bookings & Itineraries',
-      'Client Records',
-      'Vendor Records',
-      'Agency Dashboard',
-      'Team Management',
-      'Financials (Refunds/Profit)',
-      'System Settings'
-    ];
+    const allPermissions = await prisma.permission.findMany({
+      orderBy: [
+        { module: 'asc' },
+        { name: 'asc' }
+      ]
+    });
     
-    const matrix = modules.map(mod => ({
-      module: mod,
-      AGENT: getAccessLevel(mod, rolePermissionsMap['AGENT'] || []),
-      COMPANY_ADMIN: getAccessLevel(mod, rolePermissionsMap['COMPANY_ADMIN'] || []),
-      MAIN_COMPANY_ADMIN: getAccessLevel(mod, rolePermissionsMap['MAIN_COMPANY_ADMIN'] || [])
+    const moduleMap: Record<string, { name: string; label: string }[]> = {};
+    for (const p of allPermissions) {
+      if (!moduleMap[p.module]) {
+        moduleMap[p.module] = [];
+      }
+      moduleMap[p.module].push({
+        name: p.name,
+        label: getPermissionLabel(p.name)
+      });
+    }
+    
+    const matrix = Object.entries(moduleMap).map(([moduleName, perms]) => ({
+      module: moduleName,
+      permissions: perms
     }));
     
     res.status(200).json({ matrix, permissions: rolePermissionsMap });

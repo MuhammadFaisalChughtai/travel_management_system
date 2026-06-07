@@ -102,130 +102,144 @@ export function VendorsPage() {
         </div>
       </div>
 
-      <div className="bg-white/70 backdrop-blur-xl border border-white rounded-3xl shadow-sm overflow-hidden">
-        <div className="border-b border-slate-100 px-6 py-4 bg-white/50 flex items-center justify-between">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              value={search} 
-              onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} 
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:border-primary-500 rounded-xl text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400 shadow-sm" 
-              placeholder="Search vendors..." 
-            />
+      {loading ? (
+        <div className="bg-white/70 backdrop-blur-xl border border-white rounded-3xl shadow-sm p-8">
+          <LoadingState message="Loading vendors..." />
+        </div>
+      ) : tableVendors.length === 0 && !search ? (
+        <EmptyState 
+          icon={Building2} 
+          title="No vendors yet" 
+          description="Get started by adding a new vendor." 
+          transparent={false}
+          action={
+            <button onClick={() => { setEditingVendor(null); setShowAddModal(true); }} className="flex items-center gap-1.5 bg-primary-600 text-white hover:bg-primary-500 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all">
+              <Plus className="h-4 w-4" /> Add Vendor
+            </button>
+          }
+        />
+      ) : (
+        <div className="bg-white/70 backdrop-blur-xl border border-white rounded-3xl shadow-sm overflow-hidden">
+          <div className="border-b border-slate-100 px-6 py-4 bg-white/50 flex items-center justify-between">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                value={search} 
+                onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} 
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:border-primary-500 rounded-xl text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400 shadow-sm" 
+                placeholder="Search vendors..." 
+              />
+            </div>
+          </div>
+
+          <div className="p-0">
+            {tableVendors.length === 0 ? (
+              <EmptyState 
+                icon={Building2} 
+                title="No vendors found" 
+                description={`We couldn't find anyone matching "${search}"`} 
+                size="sm"
+                transparent={true}
+              />
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase text-[11px] border-b border-slate-100">
+                        <th className="py-3 px-6">Vendor Name</th>
+                        <th className="py-3 px-6">Type</th>
+                        <th className="py-3 px-6">Contact Details</th>
+                        <th className="py-3 px-6">Credit Balance</th>
+                        <th className="py-3 px-6 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100/50 text-[12px] font-medium bg-white/40">
+                      {tableVendors.map((vendor) => (
+                        <tr key={vendor.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-primary-100 text-indigo-700 flex items-center justify-center font-bold text-[11px] border border-indigo-200/50 shadow-sm shrink-0">
+                                {getInitials(vendor.name)}
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-800 block">{vendor.name}</span>
+                                {vendor.website && (
+                                  <a href={vendor.website.startsWith('http') ? vendor.website : `https://${vendor.website}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary-500 hover:underline flex items-center gap-1 mt-0.5">
+                                    <Globe className="w-3 h-3" /> {vendor.website.replace(/^https?:\/\//, '')}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-6">
+                            <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
+                              {vendor.vendorType || 'Vendor'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-6">
+                            <div className="space-y-1">
+                              {vendor.email && (
+                                <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                                  {vendor.email}
+                                </div>
+                              )}
+                              {vendor.phoneNumber && (
+                                <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+                                  {vendor.phoneNumber}
+                                </div>
+                              )}
+                              {!vendor.email && !vendor.phoneNumber && <span className="text-slate-400 italic text-[11px]">No contact details</span>}
+                            </div>
+                          </td>
+                          <td className="py-3 px-6">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                              Number(vendor.creditBalance) < 0 
+                                ? 'bg-rose-50 text-rose-700 border border-rose-100' 
+                                : Number(vendor.creditBalance) > 0 
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                  : 'bg-slate-50 text-slate-600 border border-slate-200'
+                            }`}>
+                              £{Number(vendor.creditBalance).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            </span>
+                          </td>
+                          <td className="py-3 px-6 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button 
+                                onClick={() => { setEditingVendor(vendor); setShowAddModal(true); }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                title="Edit Vendor"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => setDeletingVendorId(vendor.id)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Delete Vendor"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination 
+                  currentPage={currentPage}
+                  totalPages={totalTablePages}
+                  onPageChange={setCurrentPage}
+                  itemsPerPage={itemsPerPage}
+                  totalItems={totalTableItems}
+                />
+              </>
+            )}
           </div>
         </div>
-
-        <div className="p-0">
-          {loading ? (
-            <div className="p-8">
-              <LoadingState message="Loading vendors..." />
-            </div>
-          ) : tableVendors.length === 0 ? (
-            <EmptyState 
-              icon={Building2} 
-              title={search ? 'No vendors found' : 'No vendors yet'} 
-              description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by adding a new vendor.'} 
-              size="sm"
-              transparent={true}
-            />
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase text-[11px] border-b border-slate-100">
-                      <th className="py-3 px-6">Vendor Name</th>
-                      <th className="py-3 px-6">Type</th>
-                      <th className="py-3 px-6">Contact Details</th>
-                      <th className="py-3 px-6">Credit Balance</th>
-                      <th className="py-3 px-6 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100/50 text-[12px] font-medium bg-white/40">
-                    {tableVendors.map((vendor) => (
-                      <tr key={vendor.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 px-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-primary-100 text-indigo-700 flex items-center justify-center font-bold text-[11px] border border-indigo-200/50 shadow-sm shrink-0">
-                              {getInitials(vendor.name)}
-                            </div>
-                            <div>
-                              <span className="font-bold text-slate-800 block">{vendor.name}</span>
-                              {vendor.website && (
-                                <a href={vendor.website.startsWith('http') ? vendor.website : `https://${vendor.website}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary-500 hover:underline flex items-center gap-1 mt-0.5">
-                                  <Globe className="w-3 h-3" /> {vendor.website.replace(/^https?:\/\//, '')}
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-6">
-                          <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
-                            {vendor.vendorType || 'Vendor'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-6">
-                          <div className="space-y-1">
-                            {vendor.email && (
-                              <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
-                                <Mail className="w-3.5 h-3.5 text-slate-400" />
-                                {vendor.email}
-                              </div>
-                            )}
-                            {vendor.phoneNumber && (
-                              <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
-                                <Phone className="w-3.5 h-3.5 text-slate-400" />
-                                {vendor.phoneNumber}
-                              </div>
-                            )}
-                            {!vendor.email && !vendor.phoneNumber && <span className="text-slate-400 italic text-[11px]">No contact details</span>}
-                          </div>
-                        </td>
-                        <td className="py-3 px-6">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                            Number(vendor.creditBalance) < 0 
-                              ? 'bg-rose-50 text-rose-700 border border-rose-100' 
-                              : Number(vendor.creditBalance) > 0 
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                : 'bg-slate-50 text-slate-600 border border-slate-200'
-                          }`}>
-                            £{Number(vendor.creditBalance).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                          </span>
-                        </td>
-                        <td className="py-3 px-6 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button 
-                              onClick={() => { setEditingVendor(vendor); setShowAddModal(true); }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                              title="Edit Vendor"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => setDeletingVendorId(vendor.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                              title="Delete Vendor"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <Pagination 
-                currentPage={currentPage}
-                totalPages={totalTablePages}
-                onPageChange={setCurrentPage}
-                itemsPerPage={itemsPerPage}
-                totalItems={totalTableItems}
-              />
-            </>
-          )}
-        </div>
-      </div>
+      )}
 
       <AnimatePresence>
         {showAddModal && (

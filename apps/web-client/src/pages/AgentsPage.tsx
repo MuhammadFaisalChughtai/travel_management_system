@@ -768,51 +768,57 @@ export function AgentsPage() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-5">
-        <div className="bg-white px-6 py-4 flex items-center justify-between gap-4 border-b border-slate-100 rounded-t-3xl shadow-sm">
-          <div className="flex flex-wrap items-center gap-3 w-full">
-            <div className="flex items-center gap-2 text-slate-500 font-bold text-[10px] mr-2 uppercase tracking-wider">
-              <Search className="w-3.5 h-3.5 text-primary-500" /> Search:
-            </div>
-            <div className="relative w-full max-w-sm">
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-bold outline-none transition-all placeholder:text-slate-400 shadow-sm"
-                placeholder="Search by name, email, or phone..."
-              />
+      {loading ? (
+        <div className="bg-white/70 backdrop-blur-xl border border-white rounded-3xl shadow-sm p-8">
+          <LoadingState message="Loading agents..." />
+        </div>
+      ) : tableAgents.length === 0 && !search ? (
+        <EmptyState 
+          icon={Search}
+          title="No agents yet"
+          description="Get started by adding a new agent."
+          transparent={false}
+          action={
+            <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 bg-primary-600 text-white hover:bg-primary-500 px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all">
+              <Plus className="h-4 w-4" /> Add Agent
+            </button>
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-5">
+          <div className="bg-white px-6 py-4 flex items-center justify-between gap-4 border-b border-slate-100 rounded-t-3xl shadow-sm">
+            <div className="flex flex-wrap items-center gap-3 w-full">
+              <div className="flex items-center gap-2 text-slate-500 font-bold text-[10px] mr-2 uppercase tracking-wider">
+                <Search className="w-3.5 h-3.5 text-primary-500" /> Search:
+              </div>
+              <div className="relative w-full max-w-sm">
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-bold outline-none transition-all placeholder:text-slate-400 shadow-sm"
+                  placeholder="Search by name, email, or phone..."
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex-1 w-full min-w-0">
-          {loading ? (
-            <div className="p-8">
-              <LoadingState message="Loading agents..." />
-            </div>
-          ) : error ? (
-            <div className="bg-rose-50 rounded-2xl border border-rose-200 p-12 text-center shadow-sm max-w-2xl mx-auto">
-              <AlertCircle className="w-12 h-12 text-rose-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-rose-800">Failed to load data</h3>
-              <p className="text-rose-600 text-sm mt-1">{error}</p>
-            </div>
-          ) : tableAgents.length === 0 ? (
-            <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
+          <div className="flex-1 w-full min-w-0">
+            {error ? (
+              <div className="bg-rose-50 rounded-2xl border border-rose-200 p-12 text-center shadow-sm max-w-2xl mx-auto">
+                <AlertCircle className="w-12 h-12 text-rose-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-rose-800">Failed to load data</h3>
+                <p className="text-rose-600 text-sm mt-1">{error}</p>
+              </div>
+            ) : tableAgents.length === 0 ? (
               <EmptyState 
                 icon={Search}
-                title={search ? 'No records found' : 'No agents yet'}
-                description={search ? "We couldn't find any agents matching your current search criteria." : "Get started by adding a new agent."}
+                title="No records found"
+                description={`We couldn't find any agents matching "${search}"`}
                 size="sm"
                 transparent={true}
-                action={!search ? (
-                  <button onClick={() => setShowAddModal(true)} className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Add Agent
-                  </button>
-                ) : undefined}
               />
-            </div>
-          ) : (
-            <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
+            ) : (
+              <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden text-[11px]">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -843,6 +849,25 @@ export function AgentsPage() {
                           {agent.email && <div className="text-slate-400 text-[10px]">{agent.email}</div>}
                         </td>
                         <td className="py-3.5 px-5 font-bold text-slate-700">{agent.gdsSystem || '—'}</td>
+                        <td className="py-3.5 px-5">
+                          <div className="flex flex-wrap gap-1 max-w-[150px]">
+                            {agent.client ? agent.client.split(',').slice(0, 2).map((tag, i) => (
+                              <span key={i} className="bg-slate-50 text-slate-600 border border-slate-100 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                {tag.trim()}
+                              </span>
+                            )) : <span className="text-slate-400 italic text-[10px]">None</span>}
+                            {agent.client && agent.client.split(',').length > 2 && (
+                              <span className="text-[9px] font-bold text-primary-500">
+                                +{agent.client.split(',').length - 2} more
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <span className="inline-flex items-center gap-1.5 text-indigo-600 font-bold">
+                            {agent.marginSegments.length} slabs
+                          </span>
+                        </td>
                         <td className="py-3.5 px-5 text-center">
                           <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
                             agent.jobStatus === 'Active' 
@@ -852,11 +877,6 @@ export function AgentsPage() {
                               : 'bg-rose-50 text-rose-700'
                           }`}>
                             {agent.jobStatus.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-5 text-right">
-                          <span className="inline-flex items-center gap-1.5 text-indigo-600 font-bold">
-                            {agent.marginSegments.length} slabs
                           </span>
                         </td>
                         <td className="py-3.5 px-5 text-center" onClick={e => e.stopPropagation()}>
@@ -890,6 +910,7 @@ export function AgentsPage() {
           )}
         </div>
       </div>
+      )}
 
       <AnimatePresence>
         {selectedAgent && (

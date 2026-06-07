@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Plus, Users, CreditCard, Hotel, FileText, Lock, Unlock, Clock, 
-  ArrowLeft, Calculator, X, User, AlertCircle, Receipt
+  ArrowLeft, Calculator, X, User, AlertCircle, Receipt, Upload, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { api } from '../api/axios';
 import { useAuthStore } from '../store/authStore';
 
@@ -30,6 +31,10 @@ interface Payment {
   paymentType: string;
   paidOn: string;
   notes: string | null;
+  status?: string;
+  evidenceUrl?: string | null;
+  loggedByRole?: string | null;
+  loggedByName?: string | null;
 }
 
 interface VendorPayment {
@@ -122,6 +127,8 @@ export function BookingDetailsPage() {
   const [payType, setPayType] = useState('Instalment');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [payNotes, setPayNotes] = useState('');
+  const [payEvidenceUrl, setPayEvidenceUrl] = useState('');
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
 
   // Form Fields - Vendor Payment
   const [vName, setVName] = useState('');
@@ -213,15 +220,44 @@ export function BookingDetailsPage() {
         paymentMethod: payMethod,
         paymentType: payType,
         paidOn: payDate,
-        notes: payNotes
+        notes: payNotes,
+        evidenceUrl: payEvidenceUrl || undefined,
+        loggedByName: user?.name || undefined
       });
 
       setPayAmount('');
       setPayNotes('');
+      setPayEvidenceUrl('');
       setActiveModal('none');
       fetchBookingDetails();
-    } catch (err) {
+      toast.success(user?.role === 'AGENT' ? 'Transaction logged for admin approval' : 'Transaction registered successfully');
+    } catch (err: any) {
       console.error(err);
+      toast.error(err?.response?.data?.message || 'Failed to register transaction');
+    }
+  };
+
+  const handleEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingEvidence(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await api.post('/auth/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      setPayEvidenceUrl(response.data.url);
+      toast.success('Evidence uploaded successfully');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to upload evidence');
+    } finally {
+      setUploadingEvidence(false);
     }
   };
 
@@ -657,14 +693,43 @@ export function BookingDetailsPage() {
                 <div className="divide-y divide-slate-100 text-xs">
                   {booking.payments.map(p => (
                     <div key={p.id} className="p-4 hover:bg-slate-50/30 transition-colors flex justify-between items-start gap-3">
-                      <div>
-                        <div className="font-bold text-slate-900">£{Number(p.amount).toFixed(2)}</div>
-                        <div className="text-slate-400 text-[10px] mt-0.5 font-mono">
-                          {p.paymentMethod} • {p.paymentType}
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900">£{Number(p.amount).toFixed(2)}</span>
+                          {/* Status Badge */}
+                          <span className={`inline-block px-1.5 py-0.2 rounded text-[8px] font-extrabold tracking-wide uppercase ${
+                            p.status === 'pending'
+                              ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                              : p.status === 'rejected'
+                              ? 'bg-rose-50 text-rose-600 border border-rose-100'
+                              : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                          }`}>
+                            {p.status || 'approved'}
+                          </span>
                         </div>
-                        {p.notes && <p className="text-[10px] text-slate-500 italic mt-1 font-medium">{p.notes}</p>}
+                        <div className="text-slate-400 text-[10px] mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">
+                          <span>{p.paymentMethod} • {p.paymentType}</span>
+                          {p.loggedByName && (
+                            <span className="text-slate-400/80">({p.loggedByName})</span>
+                          )}
+                        </div>
+                        {p.notes && <p className="text-[10px] text-slate-500 italic mt-1 font-medium break-words leading-relaxed">{p.notes}</p>}
+                        
+                        {/* Evidence Attachment */}
+                        {p.evidenceUrl && (
+                          <div className="mt-1.5">
+                            <a 
+                              href={p.evidenceUrl} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              className="inline-flex items-center gap-1 text-[9px] font-extrabold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-100/50 transition-colors"
+                            >
+                              <Receipt className="w-3 h-3 text-indigo-500" /> Receipt Screenshot
+                            </a>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
+                      <div className="text-[10px] text-slate-400 font-mono shrink-0">
                         {new Date(p.paidOn).toLocaleDateString()}
                       </div>
                     </div>
@@ -1006,6 +1071,61 @@ export function BookingDetailsPage() {
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-primary-500 outline-none"
                       placeholder="Enter optional description..."
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      Evidence / Receipt Screenshot {user?.role === 'AGENT' && <span className="text-rose-500 font-bold">*</span>}
+                    </label>
+                    
+                    {payEvidenceUrl ? (
+                      <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div className="flex items-center gap-2.5 truncate">
+                          <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
+                            <img src={payEvidenceUrl} alt="Receipt preview" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-bold text-slate-700 truncate text-left">Evidence uploaded successfully</p>
+                            <a href={payEvidenceUrl} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-600 hover:text-indigo-700 underline font-medium">View Full Image</a>
+                          </div>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => setPayEvidenceUrl('')}
+                          className="p-1 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                          title="Remove upload"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative border-2 border-dashed border-slate-200 hover:border-primary-400 rounded-xl p-4 transition-colors bg-slate-50/50 flex flex-col items-center justify-center text-center cursor-pointer">
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={handleEvidenceUpload}
+                          disabled={uploadingEvidence}
+                          required={user?.role === 'AGENT'}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                        {uploadingEvidence ? (
+                          <div className="flex flex-col items-center gap-2 py-1">
+                            <Loader2 className="w-6 h-6 text-primary-500 animate-spin" />
+                            <span className="text-[11px] font-semibold text-slate-500">Uploading screenshot to storage...</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="p-2 bg-slate-100 text-slate-500 rounded-lg border border-slate-200">
+                              <Upload className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="text-[11px] font-bold text-slate-700 block">Click to upload bank transfer screenshot</span>
+                              <span className="text-[9px] text-slate-400 block mt-0.5">JPEG, PNG up to 10MB</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

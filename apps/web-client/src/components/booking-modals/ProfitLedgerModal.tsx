@@ -37,7 +37,7 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
   const totalVendorPayments = legacyVendorPayments + modernVendorPayments;
   const spendOther = Math.max(0, totalVendorPayments - (spendFlight + spendHotel + spendVisa + spendTransport));
 
-  const totalReceived = booking.payments?.filter(p => p.paymentType === 'Received from Client').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const totalReceived = booking.payments?.filter(p => p.paymentType === 'Received from Client' && (!p.status || p.status === 'approved')).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const totalDiscounts = booking.discounts?.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0) || 0;
   
   const clientRefunds = booking.refunds?.filter(r => r.direction === 'Refund to Client').reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0) || 0;

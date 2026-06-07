@@ -575,14 +575,15 @@ app.post('/:id/passengers', requireGatewayHeaders, requirePermission(Permission.
   }
 });
 
-// Add Payment / Transaction to Booking
 const addPaymentSchema = z.object({
   amount: z.number(),
   paymentMethod: z.string().min(1),
   paymentType: z.string().min(1),
   paidOn: z.string(),
   notes: z.string().nullable().optional(),
-  cardCharges: z.number().optional()
+  cardCharges: z.number().optional(),
+  evidenceUrl: z.string().nullable().optional(),
+  loggedByName: z.string().nullable().optional()
 });
 
 // POST /:id/clawback-margin
@@ -923,6 +924,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
     const bookingId = parseInt(req.params.id);
     const parsedData = addPaymentSchema.parse(req.body);
     const tenantIdNumeric = parseInt(req.tenantId!);
+    const isAgent = req.userRole === Role.AGENT;
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId }
@@ -936,7 +938,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
     }
 
-    if (booking.isLocked && req.userRole === Role.AGENT) {
+    if (booking.isLocked && isAgent) {
       return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
     }
 
@@ -959,11 +961,33 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
         paymentMethod: parsedData.paymentMethod,
         paymentType: parsedData.paymentType,
         paidOn: parseDateWithCurrentTime(parsedData.paidOn),
-        notes: finalNotes || null
+        notes: finalNotes || null,
+        status: isAgent ? 'pending' : 'approved',
+        evidenceUrl: parsedData.evidenceUrl || null,
+        loggedByRole: req.userRole || null,
+        loggedById: req.userId ? parseInt(req.userId) : null,
+        loggedByName: parsedData.loggedByName || (isAgent ? 'Agent' : 'Admin'),
+        cardCharges: parsedData.cardCharges || 0.00
       }
     });
 
-    // --- LEDGER INTEGRATION (DOUBLE ENTRY) ---
+    if (isAgent) {
+      // Create admin notification
+      await prisma.notification.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          title: 'Transaction Approval Request',
+          message: `${parsedData.loggedByName || 'Agent'} logged a payment of £${parsedData.amount.toFixed(2)} via ${parsedData.paymentMethod} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+          type: 'PAYMENT_APPROVAL',
+          referenceId: String(payment.id),
+          isRead: false
+        }
+      });
+
+      return res.status(201).json({ message: 'Transaction submitted for admin approval successfully', payment });
+    }
+
+    // --- LEDGER INTEGRATION (DOUBLE ENTRY) (Only for Admins/Auto-Approved) ---
     if (parsedData.paymentType === 'Sent to Vendor') {
       const vendorName = 'General Vendors'; // Or parse from notes if needed
       let vendorAccount = await prisma.ledgerAccount.findFirst({
@@ -1108,9 +1132,9 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
     }
     // ---------------------------
 
-    // Automatically recalculate booking paid & remaining amounts
+    // Automatically recalculate booking paid & remaining amounts (ONLY approved payments)
     const allPayments = await prisma.bookingPayment.findMany({
-      where: { bookingId }
+      where: { bookingId, status: 'approved' }
     });
     
     const totalPaid = allPayments.reduce((acc, p) => acc + Number(p.amount), 0);
@@ -2740,6 +2764,11 @@ app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.RE
       bookingRefMap.set(b.id, b.bookingReference);
     }
 
+    const payments = await prisma.bookingPayment.findMany({
+      where: { tenantId },
+      include: { booking: { select: { bookingReference: true } } }
+    });
+
     const enrichedTransactions = transactions.map((txn: any) => {
       const enrichedAllocations = txn.allocations?.map((alloc: any) => ({
         ...alloc,
@@ -2752,12 +2781,39 @@ app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.RE
         referenceNumber = uniqueRefs.join(', ');
       }
 
+      let evidenceUrl = null;
+      let status = 'approved';
+      let loggedByName = null;
+
+      if (txn.type === 'PAYMENT') {
+        const credit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount), 0) || 0;
+        const debit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount), 0) || 0;
+        const amountToMatch = Math.max(debit, credit);
+
+        const match = payments.find(p => {
+          const refMatches = p.booking?.bookingReference === referenceNumber || 
+                             (referenceNumber && referenceNumber.includes(p.booking?.bookingReference || ''));
+          const amountMatches = Math.abs(Number(p.amount) - amountToMatch) < 0.01;
+          const statusMatches = !p.status || p.status === 'approved';
+          return refMatches && amountMatches && statusMatches;
+        });
+
+        if (match) {
+          evidenceUrl = match.evidenceUrl;
+          status = match.status;
+          loggedByName = match.loggedByName;
+        }
+      }
+
       return {
         ...txn,
         referenceNumber,
-        allocations: enrichedAllocations
+        allocations: enrichedAllocations,
+        evidenceUrl,
+        status,
+        loggedByName
       };
-    });
+    }).filter((t: any) => t.status !== 'rejected' && t.status !== 'pending');
 
     res.status(200).json({ transactions: enrichedTransactions, accounts });
   } catch (error) {
@@ -2819,6 +2875,297 @@ app.get('/finance/payments', requireGatewayHeaders, async (req: CustomRequest, r
     }
   } catch (error) {
     console.error('Fetch Payments Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/finance/payments/:id', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const paymentId = parseInt(req.params.id);
+    const tenantIdNumeric = parseInt(req.tenantId!);
+    const payment = await prisma.bookingPayment.findUnique({
+      where: { id: paymentId },
+      include: { booking: { select: { bookingReference: true } } }
+    });
+    if (!payment || payment.tenantId !== tenantIdNumeric) {
+      return res.status(404).json({ error: 'Not Found', message: 'Payment record not found' });
+    }
+    res.status(200).json({ payment });
+  } catch (error) {
+    console.error('Fetch Single Payment Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/finance/notifications', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const notifications = await prisma.notification.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.status(200).json({ notifications });
+  } catch (error) {
+    console.error('Fetch Notifications Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/finance/notifications/:id/read', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const id = parseInt(req.params.id);
+    await prisma.notification.updateMany({
+      where: { id, tenantId },
+      data: { isRead: true }
+    });
+    res.status(200).json({ message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('Mark Notification Read Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/finance/payments/:paymentId/approve', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    const tenantIdNumeric = parseInt(req.tenantId!);
+
+    const payment = await prisma.bookingPayment.findUnique({
+      where: { id: paymentId },
+      include: { booking: true }
+    });
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Not Found', message: 'Payment record not found' });
+    }
+
+    if (payment.tenantId !== tenantIdNumeric) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ error: 'Bad Request', message: 'Payment is not in pending status' });
+    }
+
+    const booking = payment.booking;
+
+    // 1. Update status to approved
+    const updatedPayment = await prisma.bookingPayment.update({
+      where: { id: paymentId },
+      data: { status: 'approved' }
+    });
+
+    // 2. Ledger integration (identical to approved branch in POST /:id/payments)
+    if (payment.paymentType === 'Sent to Vendor') {
+      const vendorName = 'General Vendors';
+      let vendorAccount = await prisma.ledgerAccount.findFirst({
+        where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+      });
+      if (!vendorAccount) {
+        vendorAccount = await prisma.ledgerAccount.create({
+          data: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+        });
+      }
+
+      const mainTx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          transactionDate: payment.paidOn,
+          referenceNumber: booking.bookingReference,
+          description: `Vendor Payment via ${payment.paymentMethod}. ${payment.notes || ''}`,
+          type: 'PAYMENT'
+        }
+      });
+
+      await prisma.ledgerEntry.create({
+        data: {
+          transactionId: mainTx.id,
+          accountId: vendorAccount.id,
+          debitAmount: payment.amount,
+          creditAmount: 0
+        }
+      });
+
+      await prisma.ledgerAccount.update({
+        where: { id: vendorAccount.id },
+        data: { balance: { decrement: payment.amount } }
+      });
+    } else if (payment.paymentType === 'Received from Client') {
+      const customerName = booking.agentName || 'Direct Client';
+      let customerAccount = await prisma.ledgerAccount.findFirst({
+        where: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+      });
+      if (!customerAccount) {
+        customerAccount = await prisma.ledgerAccount.create({
+          data: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+        });
+      }
+
+      const mainTx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          transactionDate: payment.paidOn,
+          referenceNumber: booking.bookingReference,
+          description: `Client Payment via ${payment.paymentMethod}. ${payment.notes || ''}`,
+          type: 'PAYMENT'
+        }
+      });
+
+      await prisma.ledgerEntry.create({
+        data: {
+          transactionId: mainTx.id,
+          accountId: customerAccount.id,
+          debitAmount: 0,
+          creditAmount: payment.amount
+        }
+      });
+
+      await prisma.ledgerAccount.update({
+        where: { id: customerAccount.id },
+        data: { balance: { decrement: payment.amount } }
+      });
+
+      // Credit card charges handling
+      if (payment.cardCharges && Number(payment.cardCharges) > 0) {
+        const feeTx = await prisma.ledgerTransaction.create({
+          data: {
+            tenantId: tenantIdNumeric,
+            transactionDate: payment.paidOn,
+            referenceNumber: booking.bookingReference,
+            description: `Credit Card Processing Fee`,
+            type: 'FEE'
+          }
+        });
+
+        await prisma.ledgerEntry.create({
+          data: {
+            transactionId: feeTx.id,
+            accountId: customerAccount.id,
+            debitAmount: payment.cardCharges,
+            creditAmount: 0
+          }
+        });
+
+        await prisma.ledgerAccount.update({
+          where: { id: customerAccount.id },
+          data: { balance: { increment: payment.cardCharges } }
+        });
+      }
+    }
+
+    // Agent wallet sync
+    if (payment.paymentType === 'Margin Paid to Agent' && booking.agentName && booking.agentName !== 'Direct Client' && booking.agentName !== 'System / Auto') {
+      try {
+        const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
+        let agentId = booking.agentId;
+        if (!agentId) {
+          const agentRes = await fetch(`${authUrl}/agents/by-name/${encodeURIComponent(booking.agentName)}`, {
+            headers: { 'x-tenant-id': tenantIdNumeric.toString() }
+          });
+          if (agentRes.ok) {
+            const agentData = await agentRes.json();
+            agentId = agentData.agent.id;
+          }
+        }
+        
+        if (agentId) {
+          if (payment.paymentMethod !== 'Debt Offset') {
+            const walletAmount = Number(payment.amount) > 0 ? -Number(payment.amount) : Number(payment.amount);
+            
+            await fetch(`${authUrl}/agents/${agentId}/wallet/transaction`, {
+              method: 'POST',
+              headers: {
+                'x-tenant-id': tenantIdNumeric.toString(),
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                amount: walletAmount,
+                transactionType: 'MARGIN_PAID_OUT',
+                referenceId: booking.bookingReference,
+                notes: `Margin Paid to Agent via Booking. ${payment.notes || ''}`
+              })
+            });
+          }
+
+          await prisma.booking.update({
+            where: { id: booking.id },
+            data: { marginStatus: 'Paid' }
+          });
+        }
+      } catch (e) {
+        console.error('Failed to sync client payment with agent wallet', e);
+      }
+    }
+
+    // 3. Recalculate booking paid & remaining amounts (ONLY approved payments)
+    const allPayments = await prisma.bookingPayment.findMany({
+      where: { bookingId: booking.id, status: 'approved' }
+    });
+    
+    const totalPaid = allPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+    const newCardCharges = Number(booking.cardPaymentCharges) + Number(payment.cardCharges || 0);
+    const remaining = Number(booking.totalPrice) + newCardCharges + Number(booking.cancellationCharges) - totalPaid - Number(booking.refundAmount);
+
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        cardPaymentCharges: newCardCharges,
+        paidAmount: totalPaid,
+        remainingAmount: remaining >= 0 ? remaining : 0,
+        paymentStatus: remaining <= 0 ? 'paid' : (totalPaid > 0 ? 'partially_paid' : 'unpaid')
+      }
+    });
+
+    // 4. Mark notifications for this payment as read and update title to reflect approval
+    await prisma.notification.updateMany({
+      where: { tenantId: tenantIdNumeric, type: 'PAYMENT_APPROVAL', referenceId: String(paymentId) },
+      data: { isRead: true, title: 'Transaction Approved ✓' }
+    });
+
+    res.status(200).json({ message: 'Transaction approved successfully', payment: updatedPayment });
+  } catch (error) {
+    console.error('Approve Payment Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/finance/payments/:paymentId/reject', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN', 'SUPER_ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    const tenantIdNumeric = parseInt(req.tenantId!);
+
+    const payment = await prisma.bookingPayment.findUnique({
+      where: { id: paymentId }
+    });
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Not Found', message: 'Payment record not found' });
+    }
+
+    if (payment.tenantId !== tenantIdNumeric) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ error: 'Bad Request', message: 'Payment is not in pending status' });
+    }
+
+    // 1. Update status to rejected
+    const updatedPayment = await prisma.bookingPayment.update({
+      where: { id: paymentId },
+      data: { status: 'rejected' }
+    });
+
+    // 2. Mark notifications as read and update title to reflect rejection
+    await prisma.notification.updateMany({
+      where: { tenantId: tenantIdNumeric, type: 'PAYMENT_APPROVAL', referenceId: String(paymentId) },
+      data: { isRead: true, title: 'Transaction Rejected ✗' }
+    });
+
+    res.status(200).json({ message: 'Transaction rejected successfully', payment: updatedPayment });
+  } catch (error) {
+    console.error('Reject Payment Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

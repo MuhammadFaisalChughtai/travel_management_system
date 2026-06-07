@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { BookingDetail, Refund } from '../../types/booking';
 import { EmptyState } from '../shared/EmptyState';
-import { ArrowDownLeft, ArrowUpRight, Clock, AlertCircle, Percent, Receipt, RefreshCcw, Tag, ChevronDown, ChevronUp, ArrowDownCircle } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Clock, AlertCircle, Percent, Receipt, RefreshCcw, Tag, ChevronDown, ChevronUp, ArrowDownCircle, ExternalLink, Hourglass, XCircle } from 'lucide-react';
 import { api } from '../../api/axios';
 import { VendorTransactionsModal } from '../booking-modals/VendorTransactionsModal';
 import { ClientTransactionsModal } from '../booking-modals/ClientTransactionsModal';
@@ -39,8 +39,9 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
   const bookingTotal = parseFloat(booking.totalPrice) || 0;
 
   // Calculate Totals first so we can use netProfit for agent margin
-  const clientPayments = booking.payments?.filter(p => p.paymentType === 'Received from Client').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
-  const legacyVendorPayments = booking.payments?.filter(p => p.paymentType === 'Sent to Vendor').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  // Only count APPROVED payments in financial totals — pending/rejected are excluded
+  const clientPayments = booking.payments?.filter(p => p.paymentType === 'Received from Client' && (!p.status || p.status === 'approved')).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
+  const legacyVendorPayments = booking.payments?.filter(p => p.paymentType === 'Sent to Vendor' && (!p.status || p.status === 'approved')).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const modernVendorPayments = booking.vendorPayments?.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) || 0;
   const vendorPayments = legacyVendorPayments + modernVendorPayments;
 
@@ -386,24 +387,53 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                           if (item._type === 'payment' || item._type === 'vendorPayment') {
                             const t = item;
                             const isReceived = t.paymentType === 'Received from Client';
+                            const isPending = t.status === 'pending';
+                            const isRejected = t.status === 'rejected';
                             return (
-                              <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                                <td className="py-2 px-4 text-slate-500">{new Date(t.paidOn || new Date()).toLocaleDateString()}</td>
-                                <td className="py-2 px-4 font-bold text-slate-800">
+                              <tr key={t.id} className={`border-b border-slate-100 transition-colors ${
+                                isPending ? 'bg-amber-50/60 hover:bg-amber-50' :
+                                isRejected ? 'bg-red-50/40 hover:bg-red-50/60' :
+                                'hover:bg-slate-50/80'
+                              }`}>
+                                <td className="py-2.5 px-4 text-slate-500">{new Date(t.paidOn || new Date()).toLocaleDateString()}</td>
+                                <td className="py-2.5 px-4 font-bold text-slate-800">
                                   <div className="flex items-center gap-2">
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isReceived ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
-                                      {isReceived ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                                      isPending ? 'bg-amber-100 text-amber-600' :
+                                      isRejected ? 'bg-red-100 text-red-500' :
+                                      isReceived ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'
+                                    }`}>
+                                      {isPending ? <Hourglass className="w-3 h-3" /> : isRejected ? <XCircle className="w-3 h-3" /> : isReceived ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
                                     </div>
-                                    {t.paymentType}
+                                    <div className="flex flex-col">
+                                      <span className={isRejected ? 'line-through text-slate-400' : ''}>{t.paymentType}</span>
+                                      {/* Status Badge */}
+                                      {isPending && (
+                                        <span className="text-[9px] font-extrabold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full w-fit tracking-wide">⏳ PENDING APPROVAL</span>
+                                      )}
+                                      {isRejected && (
+                                        <span className="text-[9px] font-extrabold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full w-fit tracking-wide">✗ REJECTED</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
-                                <td className="py-2 px-4">
-                                  <div className="flex flex-col">
-                                    <span className="text-slate-600 font-medium">{t.paymentMethod}</span>
+                                <td className="py-2.5 px-4">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`font-medium ${isRejected ? 'text-slate-400' : 'text-slate-600'}`}>{t.paymentMethod}</span>
+                                    {t.loggedByName && <span className="text-[10px] text-slate-400 font-semibold">By: {t.loggedByName}{t.loggedByRole ? ` (${t.loggedByRole})` : ''}</span>}
                                     {t.notes && <span className="text-[10px] text-slate-400 italic whitespace-normal">"{t.notes}"</span>}
+                                    {t.evidenceUrl && (
+                                      <a href={t.evidenceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold w-fit">
+                                        <ExternalLink className="w-3 h-3" /> View Receipt
+                                      </a>
+                                    )}
                                   </div>
                                 </td>
-                                <td className={`py-2 px-4 text-right font-black ${isReceived ? 'text-emerald-600' : 'text-red-600'}`}>
+                                <td className={`py-2.5 px-4 text-right font-black ${
+                                  isPending ? 'text-amber-500' :
+                                  isRejected ? 'text-slate-400 line-through' :
+                                  isReceived ? 'text-emerald-600' : 'text-red-600'
+                                }`}>
                                   {isReceived ? '+' : '-'}£{parseFloat(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>

@@ -18,6 +18,12 @@ export interface Payment {
   paymentType: 'Received from Client' | 'Sent to Vendor' | 'Margin Paid to Agent' | string;
   paidOn: string;
   notes: string | null;
+  status?: 'pending' | 'approved' | 'rejected' | string;
+  evidenceUrl?: string | null;
+  loggedByRole?: string | null;
+  loggedById?: number | null;
+  loggedByName?: string | null;
+  cardCharges?: string | null;
 }
 
 export interface Discount {

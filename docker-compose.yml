@@ -139,7 +139,7 @@ services:
       context: ./apps/web-client
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=https://api.techbarred.com
+        - VITE_API_URL=https://api.techbarred.com/api
     container_name: travel_frontend
     ports:
       - "5173:80"

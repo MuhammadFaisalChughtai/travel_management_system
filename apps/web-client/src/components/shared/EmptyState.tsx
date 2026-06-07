@@ -20,8 +20,8 @@ export function EmptyState({ icon: Icon, title, description, action, size = 'def
       className={`relative flex flex-col items-center justify-center text-center w-full mx-auto overflow-hidden ${
         transparent 
           ? 'bg-transparent border-none shadow-none' 
-          : `bg-white/85 backdrop-blur-md border border-slate-100/90 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.02)] ${isSm ? 'rounded-2xl' : 'rounded-[3rem]'}`
-      } ${isSm ? 'p-6 my-2 min-h-[160px]' : 'p-20 md:p-28 my-10 min-h-[540px]'}`}
+          : `bg-white/85 backdrop-blur-md border border-slate-100/90 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.02)] ${isSm ? 'rounded-2xl' : 'rounded-3xl'}`
+      } ${isSm ? 'p-6 my-2 min-h-[160px]' : 'p-12 md:p-16 my-6 min-h-[360px]'}`}
     >
       
       {/* Decorative premium backdrop meshes */}
@@ -47,44 +47,44 @@ export function EmptyState({ icon: Icon, title, description, action, size = 'def
           <rect width="100%" height="100%" fill="url(#grid)" mask="url(#grid-mask)" />
         </svg>
       </div>
-
+ 
       <div className="relative z-10 flex flex-col items-center max-w-xl">
         {/* Layered illustration container */}
-        <div className={`relative flex items-center justify-center ${isSm ? 'mb-3' : 'mb-10'}`}>
+        <div className={`relative flex items-center justify-center ${isSm ? 'mb-3' : 'mb-6'}`}>
           
           {/* Deep aura behind the icon */}
           <div className={`absolute rounded-full bg-gradient-to-tr from-primary-500/10 to-indigo-500/5 blur-3xl ${
-            isSm ? 'w-20 h-20' : 'w-48 h-48'
+            isSm ? 'w-20 h-20' : 'w-36 h-36'
           }`}></div>
           
           {/* Static neat background ring */}
           <div className={`absolute border border-slate-100 rounded-full ${
-            isSm ? 'w-14 h-14' : 'w-40 h-40'
+            isSm ? 'w-14 h-14' : 'w-28 h-28'
           }`}></div>
-
+ 
           {/* Core premium container */}
           <div className={`relative flex items-center justify-center rounded-[1rem] bg-gradient-to-b from-white to-slate-50 border border-slate-200/80 shadow-[0_12px_28px_rgba(0,0,0,0.02)] ${
-            isSm ? 'w-11 h-11' : 'w-32 h-32'
+            isSm ? 'w-11 h-11' : 'w-24 h-24'
           }`}>
             {/* Glossy overlay */}
-            <div className={`absolute inset-[1px] bg-gradient-to-tr from-white/0 via-white/50 to-white/90 pointer-events-none ${isSm ? 'rounded-[0.8rem]' : 'rounded-[2rem]'}`}></div>
+            <div className={`absolute inset-[1px] bg-gradient-to-tr from-white/0 via-white/50 to-white/90 pointer-events-none ${isSm ? 'rounded-[0.8rem]' : 'rounded-[1.5rem]'}`}></div>
             
             {/* The Icon */}
-            <Icon className={`${isSm ? 'w-5 h-5' : 'w-14 h-14'} text-primary-500 relative z-10 drop-shadow-[0_2px_4px_rgba(99,102,241,0.1)]`} />
+            <Icon className={`${isSm ? 'w-5 h-5' : 'w-10 h-10'} text-primary-500 relative z-10 drop-shadow-[0_2px_4px_rgba(99,102,241,0.1)]`} />
           </div>
         </div>
-
+ 
         <motion.div 
           initial={{ opacity: 0, y: 10 }} 
           animate={{ opacity: 1, y: 0 }} 
           transition={{ duration: 0.5, delay: 0.1 }}
           className="flex flex-col items-center"
         >
-          <h3 className={`${isSm ? 'text-[13px] mb-1' : 'text-2xl sm:text-3xl mb-4'} font-black text-slate-800 tracking-tight`}>
+          <h3 className={`${isSm ? 'text-[13px] mb-1' : 'text-xl sm:text-2xl mb-2'} font-black text-slate-800 tracking-tight`}>
             {title}
           </h3>
           <p className={`text-slate-500 font-semibold leading-relaxed max-w-md ${
-            isSm ? 'text-[11px] px-2 mb-2' : 'text-[14px] sm:text-[15px] mb-10'
+            isSm ? 'text-[11px] px-2 mb-2' : 'text-[13px] sm:text-[14px] mb-6'
           }`}>
             {description}
           </p>

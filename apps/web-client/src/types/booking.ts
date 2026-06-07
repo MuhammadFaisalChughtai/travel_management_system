@@ -177,6 +177,20 @@ export interface AdditionalService {
   vendorName?: string;
 }
 
+export interface BookingPriceLog {
+  id: number;
+  tenantId: number;
+  bookingId: number;
+  serviceType: string;
+  serviceName: string;
+  action: 'ADD' | 'UPDATE' | string;
+  oldPrice: string;
+  newPrice: string;
+  loggedByName: string;
+  loggedById: number | null;
+  createdAt: string;
+}
+
 export interface BookingDetail {
   id: number;
   bookingReference: string;
@@ -204,4 +218,6 @@ export interface BookingDetail {
   refunds?: Refund[];
   marginStatus?: string;
   agentId?: number | null;
+  priceLogs?: BookingPriceLog[];
 }
+

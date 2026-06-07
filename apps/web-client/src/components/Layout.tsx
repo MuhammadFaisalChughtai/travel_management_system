@@ -7,6 +7,61 @@ import { useEffect, useState, useRef } from 'react';
 import { api } from '../api/axios';
 import toast from 'react-hot-toast';
 
+export function formatPendingNotes(notes: string | null | undefined): string {
+  if (!notes) return 'No description provided.';
+  
+  if (notes.startsWith('[PENDING_VENDOR_PAYMENT] ')) {
+    try {
+      const jsonStr = notes.replace('[PENDING_VENDOR_PAYMENT] ', '');
+      const data = JSON.parse(jsonStr);
+      let desc = `Vendor Payment of £${Number(data.amount).toFixed(2)} to ${data.vendorName || 'Unknown Vendor'}.`;
+      if (data.flightPnr) desc += ` PNR: ${data.flightPnr}.`;
+      if (data.notes) desc += ` (Notes: ${data.notes})`;
+      return desc;
+    } catch (e) {
+      return notes;
+    }
+  }
+  
+  if (notes.startsWith('[PENDING_DISCOUNT] ')) {
+    try {
+      const jsonStr = notes.replace('[PENDING_DISCOUNT] ', '');
+      const data = JSON.parse(jsonStr);
+      let desc = `Discount of £${Number(data.amount).toFixed(2)} on ${data.vendorCategory || 'Service'} service (${data.serviceName || 'Unknown'}).`;
+      if (data.notes) desc += ` (Notes: ${data.notes})`;
+      return desc;
+    } catch (e) {
+      return notes;
+    }
+  }
+  
+  if (notes.startsWith('[PENDING_REFUND] ')) {
+    try {
+      const jsonStr = notes.replace('[PENDING_REFUND] ', '');
+      const data = JSON.parse(jsonStr);
+      let desc = `${data.direction || 'Refund'} of £${Number(data.amount).toFixed(2)} on ${data.vendorCategory || 'Service'} service (${data.serviceName || 'Unknown'}).`;
+      if (data.notes) desc += ` (Notes: ${data.notes})`;
+      return desc;
+    } catch (e) {
+      return notes;
+    }
+  }
+  
+  if (notes.startsWith('[PENDING_BULK_VENDOR_PAYMENT] ')) {
+    try {
+      const jsonStr = notes.replace('[PENDING_BULK_VENDOR_PAYMENT] ', '');
+      const data = JSON.parse(jsonStr);
+      let desc = `Bulk Vendor Payment of £${Number(data.amount).toFixed(2)} to ${data.vendorName || 'Unknown Vendor'}.`;
+      if (data.notes) desc += ` (Notes: ${data.notes})`;
+      return desc;
+    } catch (e) {
+      return notes;
+    }
+  }
+  
+  return notes;
+}
+
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -421,7 +476,7 @@ export function Layout() {
                   )}
                   <div className="col-span-2 border-t border-slate-100 pt-3">
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Notes / Description</span>
-                    <p className="text-slate-700 italic font-medium">{activeApproval.payment?.notes || 'No description provided.'}</p>
+                    <p className="text-slate-700 italic font-medium">{formatPendingNotes(activeApproval.payment?.notes)}</p>
                   </div>
                 </div>
 

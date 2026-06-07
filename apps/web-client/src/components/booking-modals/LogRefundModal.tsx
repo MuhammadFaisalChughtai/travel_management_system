@@ -36,7 +36,29 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
                 (form.vendorCategory as string) === 'Visa' ? booking?.visaServices || [] :
                 (form.vendorCategory as string) === 'Additional Service' ? booking?.additionalServices || [] : [];
 
-  const previousRefunds = booking?.refunds?.filter(r => r.serviceName === form.serviceName && r.direction === form.direction).reduce((acc, r) => acc + (parseFloat(r.amount) || 0), 0) || 0;
+  const parseFlightDetails = (serviceName: string | null | undefined) => {
+    if (!serviceName) return null;
+    const match = serviceName.match(/Flight:\s*(.*?)\s*-\s*([A-Za-z0-9]+)\s*\((.*?)\)/i);
+    if (match) {
+      return {
+        airline: match[1],
+        flightNo: match[2],
+        pnr: match[3]
+      };
+    }
+    return null;
+  };
+
+  const previousRefunds = booking?.refunds?.filter(r => {
+    if (r.vendorCategory === 'Flight' && form.vendorCategory === 'Flight') {
+      const f1 = parseFlightDetails(r.serviceName);
+      const f2 = parseFlightDetails(form.serviceName);
+      if (f1 && f2) {
+        return f1.flightNo === f2.flightNo && f1.pnr === f2.pnr && r.direction === form.direction;
+      }
+    }
+    return r.serviceName === form.serviceName && r.direction === form.direction;
+  }).reduce((acc, r) => acc + (parseFloat(r.amount) || 0), 0) || 0;
   
 
   if (!isOpen) return null;

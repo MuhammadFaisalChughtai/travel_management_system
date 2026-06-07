@@ -8,6 +8,7 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { Pagination } from '../components/shared/Pagination';
 import { VendorReconciliationModal } from '../components/finance/VendorReconciliationModal';
+import { formatPendingNotes } from '../components/Layout';
 
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
@@ -848,7 +849,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   )}
                   <div className="col-span-2 border-t border-slate-100 pt-3">
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Notes / Description</span>
-                    <p className="text-slate-700 italic font-medium">{activeApproval.payment?.notes || 'No description provided.'}</p>
+                    <p className="text-slate-700 italic font-medium">{formatPendingNotes(activeApproval.payment?.notes)}</p>
                   </div>
                 </div>
 

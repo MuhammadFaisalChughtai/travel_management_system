@@ -40,7 +40,7 @@ export function FlightServicesSection({ flights, onEdit, onDelete }: FlightServi
                 {flights.map((f, i) => (
                   <tr key={f.id || i} className="hover:bg-indigo-50/30 transition-colors group">
                     <td className="py-3 px-4">
-                      <div className="font-black text-slate-800">{f.airline || '—'}</div>
+                      <div className="font-black text-slate-800">{f.airline || f.vendorName || '—'}</div>
                       <div className="text-primary-600 font-bold">{f.flightNo}</div>
                     </td>
                     <td className="py-3 px-4">

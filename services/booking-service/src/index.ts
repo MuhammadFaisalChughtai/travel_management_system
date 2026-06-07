@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client-booking';
 import { requirePermission } from './middleware/rbac';
 import { Permission, Role } from './types/rbac';
+import { calculateAndSyncAgentMargin } from './utils/marginCalculator';
 
 dotenv.config();
 
@@ -49,6 +50,62 @@ const requireGatewayHeaders = (req: CustomRequest, res: Response, next: NextFunc
   req.tenantId = tenantId;
   req.isPlatformAdmin = isPlatformAdmin;
   next();
+};
+
+const getUserName = async (userId: string | number | undefined, tenantId: string | number | undefined): Promise<string> => {
+  if (!userId) return 'Agent';
+  try {
+    const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
+    const res = await fetch(`${authUrl}/users/${userId}`, {
+      headers: { 'x-tenant-id': String(tenantId) }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.name || 'Agent';
+    }
+  } catch (err) {
+    console.error('Error fetching user name from auth-service:', err);
+  }
+  return 'Agent';
+};
+
+const logPriceChange = async ({
+  tenantId,
+  bookingId,
+  serviceType,
+  serviceName,
+  action,
+  oldPrice,
+  newPrice,
+  userId,
+}: {
+  tenantId: number;
+  bookingId: number;
+  serviceType: string;
+  serviceName: string;
+  action: 'ADD' | 'UPDATE';
+  oldPrice: number;
+  newPrice: number;
+  userId: string | undefined;
+}) => {
+  try {
+    const loggedByName = await getUserName(userId, tenantId);
+    await prisma.bookingPriceLog.create({
+      data: {
+        tenantId,
+        bookingId,
+        serviceType,
+        serviceName,
+        action,
+        oldPrice,
+        newPrice,
+        loggedByName,
+        loggedById: userId ? parseInt(userId) : null
+      }
+    });
+  } catch (err) {
+    console.error('Failed to log price change:', err);
+  }
 };
 
 // RBAC authorization builder
@@ -394,7 +451,8 @@ app.get('/:id', requireGatewayHeaders, async (req: CustomRequest, res: Response)
         visaServices: { orderBy: { id: 'asc' } },
         discounts: { orderBy: { date: 'desc' } },
         refunds: { orderBy: { date: 'desc' } },
-        additionalServices: { orderBy: { id: 'asc' } }
+        additionalServices: { orderBy: { id: 'asc' } },
+        priceLogs: { orderBy: { createdAt: 'desc' } }
       }
     });
 
@@ -746,8 +804,8 @@ app.post('/:id/finalize-margin', requireGatewayHeaders, requirePermission(Permis
       return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
     }
 
-    if (booking.isLocked && req.userRole === Role.AGENT) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Booking is locked.' });
+    if (req.userRole === Role.AGENT) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Agents are not allowed to finalize margin.' });
     }
 
     if (!booking.agentName || booking.agentName === 'System / Auto' || booking.agentName === 'Direct Client') {
@@ -925,6 +983,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
     const parsedData = addPaymentSchema.parse(req.body);
     const tenantIdNumeric = parseInt(req.tenantId!);
     const isAgent = req.userRole === Role.AGENT;
+    const agentUserName = await getUserName(req.userId, req.tenantId);
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId }
@@ -966,7 +1025,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
         evidenceUrl: parsedData.evidenceUrl || null,
         loggedByRole: req.userRole || null,
         loggedById: req.userId ? parseInt(req.userId) : null,
-        loggedByName: parsedData.loggedByName || (isAgent ? 'Agent' : 'Admin'),
+        loggedByName: parsedData.loggedByName || agentUserName || (isAgent ? 'Agent' : 'Admin'),
         cardCharges: parsedData.cardCharges || 0.00
       }
     });
@@ -975,9 +1034,9 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
       // Create admin notification
       await prisma.notification.create({
         data: {
-          tenantId: tenantIdNumeric,
+          tenantId: booking.tenantId,
           title: 'Transaction Approval Request',
-          message: `${parsedData.loggedByName || 'Agent'} logged a payment of £${parsedData.amount.toFixed(2)} via ${parsedData.paymentMethod} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+          message: `${parsedData.loggedByName || agentUserName || 'Agent'} logged a payment of £${parsedData.amount.toFixed(2)} via ${parsedData.paymentMethod} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
           type: 'PAYMENT_APPROVAL',
           referenceId: String(payment.id),
           isRead: false
@@ -1176,7 +1235,9 @@ const addVendorPaymentSchema = z.object({
   notes: z.string().nullable().optional(),
   totalPaid: z.number().default(0),
   totalRefunded: z.number().default(0),
-  remainingDue: z.number().optional()
+  remainingDue: z.number().optional(),
+  evidenceUrl: z.string().nullable().optional(),
+  loggedByName: z.string().nullable().optional()
 });
 
 app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permission.CREATE_TRANSACTION), async (req: CustomRequest, res: Response) => {
@@ -1199,6 +1260,42 @@ app.post('/:id/vendor-payments', requireGatewayHeaders, requirePermission(Permis
 
     if (booking.isLocked && req.userRole === Role.AGENT) {
       return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
+    }
+
+    if (req.userRole === Role.AGENT) {
+      const agentUserName = await getUserName(req.userId, req.tenantId);
+      // Create a pending BookingPayment to represent this transaction
+      const payment = await prisma.bookingPayment.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          bookingId,
+          amount: parsedData.amount,
+          paymentMethod: 'Bank Transfer',
+          paymentType: 'Sent to Vendor',
+          paidOn: parsedData.paidOn ? parseDateWithCurrentTime(parsedData.paidOn) : new Date(),
+          notes: '[PENDING_VENDOR_PAYMENT] ' + JSON.stringify(parsedData),
+          status: 'pending',
+          evidenceUrl: parsedData.evidenceUrl || null,
+          loggedByRole: req.userRole || null,
+          loggedById: req.userId ? parseInt(req.userId) : null,
+          loggedByName: parsedData.loggedByName || agentUserName || 'Agent',
+          cardCharges: 0.00
+        }
+      });
+
+      // Create Admin Notification
+      await prisma.notification.create({
+        data: {
+          tenantId: booking.tenantId,
+          title: 'Vendor Payment Approval Request',
+          message: `${parsedData.loggedByName || agentUserName || 'Agent'} logged a vendor payment of £${parsedData.amount.toFixed(2)} to ${parsedData.vendorName} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+          type: 'PAYMENT_APPROVAL',
+          referenceId: String(payment.id),
+          isRead: false
+        }
+      });
+
+      return res.status(201).json({ message: 'Vendor payment submitted for admin approval successfully', payment });
     }
 
     const remainingDue = parsedData.remainingDue !== undefined 
@@ -1438,6 +1535,19 @@ app.post('/:id/accommodations', requireGatewayHeaders, requirePermission(Permiss
       }
     });
 
+    if (req.userRole === Role.AGENT) {
+      await logPriceChange({
+        tenantId: tenantIdNumeric,
+        bookingId,
+        serviceType: 'Accommodation',
+        serviceName: `${parsedData.hotelName} (${parsedData.vendorName})`,
+        action: 'ADD',
+        oldPrice: 0,
+        newPrice: parsedData.price || 0,
+        userId: req.userId
+      });
+    }
+
     
     if (req.body.paidToVendor) {
       await prisma.bookingPayment.create({
@@ -1497,6 +1607,19 @@ app.post('/:id/flight-services', requireGatewayHeaders, requirePermission(Permis
         date: parsedData.date ? new Date(parsedData.date) : null
       }
     });
+
+    if (req.userRole === Role.AGENT) {
+      await logPriceChange({
+        tenantId: tenantIdNumeric,
+        bookingId,
+        serviceType: 'Flight',
+        serviceName: `${parsedData.vendorName} (Flight: ${parsedData.flightNo || 'Unknown'}, PNR: ${parsedData.pnr || 'Unknown'})`,
+        action: 'ADD',
+        oldPrice: 0,
+        newPrice: Number(parsedData.price) || 0,
+        userId: req.userId
+      });
+    }
     
     if (req.body.paidToVendor) {
       await prisma.bookingPayment.create({
@@ -1547,6 +1670,19 @@ app.post('/:id/transport-services', requireGatewayHeaders, requirePermission(Per
         date: parsedData.date ? new Date(parsedData.date) : null
       }
     });
+
+    if (req.userRole === Role.AGENT) {
+      await logPriceChange({
+        tenantId: tenantIdNumeric,
+        bookingId,
+        serviceType: 'Transport',
+        serviceName: `${parsedData.vehicleType} (${parsedData.vendorName})`,
+        action: 'ADD',
+        oldPrice: 0,
+        newPrice: Number(parsedData.price) || 0,
+        userId: req.userId
+      });
+    }
     
     if (req.body.paidToVendor) {
       await prisma.bookingPayment.create({
@@ -1596,6 +1732,19 @@ app.post('/:id/visa-services', requireGatewayHeaders, requirePermission(Permissi
         isPaidToVendor: req.body.paidToVendor || req.body.isPaidToVendor || false
       }
     });
+
+    if (req.userRole === Role.AGENT) {
+      await logPriceChange({
+        tenantId: tenantIdNumeric,
+        bookingId,
+        serviceType: 'Visa',
+        serviceName: `${parsedData.visaType || 'Visa'} (${parsedData.vendorName})`,
+        action: 'ADD',
+        oldPrice: 0,
+        newPrice: Number(parsedData.price) || 0,
+        userId: req.userId
+      });
+    }
     
     if (req.body.paidToVendor) {
       await prisma.bookingPayment.create({
@@ -1636,6 +1785,41 @@ app.post('/:id/discounts', requireGatewayHeaders, requirePermission(Permission.C
 
     if (booking.isLocked && req.userRole === Role.AGENT) {
       return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
+    }
+
+    if (req.userRole === Role.AGENT) {
+      const agentUserName = await getUserName(req.userId, req.tenantId);
+      // Create a pending BookingPayment to represent this transaction
+      const payment = await prisma.bookingPayment.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          bookingId,
+          amount: parseFloat(amount),
+          paymentMethod: 'Adjustment',
+          paymentType: 'Discount',
+          paidOn: parseDateWithCurrentTime(date),
+          notes: '[PENDING_DISCOUNT] ' + JSON.stringify({ vendorCategory, serviceName, amount, notes, date }),
+          status: 'pending',
+          loggedByRole: req.userRole || null,
+          loggedById: req.userId ? parseInt(req.userId) : null,
+          loggedByName: agentUserName || 'Agent',
+          cardCharges: 0.00
+        }
+      });
+
+      // Create Admin Notification
+      await prisma.notification.create({
+        data: {
+          tenantId: booking.tenantId,
+          title: 'Discount Approval Request',
+          message: `${agentUserName || 'Agent'} logged a discount of £${parseFloat(amount).toFixed(2)} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+          type: 'PAYMENT_APPROVAL',
+          referenceId: String(payment.id),
+          isRead: false
+        }
+      });
+
+      return res.status(201).json({ message: 'Discount submitted for admin approval successfully', payment });
     }
 
     const discount = await (prisma as any).bookingDiscount.create({
@@ -1705,6 +1889,41 @@ app.post('/:id/refunds', requireGatewayHeaders, requirePermission(Permission.CRE
 
     if (booking.isLocked && req.userRole === Role.AGENT) {
       return res.status(403).json({ error: 'Forbidden', message: 'This booking is locked.' });
+    }
+
+    if (req.userRole === Role.AGENT) {
+      const agentUserName = await getUserName(req.userId, req.tenantId);
+      // Create a pending BookingPayment to represent this transaction
+      const payment = await prisma.bookingPayment.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          bookingId,
+          amount: parseFloat(amount),
+          paymentMethod: 'Refund',
+          paymentType: direction, // 'Refund to Client' | 'Refund from Vendor'
+          paidOn: parseDateWithCurrentTime(date),
+          notes: '[PENDING_REFUND] ' + JSON.stringify({ direction, vendorCategory, serviceName, amount, notes, date }),
+          status: 'pending',
+          loggedByRole: req.userRole || null,
+          loggedById: req.userId ? parseInt(req.userId) : null,
+          loggedByName: agentUserName || 'Agent',
+          cardCharges: 0.00
+        }
+      });
+
+      // Create Admin Notification
+      await prisma.notification.create({
+        data: {
+          tenantId: booking.tenantId,
+          title: 'Refund Approval Request',
+          message: `${agentUserName || 'Agent'} logged a refund (${direction}) of £${parseFloat(amount).toFixed(2)} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+          type: 'PAYMENT_APPROVAL',
+          referenceId: String(payment.id),
+          isRead: false
+        }
+      });
+
+      return res.status(201).json({ message: 'Refund submitted for admin approval successfully', payment });
     }
 
     const refund = await (prisma as any).bookingRefund.create({
@@ -1834,6 +2053,19 @@ app.post('/:id/additional-services', requireGatewayHeaders, requirePermission(Pe
       }
     });
 
+    if (req.userRole === Role.AGENT) {
+      await logPriceChange({
+        tenantId: tenantIdNumeric,
+        bookingId,
+        serviceType: 'Additional',
+        serviceName: serviceName + (vendorName ? ` (${vendorName})` : ''),
+        action: 'ADD',
+        oldPrice: 0,
+        newPrice: parseFloat(charges) || 0,
+        userId: req.userId
+      });
+    }
+
     // Update total price of the booking
     await prisma.booking.update({
       where: { id: bookingId },
@@ -1855,13 +2087,17 @@ app.post('/:id/additional-services', requireGatewayHeaders, requirePermission(Pe
 
 // --- EDIT (PATCH) ENDPOINTS ---
 
-// Edit Accommodation
-app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-
+    const existing = await prisma.accommodationService.findUnique({
+      where: { id: serviceId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Not Found', message: 'Accommodation service not found' });
+    }
     
     const updateData: any = {};
     if (parsedData.vendorName !== undefined) updateData.vendorName = parsedData.vendorName;
@@ -1890,6 +2126,24 @@ app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, requirePermis
       where: { id: serviceId },
       data: updateData
     });
+
+    if (req.userRole === Role.AGENT && parsedData.price !== undefined) {
+      const oldPrice = Number(existing.price);
+      const newPrice = parseFloat(parsedData.price) || 0;
+      if (Math.abs(oldPrice - newPrice) > 0.01) {
+        await logPriceChange({
+          tenantId: parseInt(req.tenantId!),
+          bookingId: existing.bookingId,
+          serviceType: 'Accommodation',
+          serviceName: `${existing.hotelName} (${existing.vendorName})`,
+          action: 'UPDATE',
+          oldPrice,
+          newPrice,
+          userId: req.userId
+        });
+      }
+    }
+
     res.json({ accommodation: updated });
   } catch (error) {
     console.error(error);
@@ -1897,14 +2151,18 @@ app.patch('/:id/accommodations/:serviceId', requireGatewayHeaders, requirePermis
   }
 });
 
-// Edit Flight
-app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-
-
+    const existing = await prisma.flightService.findUnique({
+      where: { id: serviceId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Not Found', message: 'Flight service not found' });
+    }
+    
     const updateData: any = {};
     if (parsedData.vendorName !== undefined) updateData.vendorName = parsedData.vendorName;
     if (parsedData.flightNo !== undefined) updateData.flightNo = parsedData.flightNo;
@@ -1930,6 +2188,24 @@ app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, requirePermi
       where: { id: serviceId },
       data: updateData
     });
+
+    if (req.userRole === Role.AGENT && parsedData.price !== undefined) {
+      const oldPrice = Number(existing.price);
+      const newPrice = parseFloat(parsedData.price) || 0;
+      if (Math.abs(oldPrice - newPrice) > 0.01) {
+        await logPriceChange({
+          tenantId: parseInt(req.tenantId!),
+          bookingId: existing.bookingId,
+          serviceType: 'Flight',
+          serviceName: `${existing.vendorName} (Flight: ${existing.flightNo}, PNR: ${existing.pnr})`,
+          action: 'UPDATE',
+          oldPrice,
+          newPrice,
+          userId: req.userId
+        });
+      }
+    }
+
     res.json({ flight: updated });
   } catch (error) {
     console.error(error);
@@ -1937,14 +2213,18 @@ app.patch('/:id/flight-services/:serviceId', requireGatewayHeaders, requirePermi
   }
 });
 
-// Edit Transport
-app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-
-
+    const existing = await prisma.transportService.findUnique({
+      where: { id: serviceId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Not Found', message: 'Transport service not found' });
+    }
+    
     const updateData: any = {};
     if (parsedData.vendorName !== undefined) updateData.vendorName = parsedData.vendorName;
     if (parsedData.vehicleType !== undefined) updateData.vehicleType = parsedData.vehicleType;
@@ -1968,6 +2248,24 @@ app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, requirePe
       where: { id: serviceId },
       data: updateData
     });
+
+    if (req.userRole === Role.AGENT && parsedData.price !== undefined) {
+      const oldPrice = Number(existing.price);
+      const newPrice = parseFloat(parsedData.price) || 0;
+      if (Math.abs(oldPrice - newPrice) > 0.01) {
+        await logPriceChange({
+          tenantId: parseInt(req.tenantId!),
+          bookingId: existing.bookingId,
+          serviceType: 'Transport',
+          serviceName: `${existing.vehicleType} (${existing.vendorName})`,
+          action: 'UPDATE',
+          oldPrice,
+          newPrice,
+          userId: req.userId
+        });
+      }
+    }
+
     res.json({ transport: updated });
   } catch (error) {
     console.error(error);
@@ -1975,14 +2273,18 @@ app.patch('/:id/transport-services/:serviceId', requireGatewayHeaders, requirePe
   }
 });
 
-// Edit Visa
-app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-
-
+    const existing = await prisma.visaService.findUnique({
+      where: { id: serviceId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Not Found', message: 'Visa service not found' });
+    }
+    
     const updateData: any = {};
     if (parsedData.vendorName !== undefined) updateData.vendorName = parsedData.vendorName;
     if (parsedData.passportNumber !== undefined) updateData.passportNumber = parsedData.passportNumber;
@@ -2003,6 +2305,24 @@ app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, requirePermiss
       where: { id: serviceId },
       data: updateData
     });
+
+    if (req.userRole === Role.AGENT && parsedData.price !== undefined) {
+      const oldPrice = Number(existing.price);
+      const newPrice = parseFloat(parsedData.price) || 0;
+      if (Math.abs(oldPrice - newPrice) > 0.01) {
+        await logPriceChange({
+          tenantId: parseInt(req.tenantId!),
+          bookingId: existing.bookingId,
+          serviceType: 'Visa',
+          serviceName: `${existing.visaType || 'Visa'} (${existing.vendorName})`,
+          action: 'UPDATE',
+          oldPrice,
+          newPrice,
+          userId: req.userId
+        });
+      }
+    }
+
     res.json({ visa: updated });
   } catch (error) {
     console.error(error);
@@ -2010,14 +2330,18 @@ app.patch('/:id/visa-services/:serviceId', requireGatewayHeaders, requirePermiss
   }
 });
 
-// Edit Additional Service
-app.patch('/:id/additional-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req, res) => {
+app.patch('/:id/additional-services/:serviceId', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
   try {
     const serviceId = parseInt(req.params.serviceId);
     const parsedData = req.body;
     
-
-
+    const existing = await (prisma as any).additionalService.findUnique({
+      where: { id: serviceId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Not Found', message: 'Additional service not found' });
+    }
+    
     const updateData: any = {};
     if (parsedData.serviceName !== undefined) updateData.serviceName = parsedData.serviceName;
     if (parsedData.vendorName !== undefined) updateData.vendorName = parsedData.vendorName || null;
@@ -2030,6 +2354,24 @@ app.patch('/:id/additional-services/:serviceId', requireGatewayHeaders, requireP
       where: { id: serviceId },
       data: updateData
     });
+
+    if (req.userRole === Role.AGENT && parsedData.charges !== undefined) {
+      const oldPrice = Number(existing.charges);
+      const newPrice = parseFloat(parsedData.charges) || 0;
+      if (Math.abs(oldPrice - newPrice) > 0.01) {
+        await logPriceChange({
+          tenantId: parseInt(req.tenantId!),
+          bookingId: existing.bookingId,
+          serviceType: 'Additional',
+          serviceName: `${existing.serviceName}${existing.vendorName ? ` (${existing.vendorName})` : ''}`,
+          action: 'UPDATE',
+          oldPrice,
+          newPrice,
+          userId: req.userId
+        });
+      }
+    }
+
     res.json({ additionalService: updated });
   } catch (error) {
     console.error(error);
@@ -2338,6 +2680,104 @@ app.post('/ledger/vendor-payment', requireGatewayHeaders, requirePermission(Perm
 
     if (!vendorName || remainingAmount <= 0) {
       return res.status(400).json({ error: 'Invalid input parameters' });
+    }
+
+    if (req.userRole === Role.AGENT) {
+      let bookingIdToUse: number | null = null;
+      
+      // Try to get booking ID from allocations
+      if (manualAllocations && Array.isArray(manualAllocations) && manualAllocations.length > 0) {
+        const firstAlloc = manualAllocations[0];
+        if (firstAlloc && firstAlloc.bookingId) {
+          bookingIdToUse = parseInt(firstAlloc.bookingId);
+        }
+      }
+
+      // If no allocations or no booking ID found, search unpaid services for this vendor
+      if (!bookingIdToUse) {
+        const unpaidHotel = await prisma.accommodationService.findFirst({
+          where: { tenantId, vendorName, isPaidToVendor: false }
+        });
+        if (unpaidHotel) bookingIdToUse = unpaidHotel.bookingId;
+        else {
+          const unpaidFlight = await prisma.flightService.findFirst({
+            where: { tenantId, vendorName, isPaidToVendor: false }
+          });
+          if (unpaidFlight) bookingIdToUse = unpaidFlight.bookingId;
+          else {
+            const unpaidTransport = await prisma.transportService.findFirst({
+              where: { tenantId, vendorName, isPaidToVendor: false }
+            });
+            if (unpaidTransport) bookingIdToUse = unpaidTransport.bookingId;
+            else {
+              const unpaidVisa = await prisma.visaService.findFirst({
+                where: { tenantId, vendorName, isPaidToVendor: false }
+              });
+              if (unpaidVisa) bookingIdToUse = unpaidVisa.bookingId;
+              else {
+                const unpaidAdditional = await prisma.additionalService.findFirst({
+                  where: { tenantId, vendorName, isPaidToVendor: false }
+                });
+                if (unpaidAdditional) bookingIdToUse = unpaidAdditional.bookingId;
+              }
+            }
+          }
+        }
+      }
+
+      // If still no booking found, fallback to any booking in the tenant
+      if (!bookingIdToUse) {
+        const fallbackBooking = await prisma.booking.findFirst({
+          where: { tenantId }
+        });
+        if (fallbackBooking) {
+          bookingIdToUse = fallbackBooking.id;
+        }
+      }
+
+      if (!bookingIdToUse) {
+        return res.status(400).json({ error: 'Bad Request', message: 'No bookings found to link vendor payment request.' });
+      }
+
+      const agentUserName = await getUserName(req.userId, req.tenantId);
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingIdToUse }
+      });
+      if (!booking) {
+        return res.status(400).json({ error: 'Bad Request', message: 'Linked booking not found.' });
+      }
+
+      // Create a pending BookingPayment to represent this bulk vendor payment
+      const payment = await prisma.bookingPayment.create({
+        data: {
+          tenantId: booking.tenantId,
+          bookingId: bookingIdToUse,
+          amount: cashAmount,
+          paymentMethod: paymentMethod || 'Bank Transfer',
+          paymentType: 'Sent to Vendor',
+          paidOn: paidOn ? parseDateWithCurrentTime(paidOn) : new Date(),
+          notes: '[PENDING_BULK_VENDOR_PAYMENT] ' + JSON.stringify(req.body),
+          status: 'pending',
+          loggedByRole: req.userRole || null,
+          loggedById: req.userId ? parseInt(req.userId) : null,
+          loggedByName: agentUserName || 'Agent',
+          cardCharges: 0.00
+        }
+      });
+
+      // Create Admin Notification
+      await prisma.notification.create({
+        data: {
+          tenantId: booking.tenantId,
+          title: 'Bulk Vendor Payment Approval Request',
+          message: `${agentUserName || 'Agent'} logged a bulk vendor payment of £${cashAmount.toFixed(2)} to ${vendorName}. Please review and approve/reject.`,
+          type: 'PAYMENT_APPROVAL',
+          referenceId: String(payment.id),
+          isRead: false
+        }
+      });
+
+      return res.status(201).json({ message: 'Bulk vendor payment submitted for admin approval successfully', payment });
     }
 
     // Find or create Vendor LedgerAccount
@@ -2950,48 +3390,33 @@ app.post('/finance/payments/:paymentId/approve', requireGatewayHeaders, authoriz
 
     const booking = payment.booking;
 
-    // 1. Update status to approved
+    // Resolve who is approving this
+    const approvedByName = await getUserName(req.userId, req.tenantId);
+
+    // 1. Update status to approved + stamp who approved it
     const updatedPayment = await prisma.bookingPayment.update({
       where: { id: paymentId },
-      data: { status: 'approved' }
+      data: { status: 'approved', loggedByName: `Approved by ${approvedByName}` }
     });
 
     // 2. Ledger integration (identical to approved branch in POST /:id/payments)
-    if (payment.paymentType === 'Sent to Vendor') {
-      const vendorName = 'General Vendors';
-      let vendorAccount = await prisma.ledgerAccount.findFirst({
-        where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
-      });
-      if (!vendorAccount) {
-        vendorAccount = await prisma.ledgerAccount.create({
-          data: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
-        });
-      }
+    const notesStr = payment.notes || '';
+    if (notesStr.startsWith('[PENDING_DISCOUNT] ')) {
+      const payloadStr = notesStr.substring('[PENDING_DISCOUNT] '.length);
+      const payload = JSON.parse(payloadStr);
 
-      const mainTx = await prisma.ledgerTransaction.create({
+      const discount = await prisma.bookingDiscount.create({
         data: {
           tenantId: tenantIdNumeric,
-          transactionDate: payment.paidOn,
-          referenceNumber: booking.bookingReference,
-          description: `Vendor Payment via ${payment.paymentMethod}. ${payment.notes || ''}`,
-          type: 'PAYMENT'
+          bookingId: payment.bookingId,
+          vendorCategory: payload.vendorCategory,
+          serviceName: payload.serviceName || null,
+          amount: parseFloat(payload.amount),
+          notes: payload.notes || null,
+          date: parseDateWithCurrentTime(payload.date)
         }
       });
 
-      await prisma.ledgerEntry.create({
-        data: {
-          transactionId: mainTx.id,
-          accountId: vendorAccount.id,
-          debitAmount: payment.amount,
-          creditAmount: 0
-        }
-      });
-
-      await prisma.ledgerAccount.update({
-        where: { id: vendorAccount.id },
-        data: { balance: { decrement: payment.amount } }
-      });
-    } else if (payment.paymentType === 'Received from Client') {
       const customerName = booking.agentName || 'Direct Client';
       let customerAccount = await prisma.ledgerAccount.findFirst({
         where: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
@@ -3002,55 +3427,663 @@ app.post('/finance/payments/:paymentId/approve', requireGatewayHeaders, authoriz
         });
       }
 
-      const mainTx = await prisma.ledgerTransaction.create({
+      const tx = await prisma.ledgerTransaction.create({
         data: {
           tenantId: tenantIdNumeric,
-          transactionDate: payment.paidOn,
+          transactionDate: parseDateWithCurrentTime(payload.date),
           referenceNumber: booking.bookingReference,
-          description: `Client Payment via ${payment.paymentMethod}. ${payment.notes || ''}`,
+          description: `Discount applied to ${payload.vendorCategory} - ${payload.serviceName || ''}. ${payload.notes || ''}`,
+          type: 'DISCOUNT'
+        }
+      });
+
+      await prisma.ledgerEntry.create({
+        data: { transactionId: tx.id, accountId: customerAccount.id, debitAmount: 0, creditAmount: parseFloat(payload.amount) }
+      });
+      await prisma.ledgerAccount.update({
+        where: { id: customerAccount.id },
+        data: { balance: { decrement: parseFloat(payload.amount) } }
+      });
+
+      await prisma.bookingPayment.update({
+        where: { id: paymentId },
+        data: { notes: payload.notes || 'Discount approved' }
+      });
+      
+      // Auto recalculate agent margin
+      await calculateAndSyncAgentMargin(payment.bookingId);
+    } else if (notesStr.startsWith('[PENDING_REFUND] ')) {
+      const payloadStr = notesStr.substring('[PENDING_REFUND] '.length);
+      const payload = JSON.parse(payloadStr);
+
+      const refund = await prisma.bookingRefund.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          bookingId: payment.bookingId,
+          direction: payload.direction,
+          vendorCategory: payload.vendorCategory,
+          serviceName: payload.serviceName || null,
+          amount: parseFloat(payload.amount),
+          notes: payload.notes || null,
+          date: parseDateWithCurrentTime(payload.date)
+        }
+      });
+
+      const tx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          transactionDate: parseDateWithCurrentTime(payload.date),
+          referenceNumber: booking.bookingReference,
+          description: `${payload.direction} for ${payload.vendorCategory} - ${payload.serviceName || ''}. ${payload.notes || ''}`,
+          type: 'REFUND'
+        }
+      });
+
+      if (payload.direction === 'Refund to Client') {
+        const customerName = booking.agentName || 'Direct Client';
+        let customerAccount = await prisma.ledgerAccount.findFirst({
+          where: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+        });
+        if (!customerAccount) {
+          customerAccount = await prisma.ledgerAccount.create({
+            data: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+          });
+        }
+        await prisma.ledgerEntry.create({
+          data: { transactionId: tx.id, accountId: customerAccount.id, debitAmount: parseFloat(payload.amount), creditAmount: 0 }
+        });
+        await prisma.ledgerAccount.update({
+          where: { id: customerAccount.id },
+          data: { balance: { increment: parseFloat(payload.amount) } }
+        });
+      } else {
+        const vendorName = payload.vendorCategory || 'General Vendors';
+        let vendorAccount = await prisma.ledgerAccount.findFirst({
+          where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+        });
+        if (!vendorAccount) {
+          vendorAccount = await prisma.ledgerAccount.create({
+            data: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+          });
+        }
+        await prisma.ledgerEntry.create({
+          data: { transactionId: tx.id, accountId: vendorAccount.id, debitAmount: 0, creditAmount: parseFloat(payload.amount) }
+        });
+        await prisma.ledgerAccount.update({
+          where: { id: vendorAccount.id },
+          data: { balance: { increment: parseFloat(payload.amount) } }
+        });
+      }
+
+      await prisma.bookingPayment.update({
+        where: { id: paymentId },
+        data: { notes: payload.notes || 'Refund approved' }
+      });
+      
+      // Auto recalculate agent margin
+      await calculateAndSyncAgentMargin(payment.bookingId);
+    } else if (notesStr.startsWith('[PENDING_VENDOR_PAYMENT] ')) {
+      const payloadStr = notesStr.substring('[PENDING_VENDOR_PAYMENT] '.length);
+      const payload = JSON.parse(payloadStr);
+
+      const remainingDue = payload.remainingDue !== undefined 
+        ? payload.remainingDue 
+        : (payload.amount - payload.totalPaid);
+
+      // Create Vendor Payment
+      const vendorPayment = await prisma.vendorPayment.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          bookingId: payment.bookingId,
+          vendorName: payload.vendorName,
+          amount: payload.amount,
+          paymentStatus: payload.paymentStatus,
+          paidOn: payload.paidOn ? parseDateWithCurrentTime(payload.paidOn) : null,
+          flightPnr: payload.flightPnr || null,
+          issueDate: payload.issueDate ? new Date(payload.issueDate) : null,
+          reservationNumber: payload.reservationNumber || null,
+          notes: payload.notes || null,
+          totalPaid: payload.totalPaid,
+          totalRefunded: payload.totalRefunded,
+          remainingDue
+        }
+      });
+
+      // Ledger Integration
+      let vendorAccount = await prisma.ledgerAccount.findFirst({
+        where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: payload.vendorName }
+      });
+      if (!vendorAccount) {
+        vendorAccount = await prisma.ledgerAccount.create({
+          data: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: payload.vendorName }
+        });
+      }
+
+      const tx = await prisma.ledgerTransaction.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          transactionDate: payload.paidOn ? parseDateWithCurrentTime(payload.paidOn) : new Date(),
+          referenceNumber: booking.bookingReference,
+          description: `Vendor Payment to ${payload.vendorName}. ${payload.notes || ''}`,
           type: 'PAYMENT'
         }
       });
 
       await prisma.ledgerEntry.create({
         data: {
-          transactionId: mainTx.id,
-          accountId: customerAccount.id,
-          debitAmount: 0,
-          creditAmount: payment.amount
+          transactionId: tx.id,
+          accountId: vendorAccount.id,
+          debitAmount: payload.amount,
+          creditAmount: 0
         }
       });
-
       await prisma.ledgerAccount.update({
-        where: { id: customerAccount.id },
-        data: { balance: { decrement: payment.amount } }
+        where: { id: vendorAccount.id },
+        data: { balance: { decrement: payload.amount } }
       });
 
-      // Credit card charges handling
-      if (payment.cardCharges && Number(payment.cardCharges) > 0) {
-        const feeTx = await prisma.ledgerTransaction.create({
+      // FIFO Service Allocation
+      const fetchServices = async (model: any, type: string) => {
+        const svcs = await model.findMany({
+          where: { tenantId: tenantIdNumeric, bookingId: payment.bookingId, vendorName: payload.vendorName, isPaidToVendor: false },
+          orderBy: { createdAt: 'asc' }
+        });
+        return svcs.map((s: any) => ({ ...s, serviceType: type }));
+      };
+
+      const flights = await fetchServices(prisma.flightService, 'FLIGHT');
+      const hotels = await fetchServices(prisma.accommodationService, 'HOTEL');
+      const transports = await fetchServices(prisma.transportService, 'TRANSPORT');
+      const visas = await fetchServices(prisma.visaService, 'VISA');
+      const additionals = await fetchServices(prisma.additionalService, 'ADDITIONAL');
+
+      let allUnpaid = [...flights, ...hotels, ...transports, ...visas, ...additionals].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      const allocations = [];
+      let remainingAmountToAllocate = parseFloat(payload.amount as any);
+
+      for (const service of allUnpaid) {
+        if (remainingAmountToAllocate <= 0) break;
+
+        const previousAllocations = await prisma.bookingAllocation.aggregate({
+          where: { tenantId: tenantIdNumeric, serviceType: service.serviceType, serviceId: service.id },
+          _sum: { allocatedAmount: true }
+        });
+        
+        const totalCost = parseFloat(service.price) || 0;
+        const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
+        const serviceRemainingDue = totalCost - alreadyAllocated;
+
+        if (serviceRemainingDue > 0) {
+          const allocateAmt = Math.min(serviceRemainingDue, remainingAmountToAllocate);
+          
+          allocations.push({
+            tenantId: tenantIdNumeric,
+            transactionId: tx.id,
+            bookingId: payment.bookingId,
+            serviceType: service.serviceType,
+            serviceId: service.id,
+            allocatedAmount: allocateAmt
+          });
+
+          remainingAmountToAllocate -= allocateAmt;
+
+          if (allocateAmt >= serviceRemainingDue) {
+            const updateData = { isPaidToVendor: true };
+            switch(service.serviceType) {
+              case 'FLIGHT': await prisma.flightService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'HOTEL': await prisma.accommodationService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'TRANSPORT': await prisma.transportService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'VISA': await prisma.visaService.update({ where: { id: service.id }, data: updateData }); break;
+              case 'ADDITIONAL': await prisma.additionalService.update({ where: { id: service.id }, data: updateData }); break;
+            }
+          }
+        }
+      }
+
+      if (allocations.length > 0) {
+        await prisma.bookingAllocation.createMany({ data: allocations });
+      }
+
+      await prisma.bookingPayment.update({
+        where: { id: paymentId },
+        data: { notes: payload.notes || 'Vendor Payment approved' }
+      });
+      
+      // Auto recalculate agent margin
+      await calculateAndSyncAgentMargin(payment.bookingId);
+    } else if (notesStr.startsWith('[PENDING_BULK_VENDOR_PAYMENT] ')) {
+      const payloadStr = notesStr.substring('[PENDING_BULK_VENDOR_PAYMENT] '.length);
+      const payload = JSON.parse(payloadStr);
+
+      const tenantId = tenantIdNumeric;
+      const { vendorName, amount, paymentMethod, paidOn, notes: userNotes, allocations: manualAllocations, walletCreditUsed = 0 } = payload;
+      
+      const cashAmount = parseFloat(amount) || 0;
+      const creditUsedAmount = parseFloat(walletCreditUsed) || 0;
+      let remainingAmount = cashAmount + creditUsedAmount;
+
+      let account = await prisma.ledgerAccount.findFirst({
+        where: { tenantId, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+      });
+      if (!account) {
+        account = await prisma.ledgerAccount.create({
+          data: { tenantId, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+        });
+      }
+
+      const allocations: any[] = [];
+
+      // Process manual allocations
+      if (manualAllocations && Array.isArray(manualAllocations) && manualAllocations.length > 0) {
+        const enrichedAllocations = [];
+        for (const alloc of manualAllocations) {
+          const { bookingId, serviceId, serviceType, amountApplied } = alloc;
+          const parsedAmount = parseFloat(amountApplied);
+          if (isNaN(parsedAmount) || parsedAmount <= 0) continue;
+
+          let serviceModel;
+          switch(serviceType) {
+            case 'FLIGHT': serviceModel = prisma.flightService; break;
+            case 'HOTEL': serviceModel = prisma.accommodationService; break;
+            case 'TRANSPORT': serviceModel = prisma.transportService; break;
+            case 'VISA': serviceModel = prisma.visaService; break;
+            case 'ADDITIONAL': serviceModel = prisma.additionalService; break;
+            default: continue;
+          }
+
+          const service = await (serviceModel as any).findUnique({
+            where: { id: serviceId },
+            include: { booking: true }
+          });
+
+          if (!service || service.tenantId !== tenantId) continue;
+
+          enrichedAllocations.push({
+            bookingId,
+            serviceId,
+            serviceType,
+            requestedAmount: parsedAmount,
+            service,
+            booking: service.booking,
+            serviceModel
+          });
+        }
+
+        enrichedAllocations.sort((a, b) => {
+          const aDate = new Date(a.booking?.createdAt || a.booking?.date || 0).getTime();
+          const bDate = new Date(b.booking?.createdAt || b.booking?.date || 0).getTime();
+          if (aDate !== bDate) return aDate - bDate;
+          
+          const aSvcDate = new Date(a.service?.createdAt || 0).getTime();
+          const bSvcDate = new Date(b.service?.createdAt || 0).getTime();
+          return aSvcDate - bSvcDate;
+        });
+
+        let tempRemaining = remainingAmount;
+        for (const item of enrichedAllocations) {
+          if (tempRemaining <= 0) break;
+
+          const previousAllocations = await prisma.bookingAllocation.aggregate({
+            where: { tenantId, serviceType: item.serviceType, serviceId: item.serviceId },
+            _sum: { allocatedAmount: true }
+          });
+          
+          const totalCost = parseFloat(item.service.price || item.service.charges || 0);
+          const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
+          const serviceRemainingDue = totalCost - alreadyAllocated;
+
+          if (serviceRemainingDue > 0) {
+            const allocateAmt = Math.min(serviceRemainingDue, tempRemaining, item.requestedAmount);
+            if (allocateAmt <= 0) continue;
+
+            allocations.push({
+              tenantId,
+              bookingId: item.bookingId,
+              serviceType: item.serviceType,
+              serviceId: item.serviceId,
+              allocatedAmount: allocateAmt
+            });
+
+            tempRemaining -= allocateAmt;
+
+            if (allocateAmt >= serviceRemainingDue) {
+              await (item.serviceModel as any).update({
+                where: { id: item.serviceId },
+                data: { isPaidToVendor: true }
+              });
+            }
+          }
+        }
+      } else {
+        // FIFO Fallback
+        const fetchServices = async (model: any, type: string) => {
+          const svcs = await model.findMany({
+            where: { tenantId, vendorName, isPaidToVendor: false },
+            orderBy: { createdAt: 'asc' },
+            include: { booking: true }
+          });
+          return svcs.map((s: any) => ({ ...s, serviceType: type }));
+        };
+
+        const flights = await fetchServices(prisma.flightService, 'FLIGHT');
+        const hotels = await fetchServices(prisma.accommodationService, 'HOTEL');
+        const transports = await fetchServices(prisma.transportService, 'TRANSPORT');
+        const visas = await fetchServices(prisma.visaService, 'VISA');
+        const additionals = await fetchServices(prisma.additionalService, 'ADDITIONAL');
+
+        let allUnpaid = [...flights, ...hotels, ...transports, ...visas, ...additionals].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+
+        let tempRemaining = remainingAmount;
+        for (const service of allUnpaid) {
+          if (tempRemaining <= 0) break;
+
+          const previousAllocations = await prisma.bookingAllocation.aggregate({
+            where: { tenantId, serviceType: service.serviceType, serviceId: service.id },
+            _sum: { allocatedAmount: true }
+          });
+          
+          const totalCost = parseFloat(service.price || service.charges || 0);
+          const alreadyAllocated = parseFloat(previousAllocations?._sum?.allocatedAmount as any) || 0;
+          const serviceRemainingDue = totalCost - alreadyAllocated;
+
+          if (serviceRemainingDue > 0) {
+            const allocateAmt = Math.min(serviceRemainingDue, tempRemaining);
+            allocations.push({
+              tenantId,
+              bookingId: service.bookingId,
+              serviceType: service.serviceType,
+              serviceId: service.id,
+              allocatedAmount: allocateAmt
+            });
+            tempRemaining -= allocateAmt;
+
+            if (allocateAmt >= serviceRemainingDue) {
+              const updateData = { isPaidToVendor: true };
+              switch(service.serviceType) {
+                case 'FLIGHT': await prisma.flightService.update({ where: { id: service.id }, data: updateData }); break;
+                case 'HOTEL': await prisma.accommodationService.update({ where: { id: service.id }, data: updateData }); break;
+                case 'TRANSPORT': await prisma.transportService.update({ where: { id: service.id }, data: updateData }); break;
+                case 'VISA': await prisma.visaService.update({ where: { id: service.id }, data: updateData }); break;
+                case 'ADDITIONAL': await prisma.additionalService.update({ where: { id: service.id }, data: updateData }); break;
+              }
+            }
+          }
+        }
+      }
+
+      const totalAllocation = allocations.reduce((sum, a) => sum + a.allocatedAmount, 0);
+      const allocatedCash = Math.max(0, totalAllocation - creditUsedAmount);
+      const overpaidAmount = Math.max(0, cashAmount - allocatedCash);
+
+      const uniqueBookingIds = Array.from(new Set(allocations.map(a => a.bookingId)));
+      const bookings = await prisma.booking.findMany({
+        where: { id: { in: uniqueBookingIds } },
+        select: { id: true, bookingReference: true }
+      });
+      const uniqueBookingRefs = Array.from(new Set(bookings.map(b => b.bookingReference)));
+      const bookingRefsStr = uniqueBookingRefs.join(', ');
+
+      let mainTxId: number | null = null;
+
+      if (creditUsedAmount > 0) {
+        const creditTx = await prisma.ledgerTransaction.create({
+          data: {
+            tenantId,
+            transactionDate: parseDateWithCurrentTime(paidOn),
+            description: `Wallet credit drawdown applied to bookings. Allocated to ${allocations.length} service(s) on booking(s): ${bookingRefsStr}`,
+            type: 'PAYMENT',
+            referenceNumber: bookingRefsStr || null
+          }
+        });
+        await prisma.ledgerEntry.create({
+          data: {
+            transactionId: creditTx.id,
+            accountId: account.id,
+            debitAmount: 0,
+            creditAmount: creditUsedAmount
+          }
+        });
+      }
+
+      if (allocatedCash > 0) {
+        const notesSuffix = creditUsedAmount > 0 ? ` (£${creditUsedAmount.toFixed(2)} applied from Vendor Wallet)` : '';
+        const cashTx = await prisma.ledgerTransaction.create({
+          data: {
+            tenantId,
+            transactionDate: parseDateWithCurrentTime(paidOn),
+            description: `Bulk payment to vendor ${vendorName}. Allocated to ${allocations.length} service(s) on booking(s): ${bookingRefsStr}.${notesSuffix} ${userNotes || ''}`,
+            type: 'PAYMENT',
+            referenceNumber: bookingRefsStr || null
+          }
+        });
+        mainTxId = cashTx.id;
+
+        await prisma.ledgerEntry.create({
+          data: {
+            transactionId: cashTx.id,
+            accountId: account.id,
+            debitAmount: allocatedCash,
+            creditAmount: 0
+          }
+        });
+      }
+
+      if (overpaidAmount > 0) {
+        const overTx = await prisma.ledgerTransaction.create({
+          data: {
+            tenantId,
+            transactionDate: parseDateWithCurrentTime(paidOn),
+            description: `Overpayment hold for future use (Vendor Wallet credit) for ${vendorName}. ${userNotes || ''}`,
+            type: 'PAYMENT',
+            referenceNumber: bookingRefsStr || null
+          }
+        });
+        if (!mainTxId) mainTxId = overTx.id;
+
+        await prisma.ledgerEntry.create({
+          data: {
+            transactionId: overTx.id,
+            accountId: account.id,
+            debitAmount: overpaidAmount,
+            creditAmount: 0
+          }
+        });
+      }
+
+      if (!mainTxId && cashAmount > 0 && totalAllocation === 0) {
+        const unallocatedTx = await prisma.ledgerTransaction.create({
+          data: {
+            tenantId,
+            transactionDate: parseDateWithCurrentTime(paidOn),
+            description: `Vendor Wallet Credit / Prepayment to ${vendorName}. ${userNotes || ''}`,
+            type: 'PAYMENT',
+            referenceNumber: null
+          }
+        });
+        mainTxId = unallocatedTx.id;
+
+        await prisma.ledgerEntry.create({
+          data: {
+            transactionId: unallocatedTx.id,
+            accountId: account.id,
+            debitAmount: cashAmount,
+            creditAmount: 0
+          }
+        });
+      }
+
+      const allocTxId = mainTxId || 0;
+      if (allocations.length > 0 && allocTxId > 0) {
+        const allocationsWithTx = allocations.map(a => ({
+          ...a,
+          transactionId: allocTxId
+        }));
+        await prisma.bookingAllocation.createMany({ data: allocationsWithTx });
+      }
+
+      const bookingAmounts: Record<number, number> = {};
+      for (const alloc of allocations) {
+        bookingAmounts[alloc.bookingId] = (bookingAmounts[alloc.bookingId] || 0) + alloc.allocatedAmount;
+      }
+
+      for (const [bIdStr, bAmount] of Object.entries(bookingAmounts)) {
+        const bId = parseInt(bIdStr);
+
+        const [flights, hotels, transports, visas, additionals] = await Promise.all([
+          prisma.flightService.findMany({ where: { bookingId: bId, vendorName } }),
+          prisma.accommodationService.findMany({ where: { bookingId: bId, vendorName } }),
+          prisma.transportService.findMany({ where: { bookingId: bId, vendorName } }),
+          prisma.visaService.findMany({ where: { bookingId: bId, vendorName } }),
+          prisma.additionalService.findMany({ where: { bookingId: bId, vendorName } })
+        ]);
+        const allSrvs = [...flights, ...hotels, ...transports, ...visas, ...additionals];
+        const allPaid = allSrvs.length > 0 && allSrvs.every(s => s.isPaidToVendor);
+
+        const pStatus = allPaid ? 'paid' : 'partially_paid';
+
+        await prisma.vendorPayment.create({
+          data: {
+            tenantId,
+            bookingId: bId,
+            vendorName,
+            amount: bAmount,
+            paymentStatus: pStatus,
+            paidOn: parseDateWithCurrentTime(paidOn),
+            notes: userNotes || null,
+            totalPaid: bAmount,
+            totalRefunded: 0,
+            remainingDue: 0
+          }
+        });
+
+        // Auto recalculate agent margin and amounts for each affected booking
+        await calculateAndSyncAgentMargin(bId);
+
+        const allPayments = await prisma.bookingPayment.findMany({
+          where: { bookingId: bId, status: 'approved' }
+        });
+        
+        const bBooking = await prisma.booking.findUnique({ where: { id: bId } });
+        if (bBooking) {
+          const totalPaid = allPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+          const remaining = Number(bBooking.totalPrice) + Number(bBooking.cardPaymentCharges) + Number(bBooking.cancellationCharges) - totalPaid - Number(bBooking.refundAmount);
+          await prisma.booking.update({
+            where: { id: bId },
+            data: {
+              paidAmount: totalPaid,
+              remainingAmount: remaining >= 0 ? remaining : 0,
+              paymentStatus: remaining <= 0 ? 'paid' : (totalPaid > 0 ? 'partially_paid' : 'unpaid')
+            }
+          });
+        }
+      }
+
+      await prisma.bookingPayment.update({
+        where: { id: paymentId },
+        data: { notes: userNotes || 'Bulk Vendor Payment approved' }
+      });
+    } else {
+      // Original standard payment approvals (Sent to Vendor, Received from Client, etc.)
+      if (payment.paymentType === 'Sent to Vendor') {
+        const vendorName = 'General Vendors';
+        let vendorAccount = await prisma.ledgerAccount.findFirst({
+          where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+        });
+        if (!vendorAccount) {
+          vendorAccount = await prisma.ledgerAccount.create({
+            data: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
+          });
+        }
+
+        const mainTx = await prisma.ledgerTransaction.create({
           data: {
             tenantId: tenantIdNumeric,
             transactionDate: payment.paidOn,
             referenceNumber: booking.bookingReference,
-            description: `Credit Card Processing Fee`,
-            type: 'FEE'
+            description: `Vendor Payment via ${payment.paymentMethod}. ${payment.notes || ''}`,
+            type: 'PAYMENT'
           }
         });
 
         await prisma.ledgerEntry.create({
           data: {
-            transactionId: feeTx.id,
-            accountId: customerAccount.id,
-            debitAmount: payment.cardCharges,
+            transactionId: mainTx.id,
+            accountId: vendorAccount.id,
+            debitAmount: payment.amount,
             creditAmount: 0
           }
         });
 
         await prisma.ledgerAccount.update({
-          where: { id: customerAccount.id },
-          data: { balance: { increment: payment.cardCharges } }
+          where: { id: vendorAccount.id },
+          data: { balance: { decrement: payment.amount } }
         });
+      } else if (payment.paymentType === 'Received from Client') {
+        const customerName = booking.agentName || 'Direct Client';
+        let customerAccount = await prisma.ledgerAccount.findFirst({
+          where: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+        });
+        if (!customerAccount) {
+          customerAccount = await prisma.ledgerAccount.create({
+            data: { tenantId: tenantIdNumeric, accountType: 'CUSTOMER_RECEIVABLE', entityName: customerName }
+          });
+        }
+
+        const mainTx = await prisma.ledgerTransaction.create({
+          data: {
+            tenantId: tenantIdNumeric,
+            transactionDate: payment.paidOn,
+            referenceNumber: booking.bookingReference,
+            description: `Client Payment via ${payment.paymentMethod}. ${payment.notes || ''}`,
+            type: 'PAYMENT'
+          }
+        });
+
+        await prisma.ledgerEntry.create({
+          data: {
+            transactionId: mainTx.id,
+            accountId: customerAccount.id,
+            debitAmount: 0,
+            creditAmount: payment.amount
+          }
+        });
+
+        await prisma.ledgerAccount.update({
+          where: { id: customerAccount.id },
+          data: { balance: { decrement: payment.amount } }
+        });
+
+        // Credit card charges handling
+        if (payment.cardCharges && Number(payment.cardCharges) > 0) {
+          const feeTx = await prisma.ledgerTransaction.create({
+            data: {
+              tenantId: tenantIdNumeric,
+              transactionDate: payment.paidOn,
+              referenceNumber: booking.bookingReference,
+              description: `Credit Card Processing Fee`,
+              type: 'FEE'
+            }
+          });
+
+          await prisma.ledgerEntry.create({
+            data: {
+              transactionId: feeTx.id,
+              accountId: customerAccount.id,
+              debitAmount: payment.cardCharges,
+              creditAmount: 0
+            }
+          });
+
+          await prisma.ledgerAccount.update({
+            where: { id: customerAccount.id },
+            data: { balance: { increment: payment.cardCharges } }
+          });
+        }
       }
     }
 
@@ -3119,7 +4152,7 @@ app.post('/finance/payments/:paymentId/approve', requireGatewayHeaders, authoriz
 
     // 4. Mark notifications for this payment as read and update title to reflect approval
     await prisma.notification.updateMany({
-      where: { tenantId: tenantIdNumeric, type: 'PAYMENT_APPROVAL', referenceId: String(paymentId) },
+      where: { tenantId: payment.tenantId, type: 'PAYMENT_APPROVAL', referenceId: String(paymentId) },
       data: { isRead: true, title: 'Transaction Approved ✓' }
     });
 
@@ -3151,15 +4184,18 @@ app.post('/finance/payments/:paymentId/reject', requireGatewayHeaders, authorize
       return res.status(400).json({ error: 'Bad Request', message: 'Payment is not in pending status' });
     }
 
-    // 1. Update status to rejected
+    // Resolve who is rejecting this
+    const rejectedByName = await getUserName(req.userId, req.tenantId);
+
+    // 1. Update status to rejected + stamp who rejected it
     const updatedPayment = await prisma.bookingPayment.update({
       where: { id: paymentId },
-      data: { status: 'rejected' }
+      data: { status: 'rejected', loggedByName: `Rejected by ${rejectedByName}` }
     });
 
     // 2. Mark notifications as read and update title to reflect rejection
     await prisma.notification.updateMany({
-      where: { tenantId: tenantIdNumeric, type: 'PAYMENT_APPROVAL', referenceId: String(paymentId) },
+      where: { tenantId: payment.tenantId, type: 'PAYMENT_APPROVAL', referenceId: String(paymentId) },
       data: { isRead: true, title: 'Transaction Rejected ✗' }
     });
 

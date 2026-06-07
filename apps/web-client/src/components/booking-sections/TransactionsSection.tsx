@@ -3,6 +3,7 @@ import type { BookingDetail, Refund } from '../../types/booking';
 import { EmptyState } from '../shared/EmptyState';
 import { ArrowDownLeft, ArrowUpRight, Clock, AlertCircle, Percent, Receipt, RefreshCcw, Tag, ChevronDown, ChevronUp, ArrowDownCircle, ExternalLink, Hourglass, XCircle } from 'lucide-react';
 import { api } from '../../api/axios';
+import { formatPendingNotes } from '../Layout';
 import { VendorTransactionsModal } from '../booking-modals/VendorTransactionsModal';
 import { ClientTransactionsModal } from '../booking-modals/ClientTransactionsModal';
 import { ProfitLedgerModal } from '../booking-modals/ProfitLedgerModal';
@@ -421,7 +422,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                                   <div className="flex flex-col gap-0.5">
                                     <span className={`font-medium ${isRejected ? 'text-slate-400' : 'text-slate-600'}`}>{t.paymentMethod}</span>
                                     {t.loggedByName && <span className="text-[10px] text-slate-400 font-semibold">By: {t.loggedByName}{t.loggedByRole ? ` (${t.loggedByRole})` : ''}</span>}
-                                    {t.notes && <span className="text-[10px] text-slate-400 italic whitespace-normal">"{t.notes}"</span>}
+                                    {t.notes && <span className="text-[10px] text-slate-400 italic whitespace-normal">"{formatPendingNotes(t.notes)}"</span>}
                                     {t.evidenceUrl && (
                                       <a href={t.evidenceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold w-fit">
                                         <ExternalLink className="w-3 h-3" /> View Receipt

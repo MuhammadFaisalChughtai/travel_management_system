@@ -64,14 +64,39 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
   
   let currentServiceName = '';
   if (selectedItem) {
-    if (selectedCategory === 'Flight') currentServiceName = `Flight: ${selectedItem.airline || 'Unknown'} - ${selectedItem.flightNo || 'No Flight No'} (${selectedItem.pnr})`;
+    if (selectedCategory === 'Flight') currentServiceName = `Flight: ${selectedItem.airline || selectedItem.vendorName || 'Unknown'} - ${selectedItem.flightNo || 'No Flight No'} (${selectedItem.pnr})`;
     else if (selectedCategory === 'Accommodation') currentServiceName = `Hotel ${selectedItem.hotelName}`;
     else if (selectedCategory === 'Transportation') currentServiceName = `Transport ${selectedItem.vehicleType}`;
     else if (selectedCategory === 'Visa') currentServiceName = `Visa ${selectedItem.visaType}`;
     else currentServiceName = `Service ${selectedItem.serviceName}`;
   }
 
-  const previousPayments = booking?.payments?.filter(p => p.paymentType === 'Sent to Vendor' && p.notes && p.notes.includes(currentServiceName)).reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0) || 0;
+  const parseFlightDetails = (serviceName: string | null | undefined) => {
+    if (!serviceName) return null;
+    const match = serviceName.match(/Flight:\s*(.*?)\s*-\s*([A-Za-z0-9]+)\s*\((.*?)\)/i);
+    if (match) {
+      return {
+        airline: match[1],
+        flightNo: match[2],
+        pnr: match[3]
+      };
+    }
+    return null;
+  };
+
+  const previousPayments = booking?.payments?.filter(p => {
+    if (p.paymentType !== 'Sent to Vendor' || !p.notes) return false;
+    if (selectedCategory === 'Flight') {
+      const f2 = parseFlightDetails(currentServiceName);
+      if (f2) {
+        const f1 = parseFlightDetails(p.notes);
+        if (f1) {
+          return f1.flightNo === f2.flightNo && f1.pnr === f2.pnr;
+        }
+      }
+    }
+    return p.notes.includes(currentServiceName);
+  }).reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0) || 0;
   const isDuplicate = selectedItem?.isPaidToVendor === true || previousPayments > 0;
 
 

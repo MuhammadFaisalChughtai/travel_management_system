@@ -34,7 +34,29 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
                 (form.vendorCategory as string) === 'Visa' ? booking?.visaServices || [] :
                 (form.vendorCategory as string) === 'Additional Service' ? booking?.additionalServices || [] : [];
 
-  const previousDiscounts = booking?.discounts?.filter(d => d.serviceName === form.serviceName).reduce((acc, d) => acc + (parseFloat(d.amount) || 0), 0) || 0;
+  const parseFlightDetails = (serviceName: string | null | undefined) => {
+    if (!serviceName) return null;
+    const match = serviceName.match(/Flight:\s*(.*?)\s*-\s*([A-Za-z0-9]+)\s*\((.*?)\)/i);
+    if (match) {
+      return {
+        airline: match[1],
+        flightNo: match[2],
+        pnr: match[3]
+      };
+    }
+    return null;
+  };
+
+  const previousDiscounts = booking?.discounts?.filter(d => {
+    if (d.vendorCategory === 'Flight' && form.vendorCategory === 'Flight') {
+      const f1 = parseFlightDetails(d.serviceName);
+      const f2 = parseFlightDetails(form.serviceName);
+      if (f1 && f2) {
+        return f1.flightNo === f2.flightNo && f1.pnr === f2.pnr;
+      }
+    }
+    return d.serviceName === form.serviceName;
+  }).reduce((acc, d) => acc + (parseFloat(d.amount) || 0), 0) || 0;
   
 
   if (!isOpen) return null;
@@ -74,7 +96,7 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
                   <option value="">Select a specific service (Optional)</option>
                   {availableItems.map(item => {
                     let val = '';
-                    if (form.vendorCategory === 'Flight') val = `Flight: ${item.airline || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
+                    if (form.vendorCategory === 'Flight') val = `Flight: ${item.airline || item.vendorName || 'Unknown'} - ${item.flightNo || 'No Flight No'} (${item.pnr})`;
                     else if (form.vendorCategory === 'Accommodation') val = `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})`;
                     else if (form.vendorCategory === 'Transportation') val = `Transport: ${item.vehicleType} (${item.date || 'No Date'})`;
                     else if (form.vendorCategory === 'Visa') val = `Visa: ${item.country} (${item.type || ''})`;

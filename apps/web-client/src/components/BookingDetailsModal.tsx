@@ -11,6 +11,7 @@ import {
   Plus,
   Loader2,
   RefreshCcw,
+  History,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../api/axios";
@@ -746,8 +747,8 @@ export function BookingDetailsModal({
                       booking={booking || undefined}
                       onAddDiscount={canCreateTransaction ? () => setShowAddDiscount(true) : undefined}
                       onLogRefund={canCreateTransaction ? handleSaveRefund : undefined}
-                      onClawbackMargin={canUpdateTransaction ? handleClawbackMargin : undefined}
-                      onFinalizeMargin={canCreateTransaction ? handleFinalizeMargin : undefined}
+                      onClawbackMargin={user?.role !== "AGENT" && canUpdateTransaction ? handleClawbackMargin : undefined}
+                      onFinalizeMargin={user?.role !== "AGENT" && canCreateTransaction ? handleFinalizeMargin : undefined}
                       onUpdateInvoicePrice={canUpdateTransaction ? (price) => handleUpdateCoreField("totalPrice", price) : undefined}
                     />
                   </div>
@@ -897,6 +898,93 @@ export function BookingDetailsModal({
                   onDelete={canUpdateBooking ? (s: any) => handleDeleteService("additional", s.id) : undefined}
                 />
               </AccordionSection>
+
+              {user?.role !== "AGENT" && (
+                <AccordionSection
+                  title="Service Price Audit Logs (Admin Only)"
+                  icon={<History className="w-4 h-4" />}
+                  isOpen={openSections.includes("priceLogs")}
+                  onToggle={() => toggleSection("priceLogs")}
+                >
+                  <div className="space-y-4 p-4 bg-slate-50/50 rounded-xl border border-slate-200/50">
+                    {!booking.priceLogs || booking.priceLogs.length === 0 ? (
+                      <div className="text-center py-6 text-slate-400 text-sm font-medium">
+                        No service price additions or modifications logged for this booking.
+                      </div>
+                    ) : (
+                      <div className="flow-root">
+                        <ul className="-mb-8">
+                          {booking.priceLogs.map((log, logIdx) => {
+                            const isAdd = log.action === 'ADD';
+                            const oldP = parseFloat(log.oldPrice) || 0;
+                            const newP = parseFloat(log.newPrice) || 0;
+                            const diff = newP - oldP;
+                            const isDecrease = diff < 0;
+
+                            return (
+                              <li key={log.id}>
+                                <div className="relative pb-8">
+                                  {logIdx !== booking.priceLogs!.length - 1 ? (
+                                    <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-slate-200" aria-hidden="true" />
+                                  ) : null}
+                                  <div className="relative flex space-x-3">
+                                    <div>
+                                      <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${
+                                        isAdd 
+                                          ? 'bg-emerald-50 text-emerald-600' 
+                                          : isDecrease 
+                                            ? 'bg-rose-50 text-rose-600' 
+                                            : 'bg-amber-50 text-amber-600'
+                                      }`}>
+                                        <History className="h-4 w-4" />
+                                      </span>
+                                    </div>
+                                    <div className="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
+                                      <div>
+                                        <p className="text-sm text-slate-700 font-medium">
+                                          <span className="font-semibold text-slate-900">{log.loggedByName}</span>{' '}
+                                          {isAdd ? 'added price for' : 'updated price for'}{' '}
+                                          <span className="font-semibold text-indigo-600">{log.serviceType}</span> service ({log.serviceName})
+                                        </p>
+                                        <div className="mt-1 flex items-center gap-2">
+                                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                            isAdd 
+                                              ? 'bg-emerald-100 text-emerald-800' 
+                                              : isDecrease 
+                                                ? 'bg-rose-100 text-rose-800' 
+                                                : 'bg-amber-100 text-amber-800'
+                                          }`}>
+                                            {isAdd ? 'ADD' : isDecrease ? 'DECREASE' : 'INCREASE'}
+                                          </span>
+                                          <span className="text-slate-600 text-sm font-semibold font-mono">
+                                            {isAdd ? (
+                                              `£${newP.toFixed(2)}`
+                                            ) : (
+                                              <>
+                                                £{oldP.toFixed(2)} → £{newP.toFixed(2)} 
+                                                <span className={`ml-1 font-bold ${isDecrease ? 'text-rose-600' : 'text-amber-600'}`}>
+                                                  ({isDecrease ? '-' : '+'}£{Math.abs(diff).toFixed(2)})
+                                                </span>
+                                              </>
+                                            )}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="text-right text-xs whitespace-nowrap text-slate-400 pt-0.5">
+                                        <time dateTime={log.createdAt}>{new Date(log.createdAt).toLocaleString()}</time>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </AccordionSection>
+              )}
             </div>
           ) : null}
         </div>

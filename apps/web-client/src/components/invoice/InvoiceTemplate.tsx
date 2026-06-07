@@ -139,7 +139,7 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
                 {booking.flightServices.map(f => (
                   <tr key={f.id} className="border-b border-slate-100">
                     <td className="py-3 align-top">
-                      <div className="font-bold text-slate-800">{f.airline} {f.flightNo}</div>
+                      <div className="font-bold text-slate-800">{f.airline || f.vendorName} {f.flightNo}</div>
                       <div className="text-[9px] text-slate-500">PNR: <span className="font-semibold text-slate-700">{f.pnr}</span></div>
                     </td>
                     <td className="py-3 align-top text-slate-600">{f.date}</td>

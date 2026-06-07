@@ -53,56 +53,25 @@ export function EmptyState({ icon: Icon, title, description, action, size = 'def
         {/* Layered illustration container */}
         <div className="relative mb-10 flex items-center justify-center">
           
-          {/* Pulsing deep aura behind the icon */}
-          <div className={`absolute rounded-full bg-gradient-to-tr from-primary-500/15 to-indigo-500/10 blur-3xl animate-pulse ${
+          {/* Deep aura behind the icon */}
+          <div className={`absolute rounded-full bg-gradient-to-tr from-primary-500/10 to-indigo-500/5 blur-3xl ${
             isSm ? 'w-36 h-36' : 'w-48 h-48'
           }`}></div>
           
-          {/* Rotating particle rings */}
-          <motion.div 
-            animate={{ rotate: 360 }}
-            transition={{ duration: 24, repeat: Infinity, ease: 'linear' }}
-            className={`absolute border border-dashed border-primary-200/50 rounded-full ${
-              isSm ? 'w-32 h-32' : 'w-44 h-44'
-            }`}
-          ></motion.div>
-          <motion.div 
-            animate={{ rotate: -360 }}
-            transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-            className={`absolute border border-dashed border-indigo-200/40 rounded-full ${
-              isSm ? 'w-28 h-28' : 'w-36 h-36'
-            }`}
-          ></motion.div>
-
-          {/* Floating small stars / sparkles */}
-          <motion.span 
-            animate={{ y: [0, -8, 0], scale: [1, 1.2, 1], opacity: [0.6, 1, 0.6] }}
-            transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
-            className={`absolute text-primary-400 font-bold ${
-              isSm ? '-top-2 -right-1 text-base' : '-top-4 -right-4 text-xl'
-            }`}
-          >
-            ✦
-          </motion.span>
-          <motion.span 
-            animate={{ y: [0, 8, 0], scale: [1, 1.1, 1], opacity: [0.4, 0.8, 0.4] }}
-            transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 1.2 }}
-            className={`absolute text-indigo-400 font-bold ${
-              isSm ? '-bottom-1 -left-2 text-xs' : '-bottom-3 -left-5 text-base'
-            }`}
-          >
-            ✦
-          </motion.span>
+          {/* Static neat background ring */}
+          <div className={`absolute border border-slate-100 rounded-full ${
+            isSm ? 'w-28 h-28' : 'w-40 h-40'
+          }`}></div>
 
           {/* Core premium container */}
-          <div className={`relative flex items-center justify-center rounded-[2.2rem] bg-gradient-to-b from-white to-slate-50 border border-slate-200/80 shadow-[0_16px_36px_rgba(0,0,0,0.05)] ${
+          <div className={`relative flex items-center justify-center rounded-[2.2rem] bg-gradient-to-b from-white to-slate-50 border border-slate-200/80 shadow-[0_16px_36px_rgba(0,0,0,0.03)] ${
             isSm ? 'w-24 h-24' : 'w-32 h-32'
           }`}>
             {/* Glossy overlay */}
             <div className="absolute inset-[1px] rounded-[2rem] bg-gradient-to-tr from-white/0 via-white/50 to-white/90 pointer-events-none"></div>
             
             {/* The Icon */}
-            <Icon className={`${isSm ? 'w-10 h-10' : 'w-14 h-14'} text-primary-500 relative z-10 drop-shadow-[0_2px_6px_rgba(99,102,241,0.15)]`} />
+            <Icon className={`${isSm ? 'w-10 h-10' : 'w-14 h-14'} text-primary-500 relative z-10 drop-shadow-[0_2px_6px_rgba(99,102,241,0.12)]`} />
           </div>
         </div>
 

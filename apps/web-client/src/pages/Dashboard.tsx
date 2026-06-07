@@ -72,7 +72,7 @@ import { Pagination } from '../components/shared/Pagination';
 
 function hasPermission(user: any, permission: string): boolean {
   if (!user) return false;
-  if (user.role === 'SUPER_ADMIN' || user.role === 'MAIN_COMPANY_ADMIN') return true;
+  if (user.role === 'SUPER_ADMIN' || user.role === 'MAIN_COMPANY_ADMIN' || user.role === 'ADMIN') return true;
   if (user.permissions) {
     return user.permissions.includes(permission);
   }

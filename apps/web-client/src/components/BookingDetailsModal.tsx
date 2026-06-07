@@ -63,7 +63,7 @@ export function BookingDetailsModal({
 
   const hasPermission = (permission: string) => {
     if (!user) return false;
-    if (user.role === "SUPER_ADMIN" || user.role === "MAIN_COMPANY_ADMIN") return true;
+    if (user.role === "SUPER_ADMIN" || user.role === "MAIN_COMPANY_ADMIN" || user.role === "ADMIN") return true;
     if (user.permissions) {
       return user.permissions.includes(permission);
     }

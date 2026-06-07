@@ -204,13 +204,22 @@ app.post('/register', async (req: any, res: Response) => {
       });
     }
 
+    // Seed default roles and permissions for this tenant immediately on registration
+    await ensureRolePermissionsSeeded(tenant.id);
+
+    // Refresh role ID reference just in case
+    const updatedRole = await prisma.role.findFirst({
+      where: { name: 'MAIN_COMPANY_ADMIN', tenantId: tenant.id }
+    });
+    const finalRoleId = updatedRole ? updatedRole.id : role.id;
+
     const newUser = await prisma.user.create({
       data: {
         email: parsedData.email,
         name: parsedData.name,
         encryptedPassword: hashedPassword,
         tenantId: tenant.id,
-        roleId: role.id
+        roleId: finalRoleId
       }
     });
 

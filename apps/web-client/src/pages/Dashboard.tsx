@@ -649,7 +649,15 @@ export function Dashboard() {
             </div>
             <div>
               <h2 className="font-bold text-slate-800 tracking-tight leading-tight">{user.name || 'Traveler'}</h2>
-              <span className="inline-block mt-0.5 text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">Workspace User</span>
+              <span className="inline-block mt-0.5 text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+                {user.role === 'MAIN_COMPANY_ADMIN' 
+                  ? 'Main Admin' 
+                  : user.role === 'COMPANY_ADMIN' 
+                  ? 'Company Admin' 
+                  : user.role === 'AGENT' 
+                  ? 'Agent' 
+                  : user.role || 'User'}
+              </span>
             </div>
           </div>
           

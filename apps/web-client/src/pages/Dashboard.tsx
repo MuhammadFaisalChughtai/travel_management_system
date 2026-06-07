@@ -1341,11 +1341,13 @@ export function Dashboard() {
                     </motion.div>
                   ))
                 ) : (
-                  <div className="p-4">
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden p-6 mt-4">
                     <EmptyState
                       icon={Activity}
                       title="No recent operations"
                       description="No recent sales operations or bookings recorded."
+                      size="sm"
+                      transparent={true}
                       action={
                         <button 
                           onClick={handleOpenCreateModal}
@@ -1439,17 +1441,19 @@ export function Dashboard() {
                 <LoadingState message="Loading bookings..." />
               </div>
             ) : bookings.length === 0 ? (
-              <div className="p-8">
+              <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
                 <EmptyState
                   icon={Search}
                   title="No records found"
                   description="We couldn't find any bookings matching your current search criteria. Please try adjusting your filters."
+                  size="sm"
+                  transparent={true}
                   action={
                     <button 
                       onClick={performClearFilters}
-                      className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
+                      className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
                     >
-                      <X className="w-4 h-4" /> Clear All Filters
+                      <X className="w-3.5 h-3.5" /> Clear All Filters
                     </button>
                   }
                 />

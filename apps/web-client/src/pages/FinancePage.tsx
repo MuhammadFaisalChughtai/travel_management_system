@@ -340,11 +340,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         ledgerLoading ? (
           <LoadingState message="Loading ledger records..." />
         ) : ledgerTransactions.length === 0 ? (
-          <div className="p-8">
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mt-6">
             <EmptyState
               icon={Search}
               title="No ledger records"
               description="No double-entry accounting records matched your filters."
+              size="sm"
+              transparent={true}
             />
           </div>
         ) : (
@@ -452,11 +454,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         vendorWalletsLoading ? (
           <LoadingState message="Loading vendor wallets..." />
         ) : filteredVendorWallets.length === 0 ? (
-          <div className="p-8">
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <EmptyState
               icon={Wallet}
               title="No vendor wallets"
               description="No vendor wallets found matching your search."
+              size="sm"
+              transparent={true}
             />
           </div>
         ) : (
@@ -520,11 +524,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
         agentsLoading ? (
           <LoadingState message="Loading agent wallets..." />
         ) : filteredAgents.length === 0 ? (
-          <div className="p-8">
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <EmptyState
               icon={Wallet}
               title="No agent wallets"
               description="No agent wallets found matching your search."
+              size="sm"
+              transparent={true}
             />
           </div>
         ) : (
@@ -731,15 +737,13 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                     <span className="text-xs font-semibold">Loading transactions...</span>
                   </div>
                 ) : walletHistory.length === 0 ? (
-                  <div className="p-8">
-                    <EmptyState
-                      icon={Clock}
-                      title="No transactions found"
-                      description="No recorded history for this wallet."
-                      size="sm"
-                      transparent={true}
-                    />
-                  </div>
+                  <EmptyState
+                    icon={Clock}
+                    title="No transactions found"
+                    description="No recorded history for this wallet."
+                    size="sm"
+                    transparent={true}
+                  />
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {selectedVendor ? (

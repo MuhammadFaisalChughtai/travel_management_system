@@ -797,13 +797,15 @@ export function AgentsPage() {
               <p className="text-rose-600 text-sm mt-1">{error}</p>
             </div>
           ) : tableAgents.length === 0 ? (
-            <div className="p-8">
+            <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
               <EmptyState 
                 icon={Search}
                 title={search ? 'No records found' : 'No agents yet'}
                 description={search ? "We couldn't find any agents matching your current search criteria." : "Get started by adding a new agent."}
+                size="sm"
+                transparent={true}
                 action={!search ? (
-                  <button onClick={() => setShowAddModal(true)} className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                  <button onClick={() => setShowAddModal(true)} className="bg-primary-50 hover:bg-primary-100 text-primary-700 px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2">
                     <Plus className="w-4 h-4" /> Add Agent
                   </button>
                 ) : undefined}

@@ -121,13 +121,13 @@ export function VendorsPage() {
               <LoadingState message="Loading vendors..." />
             </div>
           ) : tableVendors.length === 0 ? (
-            <div className="p-8">
-              <EmptyState 
-                icon={Building2} 
-                title={search ? 'No vendors found' : 'No vendors yet'} 
-                description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by adding a new vendor.'} 
-              />
-            </div>
+            <EmptyState 
+              icon={Building2} 
+              title={search ? 'No vendors found' : 'No vendors yet'} 
+              description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by adding a new vendor.'} 
+              size="sm"
+              transparent={true}
+            />
           ) : (
             <>
               <div className="overflow-x-auto">

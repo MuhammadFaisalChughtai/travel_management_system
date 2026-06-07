@@ -179,11 +179,15 @@ export function ServiceCatalogPage() {
         ) : error ? (
           <div className="p-4 bg-red-50 text-red-600 rounded-xl font-bold">{error}</div>
         ) : items.length === 0 ? (
-          <EmptyState
-            icon={Tag}
-            title="No services found"
-            description="No services defined yet."
-          />
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <EmptyState
+              icon={Tag}
+              title="No services found"
+              description="No services defined yet."
+              size="sm"
+              transparent={true}
+            />
+          </div>
         ) : (
           <>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">

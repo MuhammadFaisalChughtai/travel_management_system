@@ -539,11 +539,13 @@ export function TeamManagement() {
               <LoadingState message="Loading team members..." />
             </div>
           ) : tableUsers.length === 0 ? (
-            <div className="p-8">
+            <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
               <EmptyState 
                 icon={Users} 
                 title={search ? 'No team members found' : 'No team members yet'} 
                 description={search ? `We couldn't find anyone matching "${search}"` : 'Get started by inviting a team member.'} 
+                size="sm"
+                transparent={true}
               />
             </div>
           ) : (

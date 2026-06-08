@@ -65,6 +65,7 @@ model Booking {
   refunds             BookingRefund[]
   additionalServices  AdditionalService[]
   priceLogs           BookingPriceLog[]
+  documentLogs        DocumentLog[]
 
   @@unique([tenantId, bookingReference])
 }
@@ -375,4 +376,82 @@ model BookingPriceLog {
 
   booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 }
+
+model CompanyContext {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int      @unique
+  companyName     String   @db.VarChar(255)
+  logoPrimary     String?  @db.Text
+  logoSecondary   String?  @db.Text
+  officeAddress   String?  @db.Text
+  emailSender     String?  @db.VarChar(255)
+  landlineFormat  String?  @db.VarChar(100)
+  whatsappWebhook String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model DocumentTemplate {
+  id            Int                @id @default(autoincrement())
+  tenantId      Int
+  name          String             @db.VarChar(255)
+  type          String             @db.VarChar(50) // e.g. "INVOICE", "VOUCHER"
+  version       Int                @default(1)
+  status        String             @default("Draft") // "Draft", "Active", "Deprecated"
+  structureHtml String             @db.Text
+  structureCss  String             @db.Text
+  variables     TemplateVariable[]
+  logs          DocumentLog[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([tenantId, name, version])
+}
+
+model TemplateVariable {
+  id           Int              @id @default(autoincrement())
+  templateId   Int
+  token        String           @db.VarChar(100) // e.g. "company.name"
+  description  String?          @db.VarChar(255)
+  pathInRecord String           @db.VarChar(255) // e.g. "bookingReference"
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  
+  template     DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, token])
+}
+
+model DocumentLog {
+  id               Int              @id @default(autoincrement())
+  tenantId         Int
+  templateId       Int
+  bookingId        Int
+  referenceNumber  String           @db.VarChar(100)
+  documentType     String           @db.VarChar(50)
+  recipientName    String           @db.VarChar(255)
+  amountGross      Decimal          @db.Decimal(10, 2)
+  amountSettled    Decimal          @db.Decimal(10, 2)
+  amountDue        Decimal          @db.Decimal(10, 2)
+  digitalSignature String           @db.Text
+  metadataJson     String           @db.Text
+  createdAt        DateTime         @default(now())
+
+  template         DocumentTemplate @relation(fields: [templateId], references: [id])
+  booking          Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  name      String   @db.VarChar(255)
+  amount    Decimal  @db.Decimal(10, 2)
+  type      String   @db.VarChar(50) // "one-time" | "recurring"
+  date      DateTime @db.Date         // Date of occurrence or recurring start date
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
 

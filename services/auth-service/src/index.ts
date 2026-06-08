@@ -741,6 +741,36 @@ app.post('/users', requireTenantContext, async (req: any, res: Response) => {
       });
     }
 
+    let resolvedAgentId = agentId ? parseInt(agentId) : null;
+
+    // User -> Agent sync: If the user's role is AGENT, verify/create an agent profile
+    if (role.name === 'AGENT') {
+      try {
+        if (!resolvedAgentId) {
+          // Check if an agent profile with this email already exists
+          const existingAgent = await (prisma as any).agent.findFirst({
+            where: { tenantId, email }
+          });
+          if (existingAgent) {
+            resolvedAgentId = existingAgent.id;
+          } else {
+            // Create a new agent profile
+            const newAgent = await (prisma as any).agent.create({
+              data: {
+                tenantId,
+                name,
+                email: email || null,
+                jobStatus: 'Active'
+              }
+            });
+            resolvedAgentId = newAgent.id;
+          }
+        }
+      } catch (agentSyncErr) {
+        console.error('Create User Agent Sync Error:', agentSyncErr);
+      }
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -751,7 +781,7 @@ app.post('/users', requireTenantContext, async (req: any, res: Response) => {
         encryptedPassword: hashedPassword,
         tenantId,
         roleId: role.id,
-        agentId: agentId ? parseInt(agentId) : null
+        agentId: resolvedAgentId
       }
     });
 
@@ -776,7 +806,10 @@ app.patch('/users/:id', requireTenantContext, async (req: any, res: Response) =>
     const userId = parseInt(req.params.id);
     const { name, roleName, password, agentId } = req.body;
 
-    const user = await prisma.user.findFirst({ where: { id: userId, tenantId } });
+    const user = await prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      include: { role: true }
+    });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     let dataToUpdate: any = {};
@@ -788,12 +821,67 @@ app.patch('/users/:id', requireTenantContext, async (req: any, res: Response) =>
       dataToUpdate.encryptedPassword = await bcrypt.hash(password, salt);
     }
 
+    const oldRoleName = user.role?.name;
+    let resolvedRoleName = oldRoleName;
+
     if (roleName) {
+      resolvedRoleName = roleName;
       let role = await prisma.role.findFirst({ where: { tenantId, name: roleName } });
       if (!role) {
         role = await prisma.role.create({ data: { name: roleName, tenantId } });
       }
       dataToUpdate.roleId = role.id;
+    }
+
+    // Role conversion and agent sync handling
+    if (resolvedRoleName === 'AGENT') {
+      try {
+        let currentAgentId = dataToUpdate.agentId !== undefined ? dataToUpdate.agentId : user.agentId;
+        if (!currentAgentId) {
+          // Find or create agent profile
+          const existingAgent = await (prisma as any).agent.findFirst({
+            where: { tenantId, email: user.email }
+          });
+          if (existingAgent) {
+            dataToUpdate.agentId = existingAgent.id;
+            currentAgentId = existingAgent.id;
+          } else {
+            const newAgent = await (prisma as any).agent.create({
+              data: {
+                tenantId,
+                name: name || user.name || '',
+                email: user.email,
+                jobStatus: 'Active'
+              }
+            });
+            dataToUpdate.agentId = newAgent.id;
+            currentAgentId = newAgent.id;
+          }
+        }
+
+        // Update the agent profile details if name/email changed
+        if (currentAgentId) {
+          await (prisma as any).agent.update({
+            where: { id: currentAgentId },
+            data: {
+              ...(name && { name })
+            }
+          });
+        }
+      } catch (agentSyncErr) {
+        console.error('Update User Agent Sync Error:', agentSyncErr);
+      }
+    } else if (oldRoleName === 'AGENT' && resolvedRoleName !== 'AGENT') {
+      // User is no longer an agent, delete the associated agent profile
+      const agentToDeleteId = user.agentId;
+      if (agentToDeleteId) {
+        dataToUpdate.agentId = null;
+        try {
+          await (prisma as any).agent.delete({ where: { id: agentToDeleteId } });
+        } catch (e) {
+          console.error('Failed to delete agent profile on user role change:', e);
+        }
+      }
     }
 
     const updatedUser = await prisma.user.update({
@@ -825,6 +913,15 @@ app.delete('/users/:id', requireTenantContext, async (req: any, res: Response) =
     const user = await prisma.user.findFirst({ where: { id: userId, tenantId } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    // Clean up associated agent profile if present
+    if (user.agentId) {
+      try {
+        await (prisma as any).agent.delete({ where: { id: user.agentId } });
+      } catch (e) {
+        console.error('Failed to delete associated agent on user deletion:', e);
+      }
+    }
+
     await prisma.user.delete({ where: { id: userId } });
     res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
@@ -853,6 +950,51 @@ app.post('/agents', requireTenantContext, async (req: any, res: Response) => {
       },
       include: { marginSegments: true }
     });
+
+    // Bidirectional sync: Automatically create / link User account with AGENT role
+    if (email) {
+      try {
+        await ensureRolePermissionsSeeded(tenantId);
+        let agentRole = await prisma.role.findFirst({
+          where: { tenantId, name: 'AGENT' }
+        });
+        if (!agentRole) {
+          agentRole = await prisma.role.create({
+            data: { name: 'AGENT', tenantId }
+          });
+        }
+
+        const existingUser = await prisma.user.findUnique({
+          where: { email }
+        });
+
+        if (existingUser) {
+          await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              agentId: agent.id,
+              roleId: agentRole.id
+            }
+          });
+        } else {
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash('Agent@123', salt);
+          await prisma.user.create({
+            data: {
+              name,
+              email,
+              encryptedPassword: hashedPassword,
+              tenantId,
+              roleId: agentRole.id,
+              agentId: agent.id
+            }
+          });
+        }
+      } catch (syncError) {
+        console.error('Create Agent User Sync Error:', syncError);
+      }
+    }
+
     res.status(201).json({ message: 'Agent created successfully', agent });
   } catch (error: any) {
     console.error('Create Agent Error:', error);
@@ -883,6 +1025,63 @@ app.patch('/agents/:id', requireTenantContext, async (req: any, res: Response) =
       },
       include: { marginSegments: { orderBy: { minAmount: 'asc' } } }
     });
+
+    // Bidirectional sync: Automatically update or create / delete User account
+    try {
+      await ensureRolePermissionsSeeded(tenantId);
+      let agentRole = await prisma.role.findFirst({
+        where: { tenantId, name: 'AGENT' }
+      });
+      if (!agentRole) {
+        agentRole = await prisma.role.create({
+          data: { name: 'AGENT', tenantId }
+        });
+      }
+
+      if (agent.email) {
+        let assocUser = await prisma.user.findFirst({
+          where: { agentId: agent.id }
+        });
+        if (!assocUser) {
+          assocUser = await prisma.user.findUnique({
+            where: { email: agent.email }
+          });
+        }
+
+        if (assocUser) {
+          await prisma.user.update({
+            where: { id: assocUser.id },
+            data: {
+              name: agent.name,
+              email: agent.email,
+              agentId: agent.id,
+              roleId: agentRole.id
+            }
+          });
+        } else {
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash('Agent@123', salt);
+          await prisma.user.create({
+            data: {
+              name: agent.name,
+              email: agent.email,
+              encryptedPassword: hashedPassword,
+              tenantId,
+              roleId: agentRole.id,
+              agentId: agent.id
+            }
+          });
+        }
+      } else {
+        // If agent email is removed/empty, delete any associated user profile
+        await prisma.user.deleteMany({
+          where: { agentId: agent.id }
+        });
+      }
+    } catch (syncError) {
+      console.error('Update Agent User Sync Error:', syncError);
+    }
+
     res.status(200).json({ message: 'Agent updated successfully', agent });
   } catch (error: any) {
     console.error('Update Agent Error:', error);
@@ -1006,6 +1205,12 @@ app.delete('/agents/:id', requireTenantContext, async (req: any, res: Response) 
     const id = parseInt(req.params.id);
     const existing = await (prisma as any).agent.findFirst({ where: { id, tenantId } });
     if (!existing) return res.status(404).json({ error: 'Not Found', message: 'Agent not found' });
+
+    // Clean up associated user first to maintain database sync
+    await prisma.user.deleteMany({
+      where: { agentId: id }
+    });
+
     await (prisma as any).agent.delete({ where: { id } });
     res.status(200).json({ message: 'Agent deleted successfully' });
   } catch (error: any) {

@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client-booking';
 import { requirePermission } from './middleware/rbac';
@@ -68,6 +69,84 @@ const getUserName = async (userId: string | number | undefined, tenantId: string
   }
   return 'Agent';
 };
+
+const resolveVendorName = async (notes: string | null | undefined, tenantIdNumeric: number): Promise<string> => {
+  const defaultVendor = 'General Vendors';
+  if (!notes) return defaultVendor;
+
+  const notesLower = notes.toLowerCase();
+
+  try {
+    const vendorAccounts = await prisma.ledgerAccount.findMany({
+      where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE' }
+    });
+    const sortedAccounts = [...vendorAccounts].sort((a, b) => (b.entityName || '').length - (a.entityName || '').length);
+    const matchedAccount = sortedAccounts.find(acc => 
+      acc.entityName && 
+      acc.entityName.toLowerCase() !== 'general vendors' && 
+      notesLower.includes(acc.entityName.toLowerCase())
+    );
+    if (matchedAccount && matchedAccount.entityName) {
+      return matchedAccount.entityName;
+    }
+  } catch (err) {
+    console.error('Error fetching vendor accounts in resolveVendorName:', err);
+  }
+
+  const patterns = [
+    /Flight:\s*([^-]+)/i,
+    /Visa:\s*([^(\n\r]+)/i,
+    /Hotel:\s*([^\n\r]+)/i,
+    /Transport:\s*([^\n\r]+)/i,
+    /Service:\s*([^\n\r]+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = notes.match(pattern);
+    if (match && match[1]) {
+      const extracted = match[1].trim();
+      if (extracted && extracted.toLowerCase() !== 'unknown') {
+        return extracted;
+      }
+    }
+  }
+
+  return defaultVendor;
+};
+
+const syncBookingFinancials = async (bookingId: number, additionalCardCharges: number = 0) => {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      payments: true,
+      refunds: true
+    }
+  });
+  if (!booking) return;
+
+  const totalPaid = booking.payments
+    .filter((p: any) => p.paymentType === 'Received from Client' && p.status === 'approved')
+    .reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) || 0;
+
+  const totalRefunded = booking.refunds
+    .filter((r: any) => r.direction === 'Refund to Client')
+    .reduce((acc: number, r: any) => acc + Number(r.amount || 0), 0) || 0;
+
+  const newCardCharges = Number(booking.cardPaymentCharges || 0) + additionalCardCharges;
+  const remaining = Number(booking.totalPrice || 0) + newCardCharges + Number(booking.cancellationCharges || 0) - totalPaid + totalRefunded;
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      cardPaymentCharges: newCardCharges,
+      paidAmount: totalPaid,
+      refundAmount: totalRefunded,
+      remainingAmount: remaining >= 0 ? remaining : 0,
+      paymentStatus: remaining <= 0 ? 'paid' : ((totalPaid - totalRefunded) > 0 ? 'partially_paid' : 'unpaid')
+    }
+  });
+};
+
 
 const logPriceChange = async ({
   tenantId,
@@ -1048,7 +1127,7 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
 
     // --- LEDGER INTEGRATION (DOUBLE ENTRY) (Only for Admins/Auto-Approved) ---
     if (parsedData.paymentType === 'Sent to Vendor') {
-      const vendorName = 'General Vendors'; // Or parse from notes if needed
+      const vendorName = await resolveVendorName(parsedData.notes, tenantIdNumeric);
       let vendorAccount = await prisma.ledgerAccount.findFirst({
         where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
       });
@@ -1191,26 +1270,8 @@ app.post('/:id/payments', requireGatewayHeaders, requirePermission(Permission.CR
     }
     // ---------------------------
 
-    // Automatically recalculate booking paid & remaining amounts (ONLY approved payments)
-    const allPayments = await prisma.bookingPayment.findMany({
-      where: { bookingId, status: 'approved' }
-    });
-    
-    const totalPaid = allPayments.reduce((acc, p) => acc + Number(p.amount), 0);
-    
-    // Add new card charges to existing
-    const newCardCharges = Number(booking.cardPaymentCharges) + (parsedData.cardCharges || 0);
-    const remaining = Number(booking.totalPrice) + newCardCharges + Number(booking.cancellationCharges) - totalPaid - Number(booking.refundAmount);
-
-    await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        cardPaymentCharges: newCardCharges,
-        paidAmount: totalPaid,
-        remainingAmount: remaining >= 0 ? remaining : 0,
-        paymentStatus: remaining <= 0 ? 'paid' : (totalPaid > 0 ? 'partially_paid' : 'unpaid')
-      }
-    });
+    // Automatically recalculate booking paid & remaining amounts
+    await syncBookingFinancials(bookingId, parsedData.cardCharges || 0);
 
     res.status(201).json({ message: 'Transaction registered successfully', payment });
   } catch (error: any) {
@@ -2014,6 +2075,8 @@ app.post('/:id/refunds', requireGatewayHeaders, requirePermission(Permission.CRE
       // -------------------------------------
     }
 
+    await syncBookingFinancials(bookingId);
+
     res.status(201).json({ message: 'Refund logged successfully', refund });
   } catch (error) {
     console.error('Add Refund Error:', error);
@@ -2631,11 +2694,34 @@ app.get('/finance/vendors/wallets', requireGatewayHeaders, async (req: CustomReq
 
     const walletsMap = new Map<string, any>();
 
+    const calculateWalletBalance = async (accountId: number): Promise<number> => {
+      const entries = await prisma.ledgerEntry.findMany({
+        where: {
+          accountId,
+          transaction: {
+            OR: [
+              { description: { contains: 'overpayment', mode: 'insensitive' } },
+              { description: { contains: 'wallet credit', mode: 'insensitive' } },
+              { description: { contains: 'prepayment', mode: 'insensitive' } },
+              { description: { contains: 'drawdown', mode: 'insensitive' } }
+            ]
+          }
+        }
+      });
+      let balance = 0;
+      for (const entry of entries) {
+        const debit = parseFloat(entry.debitAmount.toString()) || 0;
+        const credit = parseFloat(entry.creditAmount.toString()) || 0;
+        balance += (debit - credit);
+      }
+      return balance > 0 ? balance : 0.00;
+    };
+
     for (const v of dbVendors) {
       const vNameKey = v.name.toLowerCase().trim();
       const acc = accountMap.get(vNameKey);
       const ledgerBalance = acc ? parseFloat(acc.balance.toString()) : 0.00;
-      const walletBalance = ledgerBalance < 0 ? Math.abs(ledgerBalance) : 0.00;
+      const walletBalance = acc ? await calculateWalletBalance(acc.id) : 0.00;
 
       walletsMap.set(vNameKey, {
         id: v.id,
@@ -2650,7 +2736,7 @@ app.get('/finance/vendors/wallets', requireGatewayHeaders, async (req: CustomReq
         const vNameKey = acc.entityName.toLowerCase().trim();
         if (!walletsMap.has(vNameKey)) {
           const ledgerBalance = parseFloat(acc.balance.toString());
-          const walletBalance = ledgerBalance < 0 ? Math.abs(ledgerBalance) : 0.00;
+          const walletBalance = await calculateWalletBalance(acc.id);
           walletsMap.set(vNameKey, {
             id: acc.id,
             vendorName: acc.entityName,
@@ -3146,10 +3232,6 @@ app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.RE
     }
 
     if (agentName) {
-      // Find transactions allocated to bookings assigned to this agent
-      // Note: we can't easily traverse deep to bookings here without a custom join, 
-      // but if we store agent name in description or if it's a specific ledger type, we can filter.
-      // For now, search description as a fallback since Agent Name is usually appended to notes
       if (!whereTransaction.OR) {
         whereTransaction.OR = [];
       }
@@ -3255,9 +3337,235 @@ app.get('/ledger/report', requireGatewayHeaders, requirePermission(Permission.RE
       };
     }).filter((t: any) => t.status !== 'rejected' && t.status !== 'pending');
 
-    res.status(200).json({ transactions: enrichedTransactions, accounts });
+    // Fetch all expenses to dynamically calculate and append expense ledger entries
+    const allExpenses = await prisma.expense.findMany({
+      where: { tenantId }
+    });
+
+    let cumulativeExpenses = 0;
+    const startLimit = dateStart ? new Date(dateStart as string) : undefined;
+    const endLimit = dateEnd ? new Date(dateEnd as string) : new Date();
+
+    for (const exp of allExpenses) {
+      if (exp.type === 'one-time') {
+        const d = new Date(exp.date);
+        if (d <= endLimit) {
+          cumulativeExpenses += Number(exp.amount);
+        }
+      } else if (exp.type === 'recurring') {
+        const occurrences = getRecurringOccurrences(new Date(exp.date), Number(exp.amount), undefined, endLimit);
+        cumulativeExpenses += occurrences.reduce((sum, o) => sum + o.amount, 0);
+      }
+    }
+
+    // Append dynamic expense account for balancing
+    accounts.push({
+      id: 9999,
+      tenantId,
+      accountType: 'EXPENSE',
+      entityId: null,
+      entityName: 'Company Expenses',
+      balance: -cumulativeExpenses,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as any);
+
+    let expenseTransactions: any[] = [];
+    if (!vendorName && !agentName) {
+      for (const exp of allExpenses) {
+        let occurrences: { date: Date; amount: number }[] = [];
+        if (exp.type === 'one-time') {
+          const d = new Date(exp.date);
+          if (d <= endLimit && (!startLimit || d >= startLimit)) {
+            occurrences.push({ date: d, amount: Number(exp.amount) });
+          }
+        } else if (exp.type === 'recurring') {
+          occurrences = getRecurringOccurrences(new Date(exp.date), Number(exp.amount), startLimit, endLimit);
+        }
+
+        occurrences.forEach((o, idx) => {
+          expenseTransactions.push({
+            id: `expense-${exp.id}-${idx}`,
+            tenantId,
+            transactionDate: o.date,
+            referenceNumber: 'EXPENSE',
+            description: `[Expense] ${exp.name}${exp.notes ? ' - ' + exp.notes : ''}`,
+            type: 'EXPENSE',
+            createdAt: exp.createdAt,
+            entries: [
+              {
+                id: `entry-expense-${exp.id}-${idx}`,
+                transactionId: `expense-${exp.id}-${idx}`,
+                accountId: 9999,
+                debitAmount: o.amount,
+                creditAmount: 0,
+                account: {
+                  id: 9999,
+                  tenantId,
+                  accountType: 'EXPENSE',
+                  entityId: null,
+                  entityName: 'Company Expenses',
+                  balance: -cumulativeExpenses,
+                  createdAt: exp.createdAt,
+                  updatedAt: exp.updatedAt
+                }
+              }
+            ],
+            allocations: [],
+            status: 'approved'
+          });
+        });
+      }
+
+      if (reference) {
+        const queryStr = (reference as string).toLowerCase();
+        expenseTransactions = expenseTransactions.filter(t => 
+          t.description.toLowerCase().includes(queryStr) || 
+          t.referenceNumber.toLowerCase().includes(queryStr)
+        );
+      }
+    }
+
+    const finalTransactions = [...enrichedTransactions, ...expenseTransactions];
+    finalTransactions.sort((a: any, b: any) => {
+      const timeA = new Date(a.transactionDate).getTime();
+      const timeB = new Date(b.transactionDate).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      return String(a.id).localeCompare(String(b.id));
+    });
+
+    res.status(200).json({ transactions: finalTransactions, accounts });
   } catch (error) {
     console.error('Ledger Report Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Helper for generating monthly occurrences for recurring expenses
+function getRecurringOccurrences(startDate: Date, amount: number, dateStartLimit?: Date, dateEndLimit?: Date): { date: Date; amount: number }[] {
+  const occurrences: { date: Date; amount: number }[] = [];
+  const today = dateEndLimit || new Date();
+  const current = new Date(startDate);
+  
+  if (current > today) {
+    return [];
+  }
+
+  const startDay = startDate.getDate();
+  let monthsDiff = 0;
+
+  while (true) {
+    const nextDate = new Date(startDate.getFullYear(), startDate.getMonth() + monthsDiff, startDay);
+    
+    // JS Date rolls overflow days (e.g. Feb 31 to Mar 3). Capping keeps it at last day of the target month:
+    const expectedMonth = (startDate.getMonth() + monthsDiff) % 12;
+    if (nextDate.getMonth() !== expectedMonth && nextDate.getMonth() !== (expectedMonth + 12) % 12) {
+      nextDate.setDate(0); 
+    }
+
+    if (nextDate > today) {
+      break;
+    }
+
+    if (!dateStartLimit || nextDate >= dateStartLimit) {
+      occurrences.push({
+        date: nextDate,
+        amount
+      });
+    }
+
+    monthsDiff++;
+    if (monthsDiff > 1200) break; // Capped at 100 years
+  }
+  return occurrences;
+}
+
+// GET /finance/expenses
+app.get('/finance/expenses', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const expenses = await prisma.expense.findMany({
+      where: { tenantId },
+      orderBy: { date: 'desc' }
+    });
+    res.status(200).json({ expenses });
+  } catch (error) {
+    console.error('Fetch Expenses Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /finance/expenses
+app.post('/finance/expenses', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { name, amount, type, date, notes } = req.body;
+    if (!name || amount === undefined || !type || !date) {
+      return res.status(400).json({ error: 'Validation failed', message: 'name, amount, type, and date are required' });
+    }
+    const expense = await prisma.expense.create({
+      data: {
+        tenantId,
+        name,
+        amount: parseFloat(amount),
+        type,
+        date: new Date(date),
+        notes
+      }
+    });
+    res.status(201).json({ expense });
+  } catch (error) {
+    console.error('Create Expense Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// PUT /finance/expenses/:id
+app.put('/finance/expenses/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const id = parseInt(req.params.id);
+    const { name, amount, type, date, notes } = req.body;
+    const existing = await prisma.expense.findFirst({
+      where: { id, tenantId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Not Found', message: 'Expense not found' });
+    }
+    const expense = await prisma.expense.update({
+      where: { id },
+      data: {
+        name: name ?? existing.name,
+        amount: amount !== undefined ? parseFloat(amount) : existing.amount,
+        type: type ?? existing.type,
+        date: date ? new Date(date) : existing.date,
+        notes: notes !== undefined ? notes : existing.notes
+      }
+    });
+    res.status(200).json({ expense });
+  } catch (error) {
+    console.error('Update Expense Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// DELETE /finance/expenses/:id
+app.delete('/finance/expenses/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const id = parseInt(req.params.id);
+    const existing = await prisma.expense.findFirst({
+      where: { id, tenantId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Not Found', message: 'Expense not found' });
+    }
+    await prisma.expense.delete({
+      where: { id }
+    });
+    res.status(200).json({ message: 'Expense deleted successfully' });
+  } catch (error) {
+    console.error('Delete Expense Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -3964,23 +4272,7 @@ app.post('/finance/payments/:paymentId/approve', requireGatewayHeaders, authoriz
         // Auto recalculate agent margin and amounts for each affected booking
         await calculateAndSyncAgentMargin(bId);
 
-        const allPayments = await prisma.bookingPayment.findMany({
-          where: { bookingId: bId, status: 'approved' }
-        });
-        
-        const bBooking = await prisma.booking.findUnique({ where: { id: bId } });
-        if (bBooking) {
-          const totalPaid = allPayments.reduce((acc, p) => acc + Number(p.amount), 0);
-          const remaining = Number(bBooking.totalPrice) + Number(bBooking.cardPaymentCharges) + Number(bBooking.cancellationCharges) - totalPaid - Number(bBooking.refundAmount);
-          await prisma.booking.update({
-            where: { id: bId },
-            data: {
-              paidAmount: totalPaid,
-              remainingAmount: remaining >= 0 ? remaining : 0,
-              paymentStatus: remaining <= 0 ? 'paid' : (totalPaid > 0 ? 'partially_paid' : 'unpaid')
-            }
-          });
-        }
+        await syncBookingFinancials(bId);
       }
 
       await prisma.bookingPayment.update({
@@ -3990,7 +4282,7 @@ app.post('/finance/payments/:paymentId/approve', requireGatewayHeaders, authoriz
     } else {
       // Original standard payment approvals (Sent to Vendor, Received from Client, etc.)
       if (payment.paymentType === 'Sent to Vendor') {
-        const vendorName = 'General Vendors';
+        const vendorName = await resolveVendorName(payment.notes, tenantIdNumeric);
         let vendorAccount = await prisma.ledgerAccount.findFirst({
           where: { tenantId: tenantIdNumeric, accountType: 'VENDOR_PAYABLE', entityName: vendorName }
         });
@@ -4131,24 +4423,8 @@ app.post('/finance/payments/:paymentId/approve', requireGatewayHeaders, authoriz
       }
     }
 
-    // 3. Recalculate booking paid & remaining amounts (ONLY approved payments)
-    const allPayments = await prisma.bookingPayment.findMany({
-      where: { bookingId: booking.id, status: 'approved' }
-    });
-    
-    const totalPaid = allPayments.reduce((acc, p) => acc + Number(p.amount), 0);
-    const newCardCharges = Number(booking.cardPaymentCharges) + Number(payment.cardCharges || 0);
-    const remaining = Number(booking.totalPrice) + newCardCharges + Number(booking.cancellationCharges) - totalPaid - Number(booking.refundAmount);
-
-    await prisma.booking.update({
-      where: { id: booking.id },
-      data: {
-        cardPaymentCharges: newCardCharges,
-        paidAmount: totalPaid,
-        remainingAmount: remaining >= 0 ? remaining : 0,
-        paymentStatus: remaining <= 0 ? 'paid' : (totalPaid > 0 ? 'partially_paid' : 'unpaid')
-      }
-    });
+    // 3. Recalculate booking paid & remaining amounts
+    await syncBookingFinancials(booking.id, Number(payment.cardCharges || 0));
 
     // 4. Mark notifications for this payment as read and update title to reflect approval
     await prisma.notification.updateMany({
@@ -4202,6 +4478,1159 @@ app.post('/finance/payments/:paymentId/reject', requireGatewayHeaders, authorize
     res.status(200).json({ message: 'Transaction rejected successfully', payment: updatedPayment });
   } catch (error) {
     console.error('Reject Payment Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// --- INVOICING & VOUCHER SUBSYSTEM BACKEND ARCHITECTURE ---
+
+const MOCK_PREVIEW_DATA = {
+  company: {
+    name: "Terrific Travels Ltd",
+    logoPrimary: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=120",
+    logoSecondary: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=120",
+    address: "Registered Office: 123 Travel Tower, London, UK",
+    email: "operations@terrifictravels.co.uk",
+    phone: "+44 20 7946 0958",
+    whatsapp: "https://api.whatsapp.com/send?phone=442079460958"
+  },
+  booking: {
+    reference: "TT00909",
+    date: new Date().toLocaleDateString('en-GB'),
+    agent: "Faisal Chughtai",
+    amountGross: "3499.00",
+    amountSettled: "2500.00",
+    amountDue: "999.00"
+  },
+  tables: {
+    passengers: `
+      <table class="w-full text-left border-collapse" style="font-size: 11px; width: 100%;">
+        <thead>
+          <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Title</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">First Name</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Last Name</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Classification</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 6px 12px; color: #334155;">Mr</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600;">John</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600;">Smith</td>
+            <td style="padding: 6px 12px; color: #64748b;">Adult</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 6px 12px; color: #334155;">Mrs</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600;">Jane</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600;">Smith</td>
+            <td style="padding: 6px 12px; color: #64748b;">Adult</td>
+          </tr>
+        </tbody>
+      </table>
+    `,
+    flights: `
+      <table class="w-full text-left border-collapse" style="font-size: 11px; width: 100%;">
+        <thead>
+          <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Leg Date</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Flight ID</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">PNR Trackers</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Origin</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Dest</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Times</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Bag</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 6px 12px; color: #334155;">12/06/2026</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600;">MS780</td>
+            <td style="padding: 6px 12px; color: #334155; font-family: monospace;">PNR123X / GDS99</td>
+            <td style="padding: 6px 12px; color: #334155;">LHR</td>
+            <td style="padding: 6px 12px; color: #334155;">CAI</td>
+            <td style="padding: 6px 12px; color: #334155;">14:30 - 20:45</td>
+            <td style="padding: 6px 12px; color: #64748b;">2 x 23kg</td>
+          </tr>
+        </tbody>
+      </table>
+    `,
+    payments: `
+      <table class="w-full text-left border-collapse" style="font-size: 11px; width: 100%;">
+        <thead>
+          <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Receipt Date</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Payment Method</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569; text-align: right;">Amount</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 6px 12px; color: #334155;">05/06/2026</td>
+            <td style="padding: 6px 12px; color: #334155;">Bank Transfer</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£2,500.00</td>
+            <td style="padding: 6px 12px; color: #10b981; font-weight: bold;">Approved</td>
+          </tr>
+        </tbody>
+      </table>
+    `,
+    services: `
+      <table class="w-full text-left border-collapse" style="font-size: 11px; width: 100%;">
+        <thead>
+          <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Service Description</th>
+            <th style="padding: 6px 12px; font-weight: bold; color: #475569; text-align: right;">Total Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 6px 12px; color: #334155;">Flight: LHR to CAI (MS780)</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£2,100.00</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 6px 12px; color: #334155;">Hotel: Hilton Cairo (Double Room)</td>
+            <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£1,399.00</td>
+          </tr>
+        </tbody>
+      </table>
+    `
+  },
+  document: {
+    signature: "sha256-mock-sig-1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    timestamp: new Date().toLocaleString('en-GB')
+  }
+};
+
+const compileTemplateWithBookingData = (
+  template: { type: string, structureHtml: string, structureCss: string },
+  companyContext: any,
+  booking: any,
+  signature: string
+) => {
+  const totalGross = Number(booking.totalPrice || 0);
+  const paymentsApproved = booking.payments?.filter((p: any) => p.paymentType === 'Received from Client' && p.status === 'approved') || [];
+  const refundsApproved = booking.refunds?.filter((r: any) => r.direction === 'Refund to Client') || [];
+  
+  const totalPaid = paymentsApproved.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) || 0;
+  const totalRefunded = refundsApproved.reduce((acc: number, r: any) => acc + Number(r.amount || 0), 0) || 0;
+
+  const totalSettled = totalPaid - totalRefunded;
+  const balanceDue = totalGross - totalSettled;
+
+  const passengerRows = booking.customers?.map((c: any) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 6px 12px; color: #334155;">${c.title || 'Mr/Mrs'}</td>
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${c.firstName}</td>
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${c.lastName}</td>
+      <td style="padding: 6px 12px; color: #64748b;">${c.ageCategory || 'Adult'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="4" style="padding: 12px; text-align: center; color: #94a3b8;">No passengers registered</td></tr>`;
+
+  const passengersTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Title</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">First Name</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Last Name</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Classification</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${passengerRows}
+      </tbody>
+    </table>
+  `;
+
+  const flightRows = booking.flightServices?.map((f: any) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 6px 12px; color: #334155;">${f.departureDate || f.date ? new Date(f.departureDate || f.date).toLocaleDateString('en-GB') : '-'}</td>
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${f.flightNo || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155; font-family: monospace;">${f.pnr || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${f.departedFrom || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${f.arrivedAt || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${f.departTime || f.departureTime || '-'}</td>
+      <td style="padding: 6px 12px; color: #64748b;">${f.baggageAllowance || f.baggage || '-'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="7" style="padding: 12px; text-align: center; color: #94a3b8;">No flight legs registered</td></tr>`;
+
+  const flightsTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Leg Date</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Flight ID</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">PNR Trackers</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Origin</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Dest</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Times</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Bag</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${flightRows}
+      </tbody>
+    </table>
+  `;
+
+  const hotelRows = booking.accommodations?.map((h: any) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${h.hotelName || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${h.reservationNumber || h.hotelConfirmationNumber || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${h.qty || 1}</td>
+      <td style="padding: 6px 12px; color: #334155;">${h.roomType || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${h.mealType || '-'}</td>
+      <td style="padding: 6px 12px; color: #64748b;">${h.checkInDate ? new Date(h.checkInDate).toLocaleDateString('en-GB') : '-'} to ${h.checkOutDate ? new Date(h.checkOutDate).toLocaleDateString('en-GB') : '-'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="6" style="padding: 12px; text-align: center; color: #94a3b8;">No hotel bookings registered</td></tr>`;
+
+  const hotelsTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Hotel Name</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Res ID</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Qty</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Room Type</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Meal Plan</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Dates</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${hotelRows}
+      </tbody>
+    </table>
+  `;
+
+  const transportRows = booking.transportServices?.map((t: any) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 6px 12px; color: #334155;">${t.date ? new Date(t.date).toLocaleDateString('en-GB') : '-'}</td>
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${t.vehicleType || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${t.departureDestination || t.pickUpLocation || '-'} to ${t.arrivalDestination || t.dropOffLocation || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${t.departureTime || '-'}</td>
+      <td style="padding: 6px 12px; color: #64748b;">${t.vendorName || '-'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="5" style="padding: 12px; text-align: center; color: #94a3b8;">No transport services registered</td></tr>`;
+
+  const transportsTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Date</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Vehicle Class</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Route (Pickup / Dropoff)</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Time</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Provider</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${transportRows}
+      </tbody>
+    </table>
+  `;
+
+  const visaRows = booking.visaServices?.map((v: any) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${v.visaType || 'Standard'}</td>
+      <td style="padding: 6px 12px; color: #334155; font-family: monospace;">${v.passportNumber || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155; font-family: monospace;">${v.visaNumber || 'Pending'}</td>
+      <td style="padding: 6px 12px; color: #64748b;">${v.issueDate ? new Date(v.issueDate).toLocaleDateString('en-GB') : '-'} to ${v.expiryDate ? new Date(v.expiryDate).toLocaleDateString('en-GB') : '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${v.vendorName || '-'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="5" style="padding: 12px; text-align: center; color: #94a3b8;">No visa services registered</td></tr>`;
+
+  const visasTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Visa Type</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Passport Number</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Visa Number</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Validity Window</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Vendor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${visaRows}
+      </tbody>
+    </table>
+  `;
+
+  const specialtyRows = booking.additionalServices?.map((s: any) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${s.serviceName || '-'}</td>
+      <td style="padding: 6px 12px; color: #334155;">${s.vendorName || '-'}</td>
+      <td style="padding: 6px 12px; color: #64748b;">${s.notes || '-'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="3" style="padding: 12px; text-align: center; color: #94a3b8;">No custom services registered</td></tr>`;
+
+  const specialtiesTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Service Name</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Provider</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Operational Notes / Requirements</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${specialtyRows}
+      </tbody>
+    </table>
+  `;
+
+  const paymentRows = paymentsApproved.map((p: any) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 6px 12px; color: #334155;">${new Date(p.paidOn).toLocaleDateString('en-GB')}</td>
+      <td style="padding: 6px 12px; color: #334155;">${p.paymentMethod}</td>
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(p.amount).toFixed(2)}</td>
+      <td style="padding: 6px 12px; color: #10b981; font-weight: bold;">Approved</td>
+    </tr>
+  `).join('') || `<tr><td colspan="4" style="padding: 12px; text-align: center; color: #94a3b8;">No approved payments logged</td></tr>`;
+
+  const paymentsTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Receipt Date</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Payment Method</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569; text-align: right;">Amount</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${paymentRows}
+      </tbody>
+    </table>
+  `;
+
+  const serviceRows: string[] = [];
+  booking.flightServices?.forEach((f: any) => {
+    serviceRows.push(`
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 6px 12px; color: #334155;">Flight: ${f.departedFrom} to ${f.arrivedAt} (${f.flightNo || ''})</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(f.price).toFixed(2)}</td>
+      </tr>
+    `);
+  });
+  booking.accommodations?.forEach((h: any) => {
+    serviceRows.push(`
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 6px 12px; color: #334155;">Hotel: ${h.hotelName} (${h.roomType || ''})</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(h.price).toFixed(2)}</td>
+      </tr>
+    `);
+  });
+  booking.transportServices?.forEach((t: any) => {
+    serviceRows.push(`
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 6px 12px; color: #334155;">Transport: ${t.vehicleType} (${t.departureDestination || t.pickUpLocation} to ${t.arrivalDestination || t.dropOffLocation})</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(t.price).toFixed(2)}</td>
+      </tr>
+    `);
+  });
+  booking.visaServices?.forEach((v: any) => {
+    serviceRows.push(`
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 6px 12px; color: #334155;">Visa: ${v.visaType || 'Standard'} - Passport ${v.passportNumber || ''}</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(v.price).toFixed(2)}</td>
+      </tr>
+    `);
+  });
+  booking.additionalServices?.forEach((s: any) => {
+    serviceRows.push(`
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 6px 12px; color: #334155;">Extra: ${s.serviceName} (${s.notes || ''})</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(s.charges || s.price || 0).toFixed(2)}</td>
+      </tr>
+    `);
+  });
+  booking.discounts?.forEach((d: any) => {
+    serviceRows.push(`
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 6px 12px; color: #ef4444;">Discount: ${d.notes || d.description || 'General Discount'}</td>
+        <td style="padding: 6px 12px; color: #ef4444; font-weight: 600; text-align: right;">-£${Number(d.amount).toFixed(2)}</td>
+      </tr>
+    `);
+  });
+
+  const servicesTable = `
+    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Service Description</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569; text-align: right;">Total Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${serviceRows.join('') || '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #94a3b8;">No billable services recorded</td></tr>'}
+      </tbody>
+    </table>
+  `;
+
+  const tokens: Record<string, string> = {
+    "company.name": companyContext.companyName || 'Travel Agency Ltd',
+    "company.logoPrimary": companyContext.logoPrimary ? `<img src="${companyContext.logoPrimary}" style="max-height: 50px; object-fit: contain;" />` : '',
+    "company.logoSecondary": companyContext.logoSecondary ? `<img src="${companyContext.logoSecondary}" style="max-height: 50px; object-fit: contain;" />` : '',
+    "company.address": companyContext.officeAddress || '',
+    "company.email": companyContext.emailSender || '',
+    "company.phone": companyContext.landlineFormat || '',
+    "company.whatsapp": companyContext.whatsappWebhook ? `<a href="${companyContext.whatsappWebhook}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>` : '',
+    "booking.reference": booking.bookingReference,
+    "booking.date": new Date(booking.createdAt).toLocaleDateString('en-GB'),
+    "booking.agent": booking.agentName || 'Agent Assignment',
+    "booking.amountGross": template.type === 'VOUCHER' ? '' : Number(totalGross).toFixed(2),
+    "booking.amountSettled": template.type === 'VOUCHER' ? '' : Number(totalSettled).toFixed(2),
+    "booking.amountDue": template.type === 'VOUCHER' ? '' : Number(balanceDue).toFixed(2),
+    "tables.passengers": passengersTable,
+    "tables.flights": flightsTable,
+    "tables.payments": template.type === 'VOUCHER' ? '' : paymentsTable,
+    "tables.services": template.type === 'VOUCHER' ? '' : servicesTable,
+    "tables.hotels": hotelsTable,
+    "tables.transports": transportsTable,
+    "tables.visas": visasTable,
+    "tables.specialties": specialtiesTable,
+    "document.signature": signature,
+    "document.timestamp": new Date().toLocaleString('en-GB')
+  };
+
+  const compiledHtml = template.structureHtml.replace(/\{\{([^{}]+)\}\}/g, (match, token) => {
+    const key = token.trim();
+    return tokens[key] !== undefined ? tokens[key] : match;
+  });
+
+  return { compiledHtml, totalGross, totalSettled, balanceDue };
+};
+
+interface VisualSection {
+  id: string;
+  type: string;
+  title: string;
+  body?: string;
+}
+
+interface VisualConfig {
+  themeColor: string;
+  fontFamily: string;
+  title: string;
+  showLogoPrimary: boolean;
+  showLogoSecondary: boolean;
+  showAddress: boolean;
+  showPhone: boolean;
+  showEmail: boolean;
+  showWhatsapp: boolean;
+  sections: VisualSection[];
+  showSignature: boolean;
+  showTimestamp: boolean;
+}
+
+const defaultVisualConfig = (type: string): VisualConfig => ({
+  themeColor: 'indigo',
+  fontFamily: 'Inter',
+  title: type === 'INVOICE' ? 'Invoice / Receipt' : 'Service Voucher',
+  showLogoPrimary: true,
+  showLogoSecondary: false,
+  showAddress: true,
+  showPhone: true,
+  showEmail: true,
+  showWhatsapp: true,
+  sections: type === 'INVOICE'
+    ? [
+        { id: 'sec-1', type: 'passengers', title: 'Passenger Manifest' },
+        { id: 'sec-2', type: 'flights', title: 'Flight Itinerary Details' },
+        { id: 'sec-3', type: 'hotels', title: 'Hotel Booking Details' },
+        { id: 'sec-4', type: 'transports', title: 'Ground Transport Details' },
+        { id: 'sec-5', type: 'services', title: 'Itemized Price Breakdown' },
+        { id: 'sec-6', type: 'payments', title: 'Payments Receipt Log' },
+        { id: 'sec-7', type: 'balances', title: 'Financial Balance Summary' },
+        { id: 'sec-8', type: 'custom_text', title: 'Terms & Conditions', body: 'All balances must be settled prior to departure. Tickets and dynamic packages are non-refundable/non-transferable once validated and issued.' }
+      ]
+    : [
+        { id: 'sec-1', type: 'passengers', title: 'Traveler Manifest' },
+        { id: 'sec-2', type: 'flights', title: 'Flight Itinerary Legs' },
+        { id: 'sec-3', type: 'hotels', title: 'Hotel Stay Details' },
+        { id: 'sec-4', type: 'transports', title: 'Ground Transport & Shuttle Pickups' },
+        { id: 'sec-5', type: 'visas', title: 'Visa & Borders Approvals' },
+        { id: 'sec-6', type: 'specialties', title: 'Specialty Services Checklist' },
+        { id: 'sec-7', type: 'custom_text', title: 'Operational Instructions', body: 'Present this operational voucher at the check-in terminal or gate along with traveler passports. For assistance, contact the support channels listed below.' }
+      ],
+  showSignature: true,
+  showTimestamp: true
+});
+
+function generateTemplateFromVisualConfig(config: VisualConfig, _type: string) {
+  const themes: Record<string, { primary: string; secondary: string; text: string; bg: string }> = {
+    indigo: { primary: '#4f46e5', secondary: '#818cf8', text: '#312e81', bg: '#f5f3ff' },
+    blue: { primary: '#2563eb', secondary: '#60a5fa', text: '#1e3a8a', bg: '#eff6ff' },
+    emerald: { primary: '#059669', secondary: '#34d399', text: '#064e3b', bg: '#ecfdf5' },
+    slate: { primary: '#475569', secondary: '#94a3b8', text: '#0f172a', bg: '#f8fafc' },
+    amber: { primary: '#d97706', secondary: '#fbbf24', text: '#78350f', bg: '#fffbeb' }
+  };
+
+  const selectedTheme = themes[config.themeColor] || themes.indigo;
+  const primaryColor = selectedTheme.primary;
+  const fontStack = config.fontFamily === 'Outfit' 
+    ? "'Outfit', system-ui, sans-serif" 
+    : config.fontFamily === 'Roboto'
+    ? "'Roboto', system-ui, sans-serif"
+    : "'Inter', system-ui, sans-serif";
+
+  // Build HTML
+  let html = `<div class="doc-container" style="font-family: ${fontStack}; max-width: 800px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; color: #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);">`;
+
+  // Header: Branding & Metadata
+  html += `
+  <!-- Header: Branding & Metadata -->
+  <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
+    <div>
+      <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center;">`;
+  
+  if (config.showLogoPrimary) {
+    html += `\n        <div>{{company.logoPrimary}}</div>`;
+  }
+  if (config.showLogoSecondary) {
+    html += `\n        <div>{{company.logoSecondary}}</div>`;
+  }
+  
+  html += `\n      </div>
+      <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #0f172a;">{{company.name}}</h2>`;
+
+  if (config.showAddress) {
+    html += `\n      <p style="margin: 4px 0 0; font-size: 11px; color: #64748b;">{{company.address}}</p>`;
+  }
+
+  if (config.showEmail || config.showPhone) {
+    const contactParts = [];
+    if (config.showEmail) contactParts.push(`Email: {{company.email}}`);
+    if (config.showPhone) contactParts.push(`Tel: {{company.phone}}`);
+    html += `\n      <p style="margin: 2px 0 0; font-size: 11px; color: #64748b;">${contactParts.join(' | ')}</p>`;
+  }
+
+  html += `
+    </div>
+    <div style="text-align: right;">
+      <h1 style="margin: 0 0 10px; font-size: 26px; font-weight: 900; color: ${primaryColor}; letter-spacing: -0.5px; text-transform: uppercase;">${config.title}</h1>
+      <p style="margin: 2px 0; font-size: 12px; font-weight: bold; color: #475569;">Booking Ref: <span style="font-family: monospace; font-size: 13px; color: ${primaryColor}; font-weight: 800;">{{booking.reference}}</span></p>
+      <p style="margin: 2px 0; font-size: 11px; color: #64748b;">Issue Date: {{booking.date}}</p>
+      <p style="margin: 2px 0; font-size: 11px; color: #64748b;">Assigned Agent: {{booking.agent}}</p>
+    </div>
+  </div>`;
+
+  // Render Dynamic Sections in order
+  const sections = config.sections || [];
+  sections.forEach(sec => {
+    if (sec.type === 'passengers') {
+      html += `
+  <!-- Passengers Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      ${sec.title}
+    </h3>
+    {{tables.passengers}}
+  </div>`;
+    } else if (sec.type === 'flights') {
+      html += `
+  <!-- Flight Details Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3.5c-.5-.5-2.5 0-4 1.5L13.5 8.5 5.3 6.7 3 9l8 4-4.5 4.5H4L2 22l4.5-2v-2.5L11 13l4 8z"></path></svg>
+      ${sec.title}
+    </h3>
+    {{tables.flights}}
+  </div>`;
+    } else if (sec.type === 'hotels') {
+      html += `
+  <!-- Hotel Stay Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      ${sec.title}
+    </h3>
+    {{tables.hotels}}
+  </div>`;
+    } else if (sec.type === 'transports') {
+      html += `
+  <!-- Transport details Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="1" y="3" width="22" height="13" rx="2" ry="2"></rect><path d="M5 21v-2h14v2"></path><path d="M18 16V3"></path><path d="M6 16V3"></path></svg>
+      ${sec.title}
+    </h3>
+    {{tables.transports}}
+  </div>`;
+    } else if (sec.type === 'visas') {
+      html += `
+  <!-- Visa Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+      ${sec.title}
+    </h3>
+    {{tables.visas}}
+  </div>`;
+    } else if (sec.type === 'specialties') {
+      html += `
+  <!-- Specialties Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+      ${sec.title}
+    </h3>
+    {{tables.specialties}}
+  </div>`;
+    } else if (sec.type === 'services') {
+      html += `
+  <!-- Services Breakdown Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line><line x1="9" y1="17" x2="15" y2="17"></line></svg>
+      ${sec.title}
+    </h3>
+    {{tables.services}}
+  </div>`;
+    } else if (sec.type === 'payments') {
+      html += `
+  <!-- Payment logs Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12" y2="18"></line><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+      ${sec.title}
+    </h3>
+    {{tables.payments}}
+  </div>`;
+    } else if (sec.type === 'balances') {
+      html += `
+  <!-- Financial Summary Section -->
+  <div style="display: flex; justify-content: flex-end; margin-bottom: 32px;">
+    <div style="width: 260px; background: ${selectedTheme.bg}; border: 1px solid ${primaryColor}20; border-radius: 12px; padding: 16px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b;">
+        <span>Total Gross Value:</span>
+        <span style="font-weight: 700; color: #334155;">£{{booking.amountGross}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b; border-bottom: 1px solid ${primaryColor}15; padding-bottom: 8px;">
+        <span>Confirmed Paid:</span>
+        <span style="font-weight: 700; color: #10b981;">£{{booking.amountSettled}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; color: #0f172a; padding-top: 4px;">
+        <span>Balance Due:</span>
+        <span style="color: ${primaryColor}; font-weight: 900;">£{{booking.amountDue}}</span>
+      </div>
+    </div>
+  </div>`;
+    } else if (sec.type === 'custom_text') {
+      html += `
+  <!-- Custom Text Section -->
+  <div style="margin-bottom: 24px; background: ${selectedTheme.bg}; border-radius: 12px; padding: 16px; border: 1px solid ${primaryColor}15; color: ${selectedTheme.text}; line-height: 1.5;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      ${sec.title}
+    </h3>
+    <p style="margin: 0; font-size: 10px; line-height: 1.5;">${(sec.body || '').replace(/\n/g, '<br>')}</p>
+  </div>`;
+    }
+  });
+
+  if (config.showSignature || config.showTimestamp || config.showWhatsapp) {
+    html += `
+  <!-- Footer Signature & Multi-Channel Address -->
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; display: flex; justify-content: space-between; align-items: end; font-size: 10px; color: #94a3b8;">
+    <div>`;
+
+    if (config.showSignature) {
+      html += `
+      <p style="margin: 2px 0; font-weight: bold; color: #64748b;">Digital Verification Seal</p>
+      <p style="margin: 2px 0; font-family: monospace; font-size: 9px; color: #64748b; word-break: break-all; max-width: 320px;">{{document.signature}}</p>`;
+    }
+
+    if (config.showTimestamp) {
+      html += `
+      <p style="margin: 2px 0; font-size: 9px;">Generated secure hash timeline: {{document.timestamp}}</p>`;
+    }
+
+    html += `
+    </div>
+    <div style="text-align: right;">`;
+
+    if (config.showWhatsapp) {
+      html += `
+      <p style="margin: 2px 0; color: #64748b; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+        WhatsApp Support Desk
+      </p>
+      <p style="margin: 2px 0; font-size: 9px; font-family: monospace; color: #64748b;">{{company.whatsapp}}</p>`;
+    }
+
+    html += `
+    </div>
+  </div>`;
+  }
+
+  html += `\n</div>`;
+
+  let css = `/* Generated Template Stylesheet */
+.doc-container {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+@media print {
+  body {
+    background: #fff !important;
+  }
+  .doc-container {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+}`;
+
+  return { html, css };
+}
+
+async function seedDefaultTemplatesForTenant(tenantId: number) {
+  const types = ['INVOICE', 'VOUCHER'];
+  for (const type of types) {
+    const config = defaultVisualConfig(type);
+    const generated = generateTemplateFromVisualConfig(config, type);
+    const structureHtml = generated.html + `\n<!-- VISUAL_CONFIG: ${JSON.stringify(config)} -->`;
+    const structureCss = generated.css;
+    const name = type === 'INVOICE' ? 'Default Invoice Template' : 'Default Voucher Template';
+    
+    const template = await prisma.documentTemplate.create({
+      data: {
+        tenantId,
+        name,
+        type,
+        version: 1,
+        status: 'Active',
+        structureHtml,
+        structureCss
+      }
+    });
+
+    const tokenRegex = /\{\{([^{}]+)\}\}/g;
+    const detectedTokens = new Set<string>();
+    let match;
+    while ((match = tokenRegex.exec(structureHtml)) !== null) {
+      detectedTokens.add(match[1].trim());
+    }
+
+    for (const token of detectedTokens) {
+      let pathInRecord = token;
+      if (token.startsWith('booking.')) {
+        pathInRecord = token.replace('booking.', '');
+      }
+      
+      await prisma.templateVariable.create({
+        data: {
+          templateId: template.id,
+          token,
+          description: `Substitute value of ${token}`,
+          pathInRecord
+        }
+      }).catch(() => {});
+    }
+  }
+}
+
+// GET /finance/company-context
+app.get('/finance/company-context', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    let tenantId = parseInt(req.tenantId!);
+    if (req.isPlatformAdmin && req.query.tenantId) {
+      tenantId = parseInt(req.query.tenantId as string);
+    }
+    let context = await prisma.companyContext.findUnique({
+      where: { tenantId }
+    });
+    
+    if (!context) {
+      context = {
+        id: 0,
+        tenantId,
+        companyName: 'Tooba Travels Ltd',
+        logoPrimary: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
+        logoSecondary: '',
+        officeAddress: 'Registered Office: 123 Travel Tower, London, UK',
+        emailSender: 'operations@toobatravels.co.uk',
+        landlineFormat: '+44 20 7946 0958',
+        whatsappWebhook: 'https://api.whatsapp.com/send?phone=442079460958',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+    }
+    
+    res.status(200).json({ companyContext: context });
+  } catch (error) {
+    console.error('Fetch Company Context Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// PUT /finance/company-context
+app.put('/finance/company-context', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    let tenantId = parseInt(req.tenantId!);
+    if (req.isPlatformAdmin && req.body.tenantId) {
+      tenantId = parseInt(req.body.tenantId);
+    }
+    const { companyName, logoPrimary, logoSecondary, officeAddress, emailSender, landlineFormat, whatsappWebhook } = req.body;
+
+    if (!companyName) {
+      return res.status(400).json({ error: 'Validation failed', message: 'companyName is required' });
+    }
+
+    const context = await prisma.companyContext.upsert({
+      where: { tenantId },
+      update: {
+        companyName,
+        logoPrimary: logoPrimary || null,
+        logoSecondary: logoSecondary || null,
+        officeAddress: officeAddress || null,
+        emailSender: emailSender || null,
+        landlineFormat: landlineFormat || null,
+        whatsappWebhook: whatsappWebhook || null
+      },
+      create: {
+        tenantId,
+        companyName,
+        logoPrimary: logoPrimary || null,
+        logoSecondary: logoSecondary || null,
+        officeAddress: officeAddress || null,
+        emailSender: emailSender || null,
+        landlineFormat: landlineFormat || null,
+        whatsappWebhook: whatsappWebhook || null
+      }
+    });
+
+    res.status(200).json({ message: 'Company context updated successfully', companyContext: context });
+  } catch (error) {
+    console.error('Update Company Context Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET /finance/templates
+app.get('/finance/templates', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    let tenantId = parseInt(req.tenantId!);
+    if (req.isPlatformAdmin && req.query.tenantId) {
+      tenantId = parseInt(req.query.tenantId as string);
+    }
+    
+    // Check if templates exist, and seed them lazily if count is 0
+    const count = await prisma.documentTemplate.count({
+      where: { tenantId }
+    });
+    if (count === 0) {
+      await seedDefaultTemplatesForTenant(tenantId);
+    }
+
+    const templates = await prisma.documentTemplate.findMany({
+      where: { tenantId },
+      orderBy: { updatedAt: 'desc' },
+      include: { variables: true }
+    });
+    res.status(200).json({ templates });
+  } catch (error) {
+    console.error('Fetch Templates Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET /finance/templates/:id/preview
+app.get('/finance/templates/:id/preview', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    let tenantId = parseInt(req.tenantId!);
+    if (req.isPlatformAdmin && req.query.tenantId) {
+      tenantId = parseInt(req.query.tenantId as string);
+    }
+    const id = parseInt(req.params.id);
+    
+    const template = await prisma.documentTemplate.findFirst({
+      where: { id, tenantId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Not Found', message: 'Template not found' });
+    }
+
+    const tokens: Record<string, string> = {
+      "company.name": MOCK_PREVIEW_DATA.company.name,
+      "company.logoPrimary": `<img src="${MOCK_PREVIEW_DATA.company.logoPrimary}" style="max-height: 50px;" />`,
+      "company.logoSecondary": MOCK_PREVIEW_DATA.company.logoSecondary ? `<img src="${MOCK_PREVIEW_DATA.company.logoSecondary}" style="max-height: 50px;" />` : '',
+      "company.address": MOCK_PREVIEW_DATA.company.address,
+      "company.email": MOCK_PREVIEW_DATA.company.email,
+      "company.phone": MOCK_PREVIEW_DATA.company.phone,
+      "company.whatsapp": `<a href="${MOCK_PREVIEW_DATA.company.whatsapp}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>`,
+      "booking.reference": MOCK_PREVIEW_DATA.booking.reference,
+      "booking.date": MOCK_PREVIEW_DATA.booking.date,
+      "booking.agent": MOCK_PREVIEW_DATA.booking.agent,
+      "booking.amountGross": MOCK_PREVIEW_DATA.booking.amountGross,
+      "booking.amountSettled": MOCK_PREVIEW_DATA.booking.amountSettled,
+      "booking.amountDue": MOCK_PREVIEW_DATA.booking.amountDue,
+      "tables.passengers": MOCK_PREVIEW_DATA.tables.passengers,
+      "tables.flights": MOCK_PREVIEW_DATA.tables.flights,
+      "tables.payments": MOCK_PREVIEW_DATA.tables.payments,
+      "tables.services": MOCK_PREVIEW_DATA.tables.services,
+      "document.signature": MOCK_PREVIEW_DATA.document.signature,
+      "document.timestamp": MOCK_PREVIEW_DATA.document.timestamp
+    };
+
+    const compiledHtml = template.structureHtml.replace(/\{\{([^{}]+)\}\}/g, (match, token) => {
+      const key = token.trim();
+      return tokens[key] !== undefined ? tokens[key] : match;
+    });
+
+    res.status(200).json({ 
+      template, 
+      previewHtml: compiledHtml, 
+      previewCss: template.structureCss 
+    });
+  } catch (error) {
+    console.error('Template Preview Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /finance/templates
+app.post('/finance/templates', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    let tenantId = parseInt(req.tenantId!);
+    if (req.isPlatformAdmin && req.body.tenantId) {
+      tenantId = parseInt(req.body.tenantId);
+    }
+    const { name, type, structureHtml, structureCss, status = 'Draft' } = req.body;
+
+    if (!name || !type || !structureHtml || !structureCss) {
+      return res.status(400).json({ error: 'Validation failed', message: 'name, type, html, and css are required' });
+    }
+
+    if (type === 'VOUCHER') {
+      const financialTokens = [
+        'booking.amountGross',
+        'booking.amountSettled',
+        'booking.amountDue',
+        'tables.payments',
+        'tables.services'
+      ];
+      const tokenRegex = /\{\{\s*([^{}\s]+)\s*\}\}/g;
+      let match;
+      while ((match = tokenRegex.exec(structureHtml)) !== null) {
+        const tokenName = match[1].trim();
+        if (financialTokens.includes(tokenName)) {
+          return res.status(400).json({
+            error: 'Validation failed',
+            message: `Voucher templates are strictly forbidden from containing financial variables: {{${tokenName}}}`
+          });
+        }
+      }
+    }
+
+    const existing = await prisma.documentTemplate.findMany({
+      where: { tenantId, name, type },
+      orderBy: { version: 'desc' },
+      take: 1
+    });
+
+    const version = existing.length > 0 ? existing[0].version + 1 : 1;
+
+    const template = await prisma.documentTemplate.create({
+      data: {
+        tenantId,
+        name,
+        type,
+        version,
+        status,
+        structureHtml,
+        structureCss
+      }
+    });
+
+    const tokenRegex = /\{\{([^{}]+)\}\}/g;
+    const detectedTokens = new Set<string>();
+    let match;
+    while ((match = tokenRegex.exec(structureHtml)) !== null) {
+      detectedTokens.add(match[1].trim());
+    }
+
+    for (const token of detectedTokens) {
+      let pathInRecord = token;
+      if (token.startsWith('booking.')) {
+        pathInRecord = token.replace('booking.', '');
+      }
+      
+      await prisma.templateVariable.create({
+        data: {
+          templateId: template.id,
+          token,
+          description: `Substitute value of ${token}`,
+          pathInRecord
+        }
+      }).catch(() => {});
+    }
+
+    res.status(201).json({ message: 'Template created successfully', template });
+  } catch (error) {
+    console.error('Create Template Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// PUT /finance/templates/:id
+app.put('/finance/templates/:id', requireGatewayHeaders, authorizeRoles('COMPANY_ADMIN', 'MAIN_COMPANY_ADMIN', 'ADMIN'), async (req: CustomRequest, res: Response) => {
+  try {
+    let tenantId = parseInt(req.tenantId!);
+    if (req.isPlatformAdmin && req.body.tenantId) {
+      tenantId = parseInt(req.body.tenantId);
+    }
+    const id = parseInt(req.params.id);
+    const { name, status, structureHtml, structureCss } = req.body;
+
+    const template = await prisma.documentTemplate.findFirst({
+      where: { id, tenantId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Not Found', message: 'Template not found' });
+    }
+
+    if (template.type === 'VOUCHER' && structureHtml !== undefined) {
+      const financialTokens = [
+        'booking.amountGross',
+        'booking.amountSettled',
+        'booking.amountDue',
+        'tables.payments',
+        'tables.services'
+      ];
+      const tokenRegex = /\{\{\s*([^{}\s]+)\s*\}\}/g;
+      let match;
+      while ((match = tokenRegex.exec(structureHtml)) !== null) {
+        const tokenName = match[1].trim();
+        if (financialTokens.includes(tokenName)) {
+          return res.status(400).json({
+            error: 'Validation failed',
+            message: `Voucher templates are strictly forbidden from containing financial variables: {{${tokenName}}}`
+          });
+        }
+      }
+    }
+
+    const updated = await prisma.documentTemplate.update({
+      where: { id },
+      data: {
+        name: name !== undefined ? name : template.name,
+        status: status !== undefined ? status : template.status,
+        structureHtml: structureHtml !== undefined ? structureHtml : template.structureHtml,
+        structureCss: structureCss !== undefined ? structureCss : template.structureCss
+      }
+    });
+
+    res.status(200).json({ message: 'Template updated successfully', template: updated });
+  } catch (error) {
+    console.error('Update Template Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /finance/templates/:id/compile
+app.post('/finance/templates/:id/compile', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const id = parseInt(req.params.id);
+    const { bookingId } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({ error: 'Validation failed', message: 'bookingId is required' });
+    }
+
+    const [template, booking, companyContext] = await Promise.all([
+      prisma.documentTemplate.findFirst({
+        where: { id, tenantId }
+      }),
+      prisma.booking.findUnique({
+        where: { id: parseInt(bookingId) },
+        include: {
+          customers: true,
+          payments: true,
+          accommodations: true,
+          flightServices: true,
+          transportServices: true,
+          visaServices: true,
+          discounts: true,
+          refunds: true,
+          additionalServices: true
+        }
+      }),
+      prisma.companyContext.findUnique({
+        where: { tenantId }
+      })
+    ]);
+
+    if (!template) {
+      return res.status(404).json({ error: 'Not Found', message: 'Template not found' });
+    }
+
+    if (!booking || booking.tenantId !== tenantId) {
+      return res.status(404).json({ error: 'Not Found', message: 'Booking record not found' });
+    }
+
+    const resolvedContext = companyContext || {
+      companyName: 'Tooba Travels Ltd',
+      logoPrimary: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
+      logoSecondary: '',
+      officeAddress: 'Registered Office: 123 Travel Tower, London, UK',
+      emailSender: 'operations@toobatravels.co.uk',
+      landlineFormat: '+44 20 7946 0958',
+      whatsappWebhook: 'https://api.whatsapp.com/send?phone=442079460958'
+    };
+
+    const secret = process.env.JWT_SECRET || 'travel-secret';
+    const rawPayload = `${booking.bookingReference}:${booking.totalPrice}:${booking.paidAmount}`;
+    const digitalSignature = crypto.createHmac('sha256', secret).update(rawPayload).digest('hex');
+
+    const { compiledHtml, totalGross, totalSettled, balanceDue } = compileTemplateWithBookingData(
+      template,
+      resolvedContext,
+      booking,
+      digitalSignature
+    );
+
+    const docLog = await prisma.documentLog.create({
+      data: {
+        tenantId,
+        templateId: template.id,
+        bookingId: booking.id,
+        referenceNumber: booking.bookingReference,
+        documentType: template.type,
+        recipientName: booking.customers && booking.customers[0] 
+          ? `${booking.customers[0].firstName} ${booking.customers[0].lastName}` 
+          : 'Walk-in Client',
+        amountGross: totalGross,
+        amountSettled: totalSettled,
+        amountDue: balanceDue,
+        digitalSignature,
+        metadataJson: JSON.stringify({
+          compiledAt: new Date().toISOString(),
+          compiledByUserId: req.userId
+        })
+      }
+    });
+
+    res.status(200).json({
+      message: 'Document compiled successfully',
+      docLogId: docLog.id,
+      compiledHtml,
+      compiledCss: template.structureCss,
+      digitalSignature,
+      financials: {
+        totalGross,
+        totalSettled,
+        balanceDue
+      }
+    });
+  } catch (error) {
+    console.error('Compile Document Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

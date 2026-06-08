@@ -4,7 +4,8 @@ import {
   Building2, Plus, Users, Shield, RefreshCw, CheckCircle, 
   AlertTriangle, Upload, Edit, Calendar, MapPin, Briefcase, 
   Mail, Phone, Clock, X, LogOut, Settings, Inbox, Server, Key,
-  Activity
+  Activity, Layout, Trash2, ArrowUp, ArrowDown, Save,
+  Loader2, FileText, Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -54,12 +55,296 @@ interface SmtpSettings {
   pass: string;
 }
 
+interface VisualSection {
+  id: string;
+  type: 'passengers' | 'flights' | 'hotels' | 'transports' | 'visas' | 'specialties' | 'services' | 'payments' | 'balances' | 'custom_text';
+  title: string;
+  body?: string;
+}
+
+interface VisualConfig {
+  themeColor: string;
+  fontFamily: string;
+  title: string;
+  showLogoPrimary: boolean;
+  showLogoSecondary: boolean;
+  showAddress: boolean;
+  showPhone: boolean;
+  showEmail: boolean;
+  showWhatsapp: boolean;
+  sections: VisualSection[];
+  showSignature: boolean;
+  showTimestamp: boolean;
+}
+
+const defaultVisualConfig = (type: string): VisualConfig => ({
+  themeColor: 'indigo',
+  fontFamily: 'Inter',
+  title: type === 'INVOICE' ? 'Invoice / Receipt' : 'Service Voucher',
+  showLogoPrimary: true,
+  showLogoSecondary: false,
+  showAddress: true,
+  showPhone: true,
+  showEmail: true,
+  showWhatsapp: true,
+  sections: type === 'INVOICE'
+    ? [
+        { id: 'sec-1', type: 'passengers', title: 'Passenger Manifest' },
+        { id: 'sec-2', type: 'flights', title: 'Flight Itinerary Details' },
+        { id: 'sec-3', type: 'hotels', title: 'Hotel Booking Details' },
+        { id: 'sec-4', type: 'transports', title: 'Ground Transport Details' },
+        { id: 'sec-5', type: 'services', title: 'Itemized Price Breakdown' },
+        { id: 'sec-6', type: 'payments', title: 'Payments Receipt Log' },
+        { id: 'sec-7', type: 'balances', title: 'Financial Balance Summary' },
+        { id: 'sec-8', type: 'custom_text', title: 'Terms & Conditions', body: 'All balances must be settled prior to departure. Tickets and dynamic packages are non-refundable/non-transferable once validated and issued.' }
+      ]
+    : [
+        { id: 'sec-1', type: 'passengers', title: 'Traveler Manifest' },
+        { id: 'sec-2', type: 'flights', title: 'Flight Itinerary Legs' },
+        { id: 'sec-3', type: 'hotels', title: 'Hotel Stay Details' },
+        { id: 'sec-4', type: 'transports', title: 'Ground Transport & Shuttle Pickups' },
+        { id: 'sec-5', type: 'visas', title: 'Visa & Borders Approvals' },
+        { id: 'sec-6', type: 'specialties', title: 'Specialty Services Checklist' },
+        { id: 'sec-7', type: 'custom_text', title: 'Operational Instructions', body: 'Present this operational voucher at the check-in terminal or gate along with traveler passports. For assistance, contact the support channels listed below.' }
+      ],
+  showSignature: true,
+  showTimestamp: true
+});
+
+function generateTemplateFromVisualConfig(config: VisualConfig, _type: string) {
+  const themes: Record<string, { primary: string; secondary: string; text: string; bg: string }> = {
+    indigo: { primary: '#4f46e5', secondary: '#818cf8', text: '#312e81', bg: '#f5f3ff' },
+    blue: { primary: '#2563eb', secondary: '#60a5fa', text: '#1e3a8a', bg: '#eff6ff' },
+    emerald: { primary: '#059669', secondary: '#34d399', text: '#064e3b', bg: '#ecfdf5' },
+    slate: { primary: '#475569', secondary: '#94a3b8', text: '#0f172a', bg: '#f8fafc' },
+    amber: { primary: '#d97706', secondary: '#fbbf24', text: '#78350f', bg: '#fffbeb' }
+  };
+
+  const selectedTheme = themes[config.themeColor] || themes.indigo;
+  const primaryColor = selectedTheme.primary;
+  const fontStack = config.fontFamily === 'Outfit' 
+    ? "'Outfit', system-ui, sans-serif" 
+    : config.fontFamily === 'Roboto'
+    ? "'Roboto', system-ui, sans-serif"
+    : "'Inter', system-ui, sans-serif";
+
+  // Build HTML
+  let html = `<div class="doc-container" style="font-family: ${fontStack}; max-width: 800px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; color: #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);">`;
+
+  // Header: Branding & Metadata
+  html += `
+  <!-- Header: Branding & Metadata -->
+  <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
+    <div>
+      <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center;">`;
+  
+  if (config.showLogoPrimary) {
+    html += `\n        <div>{{company.logoPrimary}}</div>`;
+  }
+  if (config.showLogoSecondary) {
+    html += `\n        <div>{{company.logoSecondary}}</div>`;
+  }
+  
+  html += `\n      </div>
+      <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #0f172a;">{{company.name}}</h2>`;
+
+  if (config.showAddress) {
+    html += `\n      <p style="margin: 4px 0 0; font-size: 11px; color: #64748b;">{{company.address}}</p>`;
+  }
+
+  if (config.showEmail || config.showPhone) {
+    const contactParts = [];
+    if (config.showEmail) contactParts.push(`Email: {{company.email}}`);
+    if (config.showPhone) contactParts.push(`Tel: {{company.phone}}`);
+    html += `\n      <p style="margin: 2px 0 0; font-size: 11px; color: #64748b;">${contactParts.join(' | ')}</p>`;
+  }
+
+  html += `
+    </div>
+    <div style="text-align: right;">
+      <h1 style="margin: 0 0 10px; font-size: 26px; font-weight: 900; color: ${primaryColor}; letter-spacing: -0.5px; text-transform: uppercase;">${config.title}</h1>
+      <p style="margin: 2px 0; font-size: 12px; font-weight: bold; color: #475569;">Booking Ref: <span style="font-family: monospace; font-size: 13px; color: ${primaryColor}; font-weight: 800;">{{booking.reference}}</span></p>
+      <p style="margin: 2px 0; font-size: 11px; color: #64748b;">Issue Date: {{booking.date}}</p>
+      <p style="margin: 2px 0; font-size: 11px; color: #64748b;">Assigned Agent: {{booking.agent}}</p>
+    </div>
+  </div>`;
+
+  // Render Dynamic Sections in order
+  const sections = config.sections || [];
+  sections.forEach(sec => {
+    if (sec.type === 'passengers') {
+      html += `
+  <!-- Passengers Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      ${sec.title}
+    </h3>
+    {{tables.passengers}}
+  </div>`;
+    } else if (sec.type === 'flights') {
+      html += `
+  <!-- Flight Details Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3.5c-.5-.5-2.5 0-4 1.5L13.5 8.5 5.3 6.7 3 9l8 4-4.5 4.5H4L2 22l4.5-2v-2.5L11 13l4 8z"></path></svg>
+      ${sec.title}
+    </h3>
+    {{tables.flights}}
+  </div>`;
+    } else if (sec.type === 'hotels') {
+      html += `
+  <!-- Hotel Stay Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      ${sec.title}
+    </h3>
+    {{tables.hotels}}
+  </div>`;
+    } else if (sec.type === 'transports') {
+      html += `
+  <!-- Transport details Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="1" y="3" width="22" height="13" rx="2" ry="2"></rect><path d="M5 21v-2h14v2"></path><path d="M18 16V3"></path><path d="M6 16V3"></path></svg>
+      ${sec.title}
+    </h3>
+    {{tables.transports}}
+  </div>`;
+    } else if (sec.type === 'visas') {
+      html += `
+  <!-- Visa Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+      ${sec.title}
+    </h3>
+    {{tables.visas}}
+  </div>`;
+    } else if (sec.type === 'specialties') {
+      html += `
+  <!-- Specialties Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+      ${sec.title}
+    </h3>
+    {{tables.specialties}}
+  </div>`;
+    } else if (sec.type === 'services') {
+      html += `
+  <!-- Services Breakdown Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line><line x1="9" y1="17" x2="15" y2="17"></line></svg>
+      ${sec.title}
+    </h3>
+    {{tables.services}}
+  </div>`;
+    } else if (sec.type === 'payments') {
+      html += `
+  <!-- Payment logs Section -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12" y2="18"></line><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+      ${sec.title}
+    </h3>
+    {{tables.payments}}
+  </div>`;
+    } else if (sec.type === 'balances') {
+      html += `
+  <!-- Financial Summary Section -->
+  <div style="display: flex; justify-content: flex-end; margin-bottom: 32px;">
+    <div style="width: 260px; background: ${selectedTheme.bg}; border: 1px solid ${primaryColor}20; border-radius: 12px; padding: 16px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b;">
+        <span>Total Gross Value:</span>
+        <span style="font-weight: 700; color: #334155;">£{{booking.amountGross}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b; border-bottom: 1px solid ${primaryColor}15; padding-bottom: 8px;">
+        <span>Confirmed Paid:</span>
+        <span style="font-weight: 700; color: #10b981;">£{{booking.amountSettled}}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; color: #0f172a; padding-top: 4px;">
+        <span>Balance Due:</span>
+        <span style="color: ${primaryColor}; font-weight: 900;">£{{booking.amountDue}}</span>
+      </div>
+    </div>
+  </div>`;
+    } else if (sec.type === 'custom_text') {
+      html += `
+  <!-- Custom Text Section -->
+  <div style="margin-bottom: 24px; background: ${selectedTheme.bg}; border-radius: 12px; padding: 16px; border: 1px solid ${primaryColor}15; color: ${selectedTheme.text}; line-height: 1.5;">
+    <h3 style="margin: 0 0 8px; font-size: 11px; font-weight: 800; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      ${sec.title}
+    </h3>
+    <p style="margin: 0; font-size: 10px; line-height: 1.5;">${(sec.body || '').replace(/\n/g, '<br>')}</p>
+  </div>`;
+    }
+  });
+
+  if (config.showSignature || config.showTimestamp || config.showWhatsapp) {
+    html += `
+  <!-- Footer Signature & Multi-Channel Address -->
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; display: flex; justify-content: space-between; align-items: end; font-size: 10px; color: #94a3b8;">
+    <div>`;
+
+    if (config.showSignature) {
+      html += `
+      <p style="margin: 2px 0; font-weight: bold; color: #64748b;">Digital Verification Seal</p>
+      <p style="margin: 2px 0; font-family: monospace; font-size: 9px; color: #64748b; word-break: break-all; max-width: 320px;">{{document.signature}}</p>`;
+    }
+
+    if (config.showTimestamp) {
+      html += `
+      <p style="margin: 2px 0; font-size: 9px;">Generated secure hash timeline: {{document.timestamp}}</p>`;
+    }
+
+    html += `
+    </div>
+    <div style="text-align: right;">`;
+
+    if (config.showWhatsapp) {
+      html += `
+      <p style="margin: 2px 0; color: #64748b; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+        WhatsApp Support Desk
+      </p>
+      <p style="margin: 2px 0; font-size: 9px; font-family: monospace; color: #64748b;">{{company.whatsapp}}</p>`;
+    }
+
+    html += `
+    </div>
+  </div>`;
+  }
+
+  html += `\n</div>`;
+
+  let css = `/* Generated Template Stylesheet */
+.doc-container {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+@media print {
+  body {
+    background: #fff !important;
+  }
+  .doc-container {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+}`;
+
+  return { html, css };
+}
+
 export function SuperAdminDashboard() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
   
   // Active Tab State
-  const [activeTab, setActiveTab] = useState<'tenants' | 'demos' | 'settings'>('tenants');
+  const [activeTab, setActiveTab] = useState<'tenants' | 'demos' | 'settings' | 'templates'>('tenants');
 
   // Data State
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -103,6 +388,7 @@ export function SuperAdminDashboard() {
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [editName, setEditName] = useState('');
   const [editDomain, setEditDomain] = useState('');
@@ -116,7 +402,38 @@ export function SuperAdminDashboard() {
   const [editStatus, setEditStatus] = useState('active');
   const [editTrialEndsAt, setEditTrialEndsAt] = useState('');
   const [editError, setEditError] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
+  // Invoicing & Voucher Templates States
+  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<'studio' | 'profile'>('studio');
+
+  // Visual/Code Template Editor States
+  const [editMode, setEditMode] = useState<'visual' | 'code'>('visual');
+  const [visualConfig, setVisualConfig] = useState<VisualConfig | null>(null);
+  const [tempName, setTempName] = useState('');
+  const [tempType, setTempType] = useState('INVOICE');
+  const [tempStatus, setTempStatus] = useState('Draft');
+  const [tempHtml, setTempHtml] = useState('');
+  const [tempCss, setTempCss] = useState('');
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  // Tenant Branding Context States
+  const [tenantProfile, setTenantProfile] = useState({
+    companyName: '',
+    logoPrimary: '',
+    logoSecondary: '',
+    officeAddress: '',
+    emailSender: '',
+    landlineFormat: '',
+    whatsappWebhook: ''
+  });
+  const [tenantProfileLoading, setTenantProfileLoading] = useState(false);
+  const [uploadingPrimary, setUploadingPrimary] = useState(false);
+  const [uploadingSecondary, setUploadingSecondary] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'SUPER_ADMIN') {
@@ -124,7 +441,7 @@ export function SuperAdminDashboard() {
       return;
     }
 
-    if (activeTab === 'tenants') {
+    if (activeTab === 'tenants' || activeTab === 'templates') {
       fetchTenants();
     } else if (activeTab === 'demos') {
       fetchDemoRequests();
@@ -238,6 +555,301 @@ export function SuperAdminDashboard() {
       toast.error(err.response?.data?.error || 'Failed to upload logo image');
     } finally {
       setLogoUploading(false);
+    }
+  };
+
+  // Template Manager helpers
+  const handleSelectTenantTemplate = (t: any, tenantId: number) => {
+    setSelectedTemplate(t);
+    setTempName(t.name);
+    setTempType(t.type);
+    setTempStatus(t.status);
+    setTempHtml(t.structureHtml);
+    setTempCss(t.structureCss);
+    
+    // Extract VisualConfig comment
+    const match = t.structureHtml.match(/<!-- VISUAL_CONFIG: (.*) -->/);
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        setVisualConfig(parsed);
+        setEditMode('visual');
+      } catch (err) {
+        setVisualConfig(defaultVisualConfig(t.type));
+        setEditMode('code');
+      }
+    } else {
+      setVisualConfig(null);
+      setEditMode('code');
+    }
+    
+    triggerTenantPreview(t.id, tenantId);
+  };
+
+  const triggerTenantPreview = async (templateId: number, tenantId: number) => {
+    try {
+      setPreviewLoading(true);
+      const res = await api.get(`/finance/templates/${templateId}/preview`, { params: { tenantId } });
+      setPreviewHtml(res.data.previewHtml || '');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const fetchTenantTemplates = async (tenantId: number) => {
+    setTemplatesLoading(true);
+    try {
+      const res = await api.get('/finance/templates', { params: { tenantId } });
+      setTemplates(res.data.templates || []);
+      if (res.data.templates?.length > 0) {
+        handleSelectTenantTemplate(res.data.templates[0], tenantId);
+      } else {
+        setSelectedTemplate(null);
+        setVisualConfig(null);
+        setPreviewHtml('');
+      }
+    } catch (err) {
+      toast.error('Failed to load company templates');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const fetchTenantProfile = async (tenantId: number) => {
+    setTenantProfileLoading(true);
+    try {
+      const currentTenant = tenants.find(t => t.id === tenantId);
+      const tenantDetails = {
+        name: currentTenant?.name || 'Company Name',
+        logo: currentTenant?.logo || '',
+        location: currentTenant?.location || '',
+        email: currentTenant?.email || '',
+        phone: currentTenant?.phone || ''
+      };
+
+      const res = await api.get('/finance/company-context', { params: { tenantId } });
+      if (res.data.companyContext) {
+        const ctx = res.data.companyContext;
+        setTenantProfile({
+          companyName: ctx.companyName || tenantDetails.name,
+          logoPrimary: ctx.logoPrimary || tenantDetails.logo,
+          logoSecondary: ctx.logoSecondary || '',
+          officeAddress: ctx.officeAddress || tenantDetails.location,
+          emailSender: ctx.emailSender || tenantDetails.email,
+          landlineFormat: ctx.landlineFormat || tenantDetails.phone,
+          whatsappWebhook: ctx.whatsappWebhook || `https://api.whatsapp.com/send?phone=${(ctx.landlineFormat || tenantDetails.phone).replace(/[^0-9+]/g, '')}`
+        });
+      }
+    } catch (err) {
+      toast.error('Failed to load company branding details');
+    } finally {
+      setTenantProfileLoading(false);
+    }
+  };
+
+  const updateTenantVisualConfig = (updates: Partial<VisualConfig>) => {
+    if (!visualConfig) return;
+    const newConfig = { ...visualConfig, ...updates };
+    setVisualConfig(newConfig);
+    const generated = generateTemplateFromVisualConfig(newConfig, tempType);
+    setTempHtml(generated.html + `\n<!-- VISUAL_CONFIG: ${JSON.stringify(newConfig)} -->`);
+    setTempCss(generated.css);
+  };
+
+  const addTenantSection = (type: VisualSection['type']) => {
+    if (!visualConfig) return;
+    const newId = `sec-${Date.now()}`;
+    let defaultTitle = '';
+    let defaultBody = '';
+    
+    switch (type) {
+      case 'passengers': defaultTitle = 'Passenger Details'; break;
+      case 'flights': defaultTitle = 'Flight Details'; break;
+      case 'hotels': defaultTitle = 'Hotel Details'; break;
+      case 'transports': defaultTitle = 'Ground Transport Details'; break;
+      case 'visas': defaultTitle = 'Visa Approvals'; break;
+      case 'specialties': defaultTitle = 'Speciality Services'; break;
+      case 'services': defaultTitle = 'Itemized Pricing'; break;
+      case 'payments': defaultTitle = 'Payments Log'; break;
+      case 'balances': defaultTitle = 'Financial Summary'; break;
+      case 'custom_text': 
+        defaultTitle = 'Important Notes'; 
+        defaultBody = 'Write notes or additional instructions here...'; 
+        break;
+    }
+
+    const newSection: VisualSection = {
+      id: newId,
+      type,
+      title: defaultTitle,
+      body: defaultBody
+    };
+
+    updateTenantVisualConfig({
+      sections: [...visualConfig.sections, newSection]
+    });
+    toast.success('Added new section: ' + defaultTitle);
+  };
+
+  const removeTenantSection = (id: string) => {
+    if (!visualConfig) return;
+    const target = visualConfig.sections.find(s => s.id === id);
+    if (!target) return;
+    updateTenantVisualConfig({
+      sections: visualConfig.sections.filter(s => s.id !== id)
+    });
+    toast.success('Removed section: ' + target.title);
+  };
+
+  const moveTenantSection = (index: number, direction: 'up' | 'down') => {
+    if (!visualConfig) return;
+    const newSections = [...visualConfig.sections];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    if (targetIndex < 0 || targetIndex >= newSections.length) return;
+    
+    const temp = newSections[index];
+    newSections[index] = newSections[targetIndex];
+    newSections[targetIndex] = temp;
+    
+    updateTenantVisualConfig({ sections: newSections });
+  };
+
+  const updateTenantSectionTitle = (id: string, title: string) => {
+    if (!visualConfig) return;
+    updateTenantVisualConfig({
+      sections: visualConfig.sections.map(s => s.id === id ? { ...s, title } : s)
+    });
+  };
+
+  const updateTenantSectionBody = (id: string, body: string) => {
+    if (!visualConfig) return;
+    updateTenantVisualConfig({
+      sections: visualConfig.sections.map(s => s.id === id ? { ...s, body } : s)
+    });
+  };
+
+  const handleCreateNewTenantTemplateClick = () => {
+    setSelectedTemplate(null);
+    setTempName('');
+    setTempType('INVOICE');
+    setTempStatus('Draft');
+    const defaultConfig = defaultVisualConfig('INVOICE');
+    setVisualConfig(defaultConfig);
+    const generated = generateTemplateFromVisualConfig(defaultConfig, 'INVOICE');
+    setTempHtml(generated.html + `\n<!-- VISUAL_CONFIG: ${JSON.stringify(defaultConfig)} -->`);
+    setTempCss(generated.css);
+    setEditMode('visual');
+    setPreviewHtml('');
+  };
+
+  const handleSaveTenantTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenantId) return;
+    if (!tempName) {
+      toast.error('Template Name is required');
+      return;
+    }
+
+    if (tempType === 'VOUCHER') {
+      const financialTokens = [
+        'booking.amountGross',
+        'booking.amountSettled',
+        'booking.amountDue',
+        'tables.payments',
+        'tables.services'
+      ];
+      const foundFinancialToken = financialTokens.find(token => tempHtml.includes(token));
+      if (foundFinancialToken) {
+        toast.error(`Error: Vouchers are strictly forbidden from containing financial variables (e.g. ${foundFinancialToken})`);
+        return;
+      }
+    }
+
+    setSavingTemplate(true);
+    try {
+      if (selectedTemplate) {
+        await api.put(`/finance/templates/${selectedTemplate.id}`, {
+          tenantId: selectedTenantId,
+          name: tempName,
+          status: tempStatus,
+          structureHtml: tempHtml,
+          structureCss: tempCss
+        });
+        toast.success('Template updated successfully');
+      } else {
+        const res = await api.post('/finance/templates', {
+          tenantId: selectedTenantId,
+          name: tempName,
+          type: tempType,
+          status: tempStatus,
+          structureHtml: tempHtml,
+          structureCss: tempCss
+        });
+        toast.success('Template created successfully');
+        setSelectedTemplate(res.data.template);
+      }
+      const resList = await api.get('/finance/templates', { params: { tenantId: selectedTenantId } });
+      setTemplates(resList.data.templates || []);
+      if (!selectedTemplate && resList.data.templates?.length > 0) {
+        const justCreated = resList.data.templates.find((x: any) => x.name === tempName && x.type === tempType);
+        if (justCreated) {
+          handleSelectTenantTemplate(justCreated, selectedTenantId);
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save template');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleSaveTenantProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenantId) return;
+    setTenantProfileLoading(true);
+    try {
+      await api.put('/finance/company-context', {
+        ...tenantProfile,
+        tenantId: selectedTenantId
+      });
+      toast.success('Company Profile Context updated');
+      fetchTenantProfile(selectedTenantId);
+    } catch (err) {
+      toast.error('Failed to update profile settings');
+    } finally {
+      setTenantProfileLoading(false);
+    }
+  };
+
+  const handleTenantLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'primary' | 'secondary') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (type === 'primary') setUploadingPrimary(true);
+    else setUploadingSecondary(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/auth/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (type === 'primary') {
+        setTenantProfile(prev => ({ ...prev, logoPrimary: res.data.url }));
+        toast.success('Primary logo uploaded successfully');
+      } else {
+        setTenantProfile(prev => ({ ...prev, logoSecondary: res.data.url }));
+        toast.success('Secondary logo uploaded successfully');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to upload logo');
+    } finally {
+      if (type === 'primary') setUploadingPrimary(false);
+      else setUploadingSecondary(false);
     }
   };
 
@@ -386,6 +998,15 @@ export function SuperAdminDashboard() {
               <Settings className="h-5 w-5" />
               SMTP Settings
             </button>
+            <button
+              onClick={() => setActiveTab('templates')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left font-medium transition-colors ${
+                activeTab === 'templates' ? 'bg-primary-50 text-primary-600' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Layout className="h-5 w-5" />
+              Invoicing & Vouchers
+            </button>
           </nav>
         </div>
         
@@ -410,11 +1031,13 @@ export function SuperAdminDashboard() {
                 {activeTab === 'tenants' && 'SaaS Command Center'}
                 {activeTab === 'demos' && 'Demo Requests'}
                 {activeTab === 'settings' && 'SMTP Configuration'}
+                {activeTab === 'templates' && 'Invoicing & Voucher Studio'}
               </h1>
               <p className="text-slate-500 mt-1">
                 {activeTab === 'tenants' && 'Manage global enterprise tenants, database workspaces, and subscription access.'}
                 {activeTab === 'demos' && 'Manage incoming B2B demo leads, view company profile details, and track follow-ups.'}
                 {activeTab === 'settings' && 'Manage platform SMTP settings for verification, notifications, and customer emails.'}
+                {activeTab === 'templates' && 'Dynamically design and override documents layouts, sections, and brandings for any registered enterprise.'}
               </p>
             </div>
             
@@ -424,11 +1047,15 @@ export function SuperAdminDashboard() {
                   if (activeTab === 'tenants') fetchTenants();
                   else if (activeTab === 'demos') fetchDemoRequests();
                   else if (activeTab === 'settings') fetchSmtpSettings();
+                  else if (activeTab === 'templates' && selectedTenantId) {
+                    fetchTenantTemplates(selectedTenantId);
+                    fetchTenantProfile(selectedTenantId);
+                  }
                 }}
                 className="p-2 border border-slate-200 bg-white rounded-xl hover:bg-slate-100 transition-colors"
                 title="Refresh Data"
               >
-                <RefreshCw className={`h-5 w-5 text-slate-600 ${(loading || loadingDemos || loadingSmtp) ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 text-slate-600 ${(loading || loadingDemos || loadingSmtp || templatesLoading || tenantProfileLoading) ? 'animate-spin' : ''}`} />
               </button>
               {activeTab === 'tenants' && (
                 <button 
@@ -916,6 +1543,582 @@ export function SuperAdminDashboard() {
                     </button>
                   </div>
                 </form>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'templates' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Building2 className="w-6 h-6 text-primary-600" />
+                  <div>
+                    <h3 className="font-bold text-slate-900">Select Company Context</h3>
+                    <p className="text-xs text-slate-500">Pick a registered company to configure their invoicing, vouchers, and branding assets.</p>
+                  </div>
+                </div>
+                <select
+                  value={selectedTenantId || ''}
+                  onChange={(e) => {
+                    const tId = e.target.value ? parseInt(e.target.value) : null;
+                    setSelectedTenantId(tId);
+                    if (tId) {
+                      fetchTenantTemplates(tId);
+                      fetchTenantProfile(tId);
+                    }
+                  }}
+                  className="w-full sm:w-64 px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                >
+                  <option value="">-- Choose Company --</option>
+                  {tenants.map(t => (
+                    <option key={t.id} value={t.id}>{t.name} ({t.domain || 'no-domain'})</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedTenantId ? (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Sidebar: Templates List */}
+                  <div className="lg:col-span-3 space-y-4">
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                        <h4 className="font-bold text-slate-900 text-sm">Company Layouts</h4>
+                        <button
+                          onClick={handleCreateNewTenantTemplateClick}
+                          className="p-1.5 hover:bg-slate-50 text-primary-600 rounded-lg transition-colors border border-slate-200/60"
+                          title="Create New Template"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {templatesLoading ? (
+                        <div className="py-6 text-center text-slate-400 text-xs">
+                          <RefreshCw className="w-5 h-5 animate-spin mx-auto text-primary-600 mb-2" />
+                          Loading templates...
+                        </div>
+                      ) : templates.length === 0 ? (
+                        <div className="py-6 text-center text-slate-400 text-xs">
+                          No templates configured.
+                        </div>
+                      ) : (
+                        <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
+                          {templates.map(t => (
+                            <button
+                              key={t.id}
+                              onClick={() => handleSelectTenantTemplate(t, selectedTenantId)}
+                              className={`w-full text-left p-2.5 rounded-xl transition-all border flex flex-col gap-1 ${
+                                selectedTemplate?.id === t.id
+                                  ? 'bg-primary-50/50 border-primary-200 text-primary-700 shadow-sm font-semibold'
+                                  : 'border-transparent text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className="text-xs truncate block font-medium">{t.name}</span>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className={`px-1.5 py-0.5 rounded-md font-bold tracking-wide ${
+                                  t.type === 'INVOICE' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>{t.type}</span>
+                                <span className={`px-1.5 py-0.5 rounded-md ${
+                                  t.status === 'Active' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'bg-slate-100 text-slate-500'
+                                }`}>{t.status}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tab Menu */}
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-2 flex flex-col gap-1">
+                      <button
+                        onClick={() => setActiveSubTab('studio')}
+                        className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                          activeSubTab === 'studio' ? 'bg-primary-50 text-primary-600' : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Layout className="w-4 h-4" /> Layout Builder
+                      </button>
+                      <button
+                        onClick={() => setActiveSubTab('profile')}
+                        className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                          activeSubTab === 'profile' ? 'bg-primary-50 text-primary-600' : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Globe className="w-4 h-4" /> Branding Assets
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Main Work Area */}
+                  <div className="lg:col-span-9 space-y-6">
+                    {activeSubTab === 'profile' ? (
+                      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                        <h3 className="font-bold text-slate-900 text-base mb-1">Branding context settings</h3>
+                        <p className="text-xs text-slate-500 mb-6">These parameters fill template tags like company address, sender email, logos and support lines.</p>
+
+                        {tenantProfileLoading ? (
+                          <div className="p-12 text-center text-slate-500">
+                            <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary-600 mb-2" />
+                            Loading settings...
+                          </div>
+                        ) : (
+                          <form onSubmit={handleSaveTenantProfile} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Official Company Name *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  value={tenantProfile.companyName}
+                                  onChange={e => setTenantProfile({ ...tenantProfile, companyName: e.target.value })}
+                                  placeholder="Company Name"
+                                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Corporate Sender Email</label>
+                                <input
+                                  type="email"
+                                  value={tenantProfile.emailSender}
+                                  onChange={e => setTenantProfile({ ...tenantProfile, emailSender: e.target.value })}
+                                  placeholder="operations@company.com"
+                                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Primary Branding Logo URL</label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={tenantProfile.logoPrimary}
+                                    onChange={e => setTenantProfile({ ...tenantProfile, logoPrimary: e.target.value })}
+                                    placeholder="https://..."
+                                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                  />
+                                  <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 flex items-center justify-center cursor-pointer min-w-[100px]">
+                                    {uploadingPrimary ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upload Logo'}
+                                    <input type="file" accept="image/*" className="hidden" onChange={e => handleTenantLogoUpload(e, 'primary')} />
+                                  </label>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Secondary Branding Logo URL</label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={tenantProfile.logoSecondary}
+                                    onChange={e => setTenantProfile({ ...tenantProfile, logoSecondary: e.target.value })}
+                                    placeholder="https://..."
+                                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                  />
+                                  <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 flex items-center justify-center cursor-pointer min-w-[100px]">
+                                    {uploadingSecondary ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upload Logo'}
+                                    <input type="file" accept="image/*" className="hidden" onChange={e => handleTenantLogoUpload(e, 'secondary')} />
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Office Landlines / Helpline Format</label>
+                                <input
+                                  type="text"
+                                  value={tenantProfile.landlineFormat}
+                                  onChange={e => setTenantProfile({ ...tenantProfile, landlineFormat: e.target.value })}
+                                  placeholder="+44 20 7946 0958"
+                                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">WhatsApp Webhook API URL</label>
+                                <input
+                                  type="text"
+                                  value={tenantProfile.whatsappWebhook}
+                                  onChange={e => setTenantProfile({ ...tenantProfile, whatsappWebhook: e.target.value })}
+                                  placeholder="https://api.whatsapp.com/send?phone=..."
+                                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Office Physical Address</label>
+                              <textarea
+                                value={tenantProfile.officeAddress}
+                                onChange={e => setTenantProfile({ ...tenantProfile, officeAddress: e.target.value })}
+                                placeholder="123 Travel Tower, London, UK"
+                                rows={2}
+                                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none"
+                              />
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100 flex justify-end">
+                              <button
+                                type="submit"
+                                disabled={tenantProfileLoading}
+                                className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-xl font-semibold shadow-md shadow-primary-500/20 text-sm flex items-center gap-2"
+                              >
+                                <Save className="w-4 h-4" /> Save Context
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        {/* Visual Editor Form */}
+                        <div className="lg:col-span-6 space-y-6">
+                          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                            <form onSubmit={handleSaveTenantTemplate} className="space-y-6">
+                              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                                <h3 className="font-bold text-slate-900 text-base">
+                                  {selectedTemplate ? 'Template Layout Settings' : 'Create New Document Design'}
+                                </h3>
+                                <div className="flex gap-1.5 bg-slate-100 p-0.5 rounded-xl border border-slate-200/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditMode('visual')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                      editMode === 'visual' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                    }`}
+                                  >
+                                    Visual Builder
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditMode('code')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                      editMode === 'code' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                    }`}
+                                  >
+                                    Code
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Layout Name *</label>
+                                    <input
+                                      type="text"
+                                      required
+                                      value={tempName}
+                                      onChange={e => setTempName(e.target.value)}
+                                      placeholder="e.g. Elegant Flight Invoice"
+                                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Status</label>
+                                    <select
+                                      value={tempStatus}
+                                      onChange={e => setTempStatus(e.target.value)}
+                                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs"
+                                    >
+                                      <option value="Draft">Draft</option>
+                                      <option value="Active">Active</option>
+                                      <option value="Deprecated">Deprecated</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {!selectedTemplate && (
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Document Type *</label>
+                                    <select
+                                      value={tempType}
+                                      onChange={e => {
+                                        setTempType(e.target.value);
+                                        const defaultConfig = defaultVisualConfig(e.target.value);
+                                        setVisualConfig(defaultConfig);
+                                        const generated = generateTemplateFromVisualConfig(defaultConfig, e.target.value);
+                                        setTempHtml(generated.html + `\n<!-- VISUAL_CONFIG: ${JSON.stringify(defaultConfig)} -->`);
+                                        setTempCss(generated.css);
+                                      }}
+                                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs"
+                                    >
+                                      <option value="INVOICE">INVOICE (Includes financial details)</option>
+                                      <option value="VOUCHER">VOUCHER (Strictly price-free)</option>
+                                    </select>
+                                  </div>
+                                )}
+
+                                {editMode === 'code' ? (
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">HTML Skeleton Layout</label>
+                                      <textarea
+                                        value={tempHtml}
+                                        onChange={e => setTempHtml(e.target.value)}
+                                        rows={12}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs font-mono"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">CSS Stylesheet</label>
+                                      <textarea
+                                        value={tempCss}
+                                        onChange={e => setTempCss(e.target.value)}
+                                        rows={6}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs font-mono"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  visualConfig ? (
+                                    <div className="space-y-6">
+                                      {/* Design Styling Options */}
+                                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 gap-4">
+                                        <div>
+                                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Color Theme</label>
+                                          <div className="flex gap-1">
+                                            {['indigo', 'blue', 'emerald', 'slate', 'amber'].map(theme => (
+                                              <button
+                                                key={theme}
+                                                type="button"
+                                                onClick={() => updateTenantVisualConfig({ themeColor: theme })}
+                                                className={`w-6 h-6 rounded-full border transition-all ${
+                                                  visualConfig.themeColor === theme ? 'ring-2 ring-primary-500 ring-offset-1 scale-110' : 'opacity-70'
+                                                } ${
+                                                  theme === 'indigo' ? 'bg-indigo-600' :
+                                                  theme === 'blue' ? 'bg-blue-600' :
+                                                  theme === 'emerald' ? 'bg-emerald-600' :
+                                                  theme === 'slate' ? 'bg-slate-600' : 'bg-amber-600'
+                                                }`}
+                                              />
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Font Stack</label>
+                                          <select
+                                            value={visualConfig.fontFamily}
+                                            onChange={e => updateTenantVisualConfig({ fontFamily: e.target.value })}
+                                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs"
+                                          >
+                                            <option value="Inter">Inter UI</option>
+                                            <option value="Outfit">Outfit Minimal</option>
+                                            <option value="Roboto">Roboto Classic</option>
+                                          </select>
+                                        </div>
+                                      </div>
+
+                                      {/* Metadata checkboxes */}
+                                      <div className="bg-slate-50/30 p-4 rounded-xl border border-slate-100 space-y-2 text-xs">
+                                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1.5">Active Header Elements</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showLogoPrimary} onChange={e => updateTenantVisualConfig({ showLogoPrimary: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>Primary Logo</span>
+                                          </label>
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showLogoSecondary} onChange={e => updateTenantVisualConfig({ showLogoSecondary: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>Secondary Logo</span>
+                                          </label>
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showAddress} onChange={e => updateTenantVisualConfig({ showAddress: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>Office Address</span>
+                                          </label>
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showEmail} onChange={e => updateTenantVisualConfig({ showEmail: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>Office Email</span>
+                                          </label>
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showPhone} onChange={e => updateTenantVisualConfig({ showPhone: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>Helpline number</span>
+                                          </label>
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showWhatsapp} onChange={e => updateTenantVisualConfig({ showWhatsapp: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>WhatsApp Desk</span>
+                                          </label>
+                                        </div>
+                                      </div>
+
+                                      {/* Sections cards list */}
+                                      <div className="space-y-3">
+                                        <label className="block text-[10px] font-bold text-slate-600 uppercase">Document Layout Sections</label>
+                                        
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                          {visualConfig.sections.map((sec, idx) => (
+                                            <div key={sec.id} className="border border-slate-100 bg-slate-50/50 p-3 rounded-xl flex flex-col gap-2 shadow-sm relative group hover:border-slate-200">
+                                              <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-bold text-primary-600 uppercase tracking-wide">
+                                                  {sec.type === 'custom_text' ? 'Text block' : 'Table: ' + sec.type}
+                                                </span>
+                                                <div className="flex items-center gap-1">
+                                                  <button type="button" disabled={idx === 0} onClick={() => moveTenantSection(idx, 'up')} className="p-1 hover:bg-white border border-transparent hover:border-slate-200 rounded-md transition-all text-slate-500 disabled:opacity-30">
+                                                    <ArrowUp className="w-3.5 h-3.5" />
+                                                  </button>
+                                                  <button type="button" disabled={idx === visualConfig.sections.length - 1} onClick={() => moveTenantSection(idx, 'down')} className="p-1 hover:bg-white border border-transparent hover:border-slate-200 rounded-md transition-all text-slate-500 disabled:opacity-30">
+                                                    <ArrowDown className="w-3.5 h-3.5" />
+                                                  </button>
+                                                  <button type="button" onClick={() => removeTenantSection(sec.id)} className="p-1 hover:bg-red-50 text-red-500 border border-transparent hover:border-red-200 rounded-md transition-all">
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                                </div>
+                                              </div>
+
+                                              <div className="space-y-2">
+                                                <input
+                                                  type="text"
+                                                  value={sec.title}
+                                                  onChange={e => updateTenantSectionTitle(sec.id, e.target.value)}
+                                                  placeholder="Section Title"
+                                                  className="w-full bg-white px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-primary-500 focus:outline-none"
+                                                />
+                                                {sec.type === 'custom_text' && (
+                                                  <textarea
+                                                    value={sec.body || ''}
+                                                    onChange={e => updateTenantSectionBody(sec.id, e.target.value)}
+                                                    placeholder="Write custom notes, payment info, guidelines here..."
+                                                    rows={3}
+                                                    className="w-full bg-white px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-primary-500 focus:outline-none resize-none"
+                                                  />
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+
+                                        {/* Block insertion dropdown */}
+                                        <div className="flex gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                          <select
+                                            id="tenant-add-block-select"
+                                            className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none"
+                                            defaultValue=""
+                                          >
+                                            <option value="" disabled>-- Add Block --</option>
+                                            <option value="passengers">Passenger Manifest</option>
+                                            <option value="flights">Flight Itineraries</option>
+                                            <option value="hotels">Hotel stay Details</option>
+                                            <option value="transports">Ground Transport details</option>
+                                            <option value="visas">Visa Approvals</option>
+                                            <option value="specialties">Speciality Services Checklist</option>
+                                            <option value="custom_text">Custom Text Box</option>
+                                            {tempType === 'INVOICE' && (
+                                              <>
+                                                <option value="services">Itemized Services Table</option>
+                                                <option value="payments">Client Payments Log</option>
+                                                <option value="balances">Financial Balance Box</option>
+                                              </>
+                                            )}
+                                          </select>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const el = document.getElementById('tenant-add-block-select') as HTMLSelectElement;
+                                              if (el?.value) {
+                                                addTenantSection(el.value as any);
+                                                el.value = '';
+                                              } else {
+                                                toast.error('Select a block type first');
+                                              }
+                                            }}
+                                            className="bg-primary-600 hover:bg-primary-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                                          >
+                                            <Plus className="w-3.5 h-3.5" /> Insert
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Bottom verification switches */}
+                                      <div className="bg-slate-50/20 p-4 rounded-xl border border-slate-100 space-y-2 text-xs">
+                                        <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1.5">Footer Seal Elements</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showSignature} onChange={e => updateTenantVisualConfig({ showSignature: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>Signature Seal</span>
+                                          </label>
+                                          <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                                            <input type="checkbox" checked={visualConfig.showTimestamp} onChange={e => updateTenantVisualConfig({ showTimestamp: e.target.checked })} className="rounded text-primary-600 border-slate-200" />
+                                            <span>Secure Timestamp</span>
+                                          </label>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-6 text-slate-400 text-xs">
+                                      Please switch to Code mode or load a visual template.
+                                    </div>
+                                  )
+                                )}
+                              </div>
+
+                              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                                <button
+                                  type="submit"
+                                  disabled={savingTemplate}
+                                  className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-xl font-semibold shadow-md shadow-primary-500/20 text-xs flex items-center gap-2"
+                                >
+                                  {savingTemplate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                  Save Template
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+
+                        {/* Real-time Preview Pane */}
+                        <div className="lg:col-span-6 space-y-6">
+                          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sticky top-6">
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+                              <h3 className="font-bold text-slate-900 text-base">Live Preview</h3>
+                              {selectedTemplate && (
+                                <span className="text-[10px] font-bold text-slate-400 font-mono">
+                                  Template ID: {selectedTemplate.id}
+                                </span>
+                              )}
+                            </div>
+
+                            {previewLoading ? (
+                              <div className="flex flex-col items-center justify-center py-32 text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                <RefreshCw className="w-8 h-8 animate-spin text-primary-600 mb-2" />
+                                Generating real-time layout compilation...
+                              </div>
+                            ) : previewHtml ? (
+                              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-slate-100/50 p-4">
+                                <iframe
+                                  srcDoc={`
+                                    <!DOCTYPE html>
+                                    <html>
+                                      <head>
+                                        <style>
+                                          body { margin: 0; padding: 0; background: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+                                          ${tempCss}
+                                        </style>
+                                      </head>
+                                      <body>
+                                        ${previewHtml}
+                                      </body>
+                                    </html>
+                                  `}
+                                  title="Layout Preview"
+                                  className="w-full min-h-[500px] border-0 bg-white rounded-xl shadow-inner"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center py-32 text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                <FileText className="w-12 h-12 text-slate-300 mb-3" />
+                                No layout compilation generated. Create a new design or edit one to compile.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-500">
+                  <Building2 className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+                  <p className="font-semibold text-lg text-slate-700">No Company Selected</p>
+                  <p className="text-sm mt-1 max-w-md mx-auto">Please choose an enterprise tenant from the dropdown selection at the top to access and customize their document layout templates.</p>
+                </div>
               )}
             </div>
           )}

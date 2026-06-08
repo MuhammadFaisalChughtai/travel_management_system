@@ -12,6 +12,7 @@ import {
   Loader2,
   RefreshCcw,
   History,
+  ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../api/axios";
@@ -41,7 +42,7 @@ import { DeleteConfirmationModal } from "./booking-modals/DeleteConfirmationModa
 import { DebtOffsetModal } from "./booking-modals/DebtOffsetModal";
 import { InvoiceTemplate } from "./documents/InvoiceTemplate";
 import { VoucherTemplate } from "./documents/VoucherTemplate";
-import { generateInvoicePDF } from "../utils/pdfGenerator";
+import { generateInvoicePDF, printCompiledTemplate } from "../utils/pdfGenerator";
 
 interface BookingDetailsModalProps {
   bookingId: number | null;
@@ -126,6 +127,9 @@ export function BookingDetailsModal({
     useState(false);
   const [isGeneratingTransportVoucher, setIsGeneratingTransportVoucher] =
     useState(false);
+  const [voucherTemplates, setVoucherTemplates] = useState<any[]>([]);
+  const [showVoucherDropdown, setShowVoucherDropdown] = useState(false);
+  const [isGeneratingVoucher, setIsGeneratingVoucher] = useState(false);
   const [deleteConfig, setDeleteConfig] = useState<{
     isOpen: boolean;
     serviceType: string;
@@ -175,12 +179,71 @@ export function BookingDetailsModal({
     if (!booking) return;
     setIsGeneratingPDF(true);
     try {
-      await generateInvoicePDF(
-        "invoice-template",
-        `Invoice_${booking.bookingReference}.pdf`,
+      const templatesRes = await api.get('/finance/templates');
+      const activeTemplate = templatesRes.data.templates?.find(
+        (t: any) => t.type === 'INVOICE' && t.status === 'Active'
       );
+
+      if (activeTemplate) {
+        const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
+          bookingId: booking.id
+        });
+        printCompiledTemplate(
+          compileRes.data.compiledHtml,
+          compileRes.data.compiledCss,
+          `Invoice_${booking.bookingReference}.pdf`
+        );
+      } else {
+        await generateInvoicePDF(
+          "invoice-template",
+          `Invoice_${booking.bookingReference}.pdf`,
+        );
+      }
+    } catch (err) {
+      console.error("Failed to generate custom invoice:", err);
+      try {
+        await generateInvoicePDF(
+          "invoice-template",
+          `Invoice_${booking.bookingReference}.pdf`,
+        );
+      } catch (fallbackErr) {
+        console.error("Fallback invoice generation failed:", fallbackErr);
+      }
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+  const fetchVoucherTemplates = async () => {
+    try {
+      const res = await api.get('/finance/templates');
+      const activeVouchers = res.data.templates?.filter(
+        (t: any) => t.type === 'VOUCHER' && t.status === 'Active'
+      ) || [];
+      setVoucherTemplates(activeVouchers);
+    } catch (err) {
+      console.error('Failed to fetch voucher templates:', err);
+    }
+  };
+
+  const handleGenerateCustomVoucher = async (template: any) => {
+    if (!booking) return;
+    setIsGeneratingVoucher(true);
+    try {
+      const compileRes = await api.post(`/finance/templates/${template.id}/compile`, {
+        bookingId: booking.id
+      });
+      printCompiledTemplate(
+        compileRes.data.compiledHtml,
+        compileRes.data.compiledCss,
+        `${template.name.replace(/\s+/g, '_')}_${booking.bookingReference}.pdf`
+      );
+      toast.success("Voucher generated successfully");
+    } catch (err) {
+      console.error("Failed to generate custom voucher:", err);
+      toast.error("Failed to generate custom voucher");
+    } finally {
+      setIsGeneratingVoucher(false);
     }
   };
 
@@ -193,10 +256,36 @@ export function BookingDetailsModal({
       return;
     setIsGeneratingHotelVoucher(true);
     try {
-      await generateInvoicePDF(
-        "hotel-voucher-template",
-        `HotelVoucher_${booking.bookingReference}.pdf`,
+      const templatesRes = await api.get('/finance/templates');
+      const activeTemplate = templatesRes.data.templates?.find(
+        (t: any) => t.type === 'VOUCHER' && t.status === 'Active'
       );
+
+      if (activeTemplate) {
+        const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
+          bookingId: booking.id
+        });
+        printCompiledTemplate(
+          compileRes.data.compiledHtml,
+          compileRes.data.compiledCss,
+          `HotelVoucher_${booking.bookingReference}.pdf`
+        );
+      } else {
+        await generateInvoicePDF(
+          "hotel-voucher-template",
+          `HotelVoucher_${booking.bookingReference}.pdf`,
+        );
+      }
+    } catch (err) {
+      console.error("Failed to generate custom hotel voucher:", err);
+      try {
+        await generateInvoicePDF(
+          "hotel-voucher-template",
+          `HotelVoucher_${booking.bookingReference}.pdf`,
+        );
+      } catch (fallbackErr) {
+        console.error("Fallback hotel voucher failed:", fallbackErr);
+      }
     } finally {
       setIsGeneratingHotelVoucher(false);
     }
@@ -211,10 +300,36 @@ export function BookingDetailsModal({
       return;
     setIsGeneratingTransportVoucher(true);
     try {
-      await generateInvoicePDF(
-        "transport-voucher-template",
-        `TransportVoucher_${booking.bookingReference}.pdf`,
+      const templatesRes = await api.get('/finance/templates');
+      const activeTemplate = templatesRes.data.templates?.find(
+        (t: any) => t.type === 'VOUCHER' && t.status === 'Active'
       );
+
+      if (activeTemplate) {
+        const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
+          bookingId: booking.id
+        });
+        printCompiledTemplate(
+          compileRes.data.compiledHtml,
+          compileRes.data.compiledCss,
+          `TransportVoucher_${booking.bookingReference}.pdf`
+        );
+      } else {
+        await generateInvoicePDF(
+          "transport-voucher-template",
+          `TransportVoucher_${booking.bookingReference}.pdf`,
+        );
+      }
+    } catch (err) {
+      console.error("Failed to generate custom transport voucher:", err);
+      try {
+        await generateInvoicePDF(
+          "transport-voucher-template",
+          `TransportVoucher_${booking.bookingReference}.pdf`,
+        );
+      } catch (fallbackErr) {
+        console.error("Fallback transport voucher failed:", fallbackErr);
+      }
     } finally {
       setIsGeneratingTransportVoucher(false);
     }
@@ -587,12 +702,19 @@ export function BookingDetailsModal({
   useEffect(() => {
     if (isOpen && bookingId) {
       fetchDetails();
+      fetchVoucherTemplates();
     } else {
       setBooking(null);
+      setVoucherTemplates([]);
+      setShowVoucherDropdown(false);
     }
   }, [isOpen, bookingId]);
 
   if (!isOpen) return null;
+
+  const hasVoucherOptions = (voucherTemplates && voucherTemplates.length > 0) || 
+    (booking?.accommodations && booking.accommodations.length > 0) || 
+    (booking?.transportServices && booking.transportServices.length > 0);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -613,10 +735,12 @@ export function BookingDetailsModal({
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className="relative w-full max-w-[95vw] xl:max-w-7xl h-[90vh] bg-slate-50 shadow-2xl flex flex-col z-10 rounded-2xl overflow-hidden"
       >
-        {/* Premium Header */}
-        <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-8 py-6 flex justify-between items-center shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
-          <div className="absolute bottom-0 left-20 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl -mb-10"></div>
+        <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-8 py-6 flex justify-between items-center shadow-lg relative z-20">
+          {/* Background Decorative Circles clipped by wrapper */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+            <div className="absolute bottom-0 left-20 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl -mb-10"></div>
+          </div>
 
           <div className="relative z-10 flex flex-col">
             <h2 className="text-2xl font-extrabold tracking-tight flex items-center gap-3">
@@ -632,40 +756,83 @@ export function BookingDetailsModal({
             </p>
           </div>
           <div className="relative z-10 flex items-center gap-4">
-            {booking &&
-              booking.accommodations &&
-              booking.accommodations.length > 0 && (
+            {/* Generate Vouchers Dropdown */}
+            {booking && hasVoucherOptions && (
+              <div className="relative">
                 <button
-                  onClick={handleGenerateHotelVoucher}
-                  disabled={isGeneratingHotelVoucher}
+                  onClick={() => setShowVoucherDropdown(!showVoucherDropdown)}
+                  disabled={isGeneratingVoucher || isGeneratingHotelVoucher || isGeneratingTransportVoucher}
                   className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
                 >
-                  {isGeneratingHotelVoucher ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <FileText className="w-4 h-4" />
-                  )}
-                  {isGeneratingHotelVoucher ? "Generating..." : "Hotel Voucher"}
+                  <FileText className="w-4 h-4" />
+                  <span>
+                    {isGeneratingVoucher || isGeneratingHotelVoucher || isGeneratingTransportVoucher
+                      ? "Generating..."
+                      : "Generate Voucher"}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 opacity-80" />
                 </button>
-              )}
-            {booking &&
-              booking.transportServices &&
-              booking.transportServices.length > 0 && (
-                <button
-                  onClick={handleGenerateTransportVoucher}
-                  disabled={isGeneratingTransportVoucher}
-                  className="flex items-center gap-2 bg-indigo-500/30 hover:bg-indigo-500/50 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border border-indigo-400/30 shadow-lg"
-                >
-                  {isGeneratingTransportVoucher ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <FileText className="w-4 h-4" />
-                  )}
-                  {isGeneratingTransportVoucher
-                    ? "Generating..."
-                    : "Transport Voucher"}
-                </button>
-              )}
+                
+                {showVoucherDropdown && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowVoucherDropdown(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-64 bg-slate-900/95 border border-slate-800 rounded-xl shadow-2xl py-1 z-50 backdrop-blur-md">
+                      {voucherTemplates.length > 0 && (
+                        <>
+                          <div className="px-3 py-1.5 border-b border-slate-800 text-[9px] uppercase tracking-wider text-slate-400 font-extrabold">Custom Templates</div>
+                          {voucherTemplates.map((t: any) => (
+                            <button
+                              key={t.id}
+                              onClick={() => {
+                                handleGenerateCustomVoucher(t);
+                                setShowVoucherDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-white/10 text-white font-semibold transition-colors flex items-center justify-between"
+                            >
+                              <span className="truncate mr-2">{t.name}</span>
+                              <span className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300 font-mono">v{t.version}</span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      
+                      {((booking.accommodations && booking.accommodations.length > 0) || 
+                        (booking.transportServices && booking.transportServices.length > 0)) && (
+                        <>
+                          <div className="px-3 py-1.5 border-t border-slate-800 border-b text-[9px] uppercase tracking-wider text-slate-400 font-extrabold">Default Vouchers</div>
+                          {booking.accommodations && booking.accommodations.length > 0 && (
+                            <button
+                              onClick={() => {
+                                handleGenerateHotelVoucher();
+                                setShowVoucherDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-white/10 text-white font-semibold transition-colors flex items-center justify-between"
+                            >
+                              <span>Hotel Stay Voucher</span>
+                            </button>
+                          )}
+                          {booking.transportServices && booking.transportServices.length > 0 && (
+                            <button
+                              onClick={() => {
+                                handleGenerateTransportVoucher();
+                                setShowVoucherDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-white/10 text-white font-semibold transition-colors flex items-center justify-between"
+                            >
+                              <span>Transport Voucher</span>
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {booking && (
               <button
                 onClick={handleGenerateInvoice}

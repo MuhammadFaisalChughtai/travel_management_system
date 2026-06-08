@@ -31,7 +31,8 @@ import {
   Shield,
   Search,
   User,
-  Tag
+  Tag,
+  FileText
 } from 'lucide-react';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,6 +44,7 @@ import { VendorsPage } from './VendorsPage';
 import { TeamManagement } from './TeamManagement';
 import { FinancePage } from './FinancePage';
 import { ServiceCatalogPage } from './ServiceCatalogPage';
+import { DocumentTemplatesPage } from './DocumentTemplatesPage';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { 
@@ -105,7 +107,8 @@ const TAB_PERMISSIONS: Record<string, string> = {
   payments: 'READ_TRANSACTION',
   catalog: 'READ_SERVICE',
   team: 'READ_USER',
-  settings: 'MANAGE_SETTINGS'
+  settings: 'MANAGE_SETTINGS',
+  templates: 'MANAGE_SETTINGS'
 };
 
 const SIDEBAR_ITEMS = [
@@ -115,6 +118,7 @@ const SIDEBAR_ITEMS = [
   { id: 'vendors', icon: UserCog, label: 'Vendors Registry' },
   { id: 'payments', icon: CreditCard, label: 'Finance & Payments' },
   { id: 'catalog', icon: Tag, label: 'Service Catalog', adminOnly: true },
+  { id: 'templates', icon: FileText, label: 'Document Studio', adminOnly: true },
   { id: 'team', icon: Shield, label: 'Team & Permissions' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
@@ -144,6 +148,9 @@ export function Dashboard() {
     if (user?.role === 'AGENT' && item.id === 'payments') {
       return false;
     }
+    if (item.id === 'templates' && user?.role !== 'SUPER_ADMIN') {
+      return false;
+    }
     const requiredPerm = TAB_PERMISSIONS[item.id];
     if (requiredPerm) {
       return hasPermission(user, requiredPerm);
@@ -153,7 +160,7 @@ export function Dashboard() {
 
   // Sidebar navigation tab state
   const { tab } = useParams<{ tab?: string }>();
-  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog';
+  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog' | 'templates';
   
   useEffect(() => {
     if (user && permittedItems.length > 0) {
@@ -169,6 +176,7 @@ export function Dashboard() {
   const [totalTableItems, setTotalTableItems] = useState(0);
   const [totalTablePages, setTotalTablePages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [expenses, setExpenses] = useState<any[]>([]);
 
   const [bookingsPage, setBookingsPage] = useState(1);
   const bookingsPerPage = 10;
@@ -254,6 +262,21 @@ export function Dashboard() {
     };
     if (isAuthenticated) {
       fetchCompanyProfile();
+    }
+  }, [isAuthenticated]);
+
+  const fetchExpensesList = async () => {
+    try {
+      const res = await api.get('/finance/expenses');
+      setExpenses(res.data.expenses || []);
+    } catch (err) {
+      console.error('Failed to fetch expenses', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchExpensesList();
     }
   }, [isAuthenticated]);
 
@@ -423,6 +446,64 @@ export function Dashboard() {
       conversionRate: bookingCount > 0 ? 100 : 0 
     };
   }, [bookings]);
+
+  const totalCompanyExpenses = useMemo(() => {
+    const today = new Date();
+    let total = 0;
+    
+    expenses.forEach(exp => {
+      const amount = parseFloat(exp.amount) || 0;
+      if (exp.type === 'one-time') {
+        const d = new Date(exp.date);
+        if (d <= today) {
+          total += amount;
+        }
+      } else if (exp.type === 'recurring') {
+        const startDate = new Date(exp.date);
+        if (startDate <= today) {
+          const startDay = startDate.getDate();
+          let monthsDiff = 0;
+          while (true) {
+            const nextDate = new Date(startDate.getFullYear(), startDate.getMonth() + monthsDiff, startDay);
+            const expectedMonth = (startDate.getMonth() + monthsDiff) % 12;
+            if (nextDate.getMonth() !== expectedMonth && nextDate.getMonth() !== (expectedMonth + 12) % 12) {
+              nextDate.setDate(0);
+            }
+            if (nextDate > today) {
+              break;
+            }
+            total += amount;
+            monthsDiff++;
+            if (monthsDiff > 1200) break;
+          }
+        }
+      }
+    });
+    return total;
+  }, [expenses]);
+
+  const netBookingProfit = useMemo(() => {
+    return bookings.reduce((sum, b) => {
+      const bookingTotal = parseFloat(b.totalPrice) || 0;
+      const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client' && (!p.status || p.status === 'approved')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0) || 0;
+      const legacyVendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0) || 0;
+      const modernVendorPayments = b.vendorPayments?.reduce((s: number, vp: any) => s + (parseFloat(vp.amount) || 0), 0) || 0;
+      const vendorPayments = legacyVendorPayments + modernVendorPayments;
+      const totalDiscounts = b.discounts?.reduce((s: number, d: any) => s + (parseFloat(d.amount) || 0), 0) || 0;
+      const refundsToClient = b.refunds?.filter((r: any) => r.direction === 'Refund to Client').reduce((s: number, r: any) => s + (parseFloat(r.amount) || 0), 0) || 0;
+      const refundsFromVendor = b.refunds?.filter((r: any) => r.direction === 'Refund from Vendor').reduce((s: number, r: any) => s + (parseFloat(r.amount) || 0), 0) || 0;
+
+      const totalReceived = Math.min(clientPayments, bookingTotal) - refundsToClient;
+      const totalSent = vendorPayments - refundsFromVendor;
+      
+      const netProfit = (totalReceived - totalSent) + totalDiscounts;
+      return sum + netProfit;
+    }, 0);
+  }, [bookings]);
+
+  const netCompanyProfit = useMemo(() => {
+    return netBookingProfit - totalCompanyExpenses;
+  }, [netBookingProfit, totalCompanyExpenses]);
 
   const revenueChartData = useMemo(() => {
     const getActualSum = (filterFn: (b: any) => boolean) => {
@@ -771,100 +852,192 @@ export function Dashboard() {
               <>
                 {/* Core KPI Metrics Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                  <motion.div 
-                    initial={{ opacity: 0, y: 15 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
-                  >
-                    <div className="absolute right-0 top-0 h-24 w-24 bg-primary-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Booking Revenue' : 'Gross Booking Revenue'}</span>
-                      <div className="h-8 w-8 bg-primary-100 text-primary-600 rounded-xl flex items-center justify-center">
-                        <DollarSign className="w-4 h-4" />
-                      </div>
-                    </div>
-                    <p className="text-xl font-black text-slate-900 mt-3">
-                      £{stats.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                        <TrendingUp className="h-3 w-3" /> +{stats.growth}%
-                      </span>
-                      <span className="text-slate-400 text-[10px] font-medium">vs last period</span>
-                    </div>
-                  </motion.div>
+                  {user?.role === 'AGENT' ? (
+                    <>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-primary-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">My Booking Revenue</span>
+                          <div className="h-8 w-8 bg-primary-100 text-primary-600 rounded-xl flex items-center justify-center">
+                            <DollarSign className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-slate-900 mt-3">
+                          £{stats.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                            <TrendingUp className="h-3 w-3" /> +{stats.growth}%
+                          </span>
+                          <span className="text-slate-400 text-[10px] font-medium">vs last period</span>
+                        </div>
+                      </motion.div>
 
-                  <motion.div 
-                    initial={{ opacity: 0, y: 15 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    transition={{ delay: 0.05 }}
-                    className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
-                  >
-                    <div className="absolute right-0 top-0 h-24 w-24 bg-primary-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Average Order Value' : 'Average Order Value (AOV)'}</span>
-                      <div className="h-8 w-8 bg-primary-100 text-primary-600 rounded-xl flex items-center justify-center">
-                        <ShoppingBag className="w-4 h-4" />
-                      </div>
-                    </div>
-                    <p className="text-xl font-black text-slate-900 mt-3">
-                      £{stats.aov.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                        <TrendingUp className="h-3 w-3" /> +4.2%
-                      </span>
-                      <span className="text-slate-400 text-[10px] font-medium">from last month</span>
-                    </div>
-                  </motion.div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: 0.05 }}
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-primary-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">My Average Order Value</span>
+                          <div className="h-8 w-8 bg-primary-100 text-primary-600 rounded-xl flex items-center justify-center">
+                            <ShoppingBag className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-slate-900 mt-3">
+                          £{stats.aov.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                            <TrendingUp className="h-3 w-3" /> +4.2%
+                          </span>
+                          <span className="text-slate-400 text-[10px] font-medium">from last month</span>
+                        </div>
+                      </motion.div>
 
-                  <motion.div 
-                    initial={{ opacity: 0, y: 15 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    transition={{ delay: 0.1 }}
-                    className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
-                  >
-                    <div className="absolute right-0 top-0 h-24 w-24 bg-indigo-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Orders Processed' : 'Orders Processed'}</span>
-                      <div className="h-8 w-8 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
-                        <Activity className="w-4 h-4" />
-                      </div>
-                    </div>
-                    <p className="text-xl font-black text-slate-900 mt-3">
-                      {stats.totalVolume}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                        <TrendingUp className="h-3 w-3" /> +9.1%
-                      </span>
-                      <span className="text-slate-400 text-[10px] font-medium">monthly growth</span>
-                    </div>
-                  </motion.div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: 0.1 }}
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-indigo-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">My Orders Processed</span>
+                          <div className="h-8 w-8 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
+                            <Activity className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-slate-900 mt-3">
+                          {stats.totalVolume}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                            <TrendingUp className="h-3 w-3" /> +9.1%
+                          </span>
+                          <span className="text-slate-400 text-[10px] font-medium">monthly growth</span>
+                        </div>
+                      </motion.div>
 
-                  <motion.div 
-                    initial={{ opacity: 0, y: 15 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    transition={{ delay: 0.15 }}
-                    className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
-                  >
-                    <div className="absolute right-0 top-0 h-24 w-24 bg-amber-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 text-xs font-bold">{user?.role === 'AGENT' ? 'My Q2 Target Progress' : 'Q2 Target Progress'}</span>
-                      <div className="h-8 w-8 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
-                        <Target className="w-4 h-4" />
-                      </div>
-                    </div>
-                    <p className="text-xl font-black text-slate-900 mt-3">
-                      {Math.min(100, Math.round((stats.totalRevenue / targetProgressValue) * 100))}%
-                    </p>
-                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2.5 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-1000"
-                        style={{ width: `${Math.min(100, Math.round((stats.totalRevenue / targetProgressValue) * 100))}%` }}
-                      />
-                    </div>
-                  </motion.div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: 0.15 }}
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-amber-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">My Q2 Target Progress</span>
+                          <div className="h-8 w-8 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
+                            <Target className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-slate-900 mt-3">
+                          {Math.min(100, Math.round((stats.totalRevenue / targetProgressValue) * 100))}%
+                        </p>
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2.5 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-1000"
+                            style={{ width: `${Math.min(100, Math.round((stats.totalRevenue / targetProgressValue) * 100))}%` }}
+                          />
+                        </div>
+                      </motion.div>
+                    </>
+                  ) : (
+                    <>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-primary-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">Gross Booking Revenue</span>
+                          <div className="h-8 w-8 bg-primary-100 text-primary-600 rounded-xl flex items-center justify-center">
+                            <DollarSign className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-slate-900 mt-3">
+                          £{stats.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                            <TrendingUp className="h-3 w-3" /> +{stats.growth}%
+                          </span>
+                          <span className="text-slate-400 text-[10px] font-medium">vs last period</span>
+                        </div>
+                      </motion.div>
+
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: 0.05 }}
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-emerald-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">Net Profit from Bookings</span>
+                          <div className="h-8 w-8 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                            <TrendingUp className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-slate-900 mt-3">
+                          £{netBookingProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="text-slate-400 text-[10px] font-medium">cumulative booking net margins</span>
+                        </div>
+                      </motion.div>
+
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: 0.1 }}
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-rose-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">Total Company Expenses</span>
+                          <div className="h-8 w-8 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center">
+                            <CreditCard className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-rose-600 mt-3">
+                          £{totalCompanyExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="text-slate-400 text-[10px] font-medium">one-time and recurring costs</span>
+                        </div>
+                      </motion.div>
+
+                      <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: 0.15 }}
+                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="absolute right-0 top-0 h-24 w-24 bg-indigo-50 rounded-bl-full -z-10 opacity-40 group-hover:scale-110 transition-transform duration-300" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 text-xs font-bold">Net Company Profit</span>
+                          <div className="h-8 w-8 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
+                            <Activity className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <p className={`text-xl font-black mt-3 ${netCompanyProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          £{netCompanyProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="text-slate-400 text-[10px] font-medium">actual net corporate income</span>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
                 </div>
 
                 {/* Main Area Chart */}
@@ -1591,6 +1764,12 @@ export function Dashboard() {
         {/* TAB 4: COMPANY SETTINGS */}
                 {sidebarTab === 'catalog' && (
           <ServiceCatalogPage />
+        )}
+
+        {sidebarTab === 'templates' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <DocumentTemplatesPage />
+          </div>
         )}
 
         {sidebarTab === 'settings' && (

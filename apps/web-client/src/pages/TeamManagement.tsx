@@ -370,13 +370,29 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
             </div>
             <div className="md:col-span-2">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Link to Agent Profile (Optional)</label>
-              <select value={form.agentId} onChange={e => setForm({ ...form, agentId: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] font-medium outline-none transition-all shadow-sm cursor-pointer">
+              <select
+                value={form.agentId}
+                onChange={e => {
+                  const selectedId = e.target.value;
+                  const selectedAgent = agents.find(a => String(a.id) === selectedId);
+                  setForm(prev => ({
+                    ...prev,
+                    agentId: selectedId,
+                    // Auto-fill name from agent (always)
+                    name: selectedAgent ? selectedAgent.name : prev.name,
+                    // Auto-fill email only if not editing an existing user and agent has an email
+                    email: (!editingUser && selectedAgent?.email) ? selectedAgent.email : prev.email,
+                  }));
+                }}
+                className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] font-medium outline-none transition-all shadow-sm cursor-pointer"
+              >
                 <option value="">-- No Agent Linked --</option>
                 {agents.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>{a.name}{a.email ? ` — ${a.email}` : ''}</option>
                 ))}
               </select>
-              <p className="mt-1.5 text-[10px] text-slate-400 leading-normal">Linking an agent profile ensures their bookings and commissions are tracked to this user.</p>
+              <p className="mt-1.5 text-[10px] text-slate-400 leading-normal">Selecting an agent auto-fills their name and email. Linking ensures their bookings and commissions are tracked to this user.</p>
+
             </div>
           </div>
         </div>

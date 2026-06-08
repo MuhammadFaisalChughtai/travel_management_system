@@ -18,13 +18,9 @@ import {
   Users,
   Award,
   CheckCircle,
-  Building,
-  Mail,
-  Phone,
-  Globe,
-  MapPin,
   Lock,
   Unlock,
+  Server,
   
   Filter, Hash,
   UserCog,
@@ -34,6 +30,7 @@ import {
   Tag,
   FileText
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -225,7 +222,7 @@ export function Dashboard() {
     }
   }, [user]);
 
-  // Simulated company settings state
+  // Company settings state (including SMTP config)
   const [companyInfo, setCompanyInfo] = useState({
     name: 'TravelBooker Workspace',
     logo: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
@@ -236,34 +233,76 @@ export function Dashboard() {
     email: 'operations@travelbooker.co.uk',
     phone: '+44 20 7946 0958',
     plan: 'Premium Subscription (Active)',
+    smtpHost: '',
+    smtpPort: '',
+    smtpSecure: false,
+    smtpUser: '',
+    smtpPass: ''
   });
 
-  useEffect(() => {
-    const fetchCompanyProfile = async () => {
-      try {
-        const res = await api.get('/auth/tenants/profile');
-        if (res.data.tenant) {
-          const t = res.data.tenant;
-          setCompanyInfo({
-            name: t.name || 'TravelBooker Workspace',
-            logo: t.logo || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
-            domain: t.domain || 'travelbooker.co.uk',
-            description: t.description || 'Bespoke global luxury travel operators and package reservation engines.',
-            industry: t.industry || 'Travel & Hospitality',
-            location: t.location || 'London, UK',
-            email: t.email || 'operations@travelbooker.co.uk',
-            phone: t.phone || '+44 20 7946 0958',
-            plan: `${t.subscriptionPlan ? t.subscriptionPlan.charAt(0).toUpperCase() + t.subscriptionPlan.slice(1) : 'Premium'} Subscription (${t.subscriptionStatus ? t.subscriptionStatus.charAt(0).toUpperCase() + t.subscriptionStatus.slice(1) : 'Active'})`,
-          });
-        }
-      } catch (err) {
-        console.error('Failed to fetch company profile', err);
+  const fetchCompanyProfile = async () => {
+    try {
+      const res = await api.get('/auth/tenants/profile');
+      if (res.data.tenant) {
+        const t = res.data.tenant;
+        setCompanyInfo({
+          name: t.name || 'TravelBooker Workspace',
+          logo: t.logo || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80',
+          domain: t.domain || 'travelbooker.co.uk',
+          description: t.description || 'Bespoke global luxury travel operators and package reservation engines.',
+          industry: t.industry || 'Travel & Hospitality',
+          location: t.location || 'London, UK',
+          email: t.email || 'operations@travelbooker.co.uk',
+          phone: t.phone || '+44 20 7946 0958',
+          plan: `${t.subscriptionPlan ? t.subscriptionPlan.charAt(0).toUpperCase() + t.subscriptionPlan.slice(1) : 'Premium'} Subscription (${t.subscriptionStatus ? t.subscriptionStatus.charAt(0).toUpperCase() + t.subscriptionStatus.slice(1) : 'Active'})`,
+          smtpHost: t.smtpHost || '',
+          smtpPort: t.smtpPort !== null && t.smtpPort !== undefined ? String(t.smtpPort) : '',
+          smtpSecure: !!t.smtpSecure,
+          smtpUser: t.smtpUser || '',
+          smtpPass: t.smtpPass || ''
+        });
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch company profile', err);
+    }
+  };
+
+  useEffect(() => {
     if (isAuthenticated) {
       fetchCompanyProfile();
     }
   }, [isAuthenticated]);
+
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      const payload = {
+        name: companyInfo.name,
+        domain: companyInfo.domain,
+        description: companyInfo.description,
+        industry: companyInfo.industry,
+        location: companyInfo.location,
+        email: companyInfo.email,
+        phone: companyInfo.phone,
+        smtpHost: companyInfo.smtpHost,
+        smtpPort: companyInfo.smtpPort,
+        smtpSecure: companyInfo.smtpSecure,
+        smtpUser: companyInfo.smtpUser,
+        smtpPass: companyInfo.smtpPass
+      };
+      await api.put('/auth/tenants/profile', payload);
+      toast.success('Company profile and SMTP settings saved successfully!');
+      fetchCompanyProfile();
+    } catch (err: any) {
+      console.error('Failed to save company profile:', err);
+      toast.error(err?.response?.data?.error || 'Failed to save settings.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const fetchExpensesList = async () => {
     try {
@@ -1773,10 +1812,10 @@ export function Dashboard() {
         )}
 
         {sidebarTab === 'settings' && (
-          <div className="space-y-6 max-w-3xl">
+          <form onSubmit={handleSaveProfile} className="space-y-6 max-w-4xl pb-12">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Company Profile & Workspace Settings</h1>
-              <p className="text-slate-500 text-xs mt-0.5">Manage subscription details, logos, domains, and agency metadata.</p>
+              <p className="text-slate-500 text-xs mt-0.5">Manage subscription details, logos, domains, and custom SMTP server configuration.</p>
             </div>
 
             <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-6">
@@ -1798,65 +1837,171 @@ export function Dashboard() {
               </div>
 
               {/* Grid of properties */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4.5 text-xs">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Domain name</label>
-                  <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100 font-semibold text-slate-700">
-                    <Globe className="w-4 h-4 text-slate-400" />
-                    <span>{companyInfo.domain}</span>
+                  <h4 className="text-sm font-extrabold text-slate-800 border-b border-slate-100 pb-2 mb-4">General Workspace Settings</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4.5 text-xs">
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Company Name</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.name}
+                        onChange={e => setCompanyInfo({ ...companyInfo, name: e.target.value })}
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Domain name</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.domain}
+                        onChange={e => setCompanyInfo({ ...companyInfo, domain: e.target.value })}
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Industry Segment</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.industry}
+                        onChange={e => setCompanyInfo({ ...companyInfo, industry: e.target.value })}
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Email Inbox (Sender)</label>
+                      <input 
+                        type="email"
+                        value={companyInfo.email}
+                        onChange={e => setCompanyInfo({ ...companyInfo, email: e.target.value })}
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Phone Hot-line</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.phone}
+                        onChange={e => setCompanyInfo({ ...companyInfo, phone: e.target.value })}
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Location Address</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.location}
+                        onChange={e => setCompanyInfo({ ...companyInfo, location: e.target.value })}
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Industry Segment</label>
-                  <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100 font-semibold text-slate-700">
-                    <Building className="w-4 h-4 text-slate-400" />
-                    <span>{companyInfo.industry}</span>
+                  <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Workspace Description</label>
+                  <textarea 
+                    value={companyInfo.description}
+                    onChange={e => setCompanyInfo({ ...companyInfo, description: e.target.value })}
+                    className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-600 font-medium text-xs leading-relaxed outline-none transition-all h-24 resize-none"
+                  />
+                </div>
+
+                {/* SMTP Server Configuration section */}
+                <div className="pt-4 border-t border-slate-100">
+                  <h4 className="text-sm font-extrabold text-slate-800 border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
+                    <Server className="w-4 h-4 text-indigo-500" />
+                    Custom SMTP Email Server Settings
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mb-4 leading-normal">
+                    Configure your company's own SMTP settings so transaction notifications, voucher requests, and customer GDPR emails are sent from your custom email domain. If left blank, the platform's default mail service will be used.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4.5 text-xs">
+                    <div className="sm:col-span-2">
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">SMTP Host</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.smtpHost}
+                        onChange={e => setCompanyInfo({ ...companyInfo, smtpHost: e.target.value })}
+                        placeholder="e.g. smtp.mailgun.org"
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">SMTP Port</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.smtpPort}
+                        onChange={e => setCompanyInfo({ ...companyInfo, smtpPort: e.target.value })}
+                        placeholder="587 or 465"
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">SMTP User / Username</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.smtpUser}
+                        onChange={e => setCompanyInfo({ ...companyInfo, smtpUser: e.target.value })}
+                        placeholder="postmaster@yourdomain.com"
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">SMTP Password</label>
+                      <input 
+                        type="password"
+                        value={companyInfo.smtpPass}
+                        onChange={e => setCompanyInfo({ ...companyInfo, smtpPass: e.target.value })}
+                        placeholder="••••••••"
+                        className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="flex items-center sm:pt-6">
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                        <input 
+                          type="checkbox"
+                          checked={companyInfo.smtpSecure}
+                          onChange={e => setCompanyInfo({ ...companyInfo, smtpSecure: e.target.checked })}
+                          className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Use Secure connection (SSL/TLS)</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Email Inbox</label>
-                  <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100 font-semibold text-slate-700">
-                    <Mail className="w-4 h-4 text-slate-400" />
-                    <span>{companyInfo.email}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Phone Hot-line</label>
-                  <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100 font-semibold text-slate-700">
-                    <Phone className="w-4 h-4 text-slate-400" />
-                    <span>{companyInfo.phone}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Location Address</label>
-                  <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100 font-semibold text-slate-700">
-                    <MapPin className="w-4 h-4 text-slate-400" />
-                    <span>{companyInfo.location}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Subscription Tier</label>
-                  <div className="flex items-center gap-2 bg-emerald-50 px-3.5 py-2.5 rounded-xl border border-emerald-100 font-bold text-emerald-700">
-                    <CheckCircle className="w-4 h-4 text-emerald-600" />
-                    <span>Lifetime Access Subscription</span>
-                  </div>
-                </div>
               </div>
 
-              <div>
-                <label className="block text-slate-400 font-bold mb-1 uppercase text-[9px]">Workspace Description</label>
-                <p className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100/50 font-medium text-slate-600 text-xs leading-relaxed">
-                  {companyInfo.description}
-                </p>
+              {/* Action bar */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button 
+                  type="submit" 
+                  disabled={savingProfile}
+                  className="px-6 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {savingProfile ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-3.5 h-3.5" />
+                  )}
+                  Save Changes
+                </button>
               </div>
 
             </div>
-          </div>
+          </form>
         )}
 
       </main>

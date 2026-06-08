@@ -24,6 +24,11 @@ jobs:
             git pull origin main
             echo "Starting Docker containers..."
             docker compose up -d --build
+            echo "Waiting for services to boot..."
+            sleep 10
+            echo "Running database migrations..."
+            docker compose exec -T auth-service npx prisma db push --schema=prisma/schema.prisma --accept-data-loss
+            docker compose exec -T booking-service npx prisma db push --schema=prisma/schema.prisma --accept-data-loss
             echo "Cleaning unused images..."
             docker image prune -f
             echo "Deployment complete"

@@ -943,6 +943,40 @@ export function BookingDetailsModal({
                   onAdd={canUpdateBooking ? () => setShowAddPassenger(true) : undefined}
                   onEdit={canUpdateBooking ? (p) => setEditingPassenger(p) : undefined}
                   onDelete={canUpdateBooking ? (s: any) => handleDeleteService("passenger", s.id) : undefined}
+                  onSendGdprRequest={async (passenger) => {
+                    let emailToSend = passenger.email;
+                    if (!emailToSend) {
+                      const updatedEmail = window.prompt(
+                        `The passenger "${passenger.firstName} ${passenger.lastName}" does not have an email address set.\n\nPlease enter an email address to send the GDPR travel information request to:`
+                      );
+                      if (updatedEmail === null) {
+                        return; // Admin cancelled
+                      }
+                      if (!updatedEmail.trim() || !updatedEmail.includes("@")) {
+                        toast.error("Invalid email address provided.");
+                        return;
+                      }
+                      emailToSend = updatedEmail.trim();
+                    }
+
+                    const promise = api.post(`/bookings/${booking.id}/passengers/${passenger.id}/send-gdpr-request`, {
+                      email: emailToSend
+                    });
+
+                    toast.promise(promise, {
+                      loading: "Sending GDPR information request email...",
+                      success: () => {
+                        if (emailToSend !== passenger.email) {
+                          fetchDetails();
+                        }
+                        return "GDPR request email dispatched successfully!";
+                      },
+                      error: (err: any) => {
+                        const errMsg = err?.response?.data?.message || err?.message || "Failed to send email.";
+                        return `Error: ${errMsg}`;
+                      }
+                    });
+                  }}
                 />
               </AccordionSection>
 

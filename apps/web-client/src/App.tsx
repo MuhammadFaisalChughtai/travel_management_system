@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
 import { SuperAdminLogin } from './pages/SuperAdminLogin';
 import { BookingDetailsPage } from './pages/BookingDetailsPage';
+import GDPRPassengerForm from './pages/GDPRPassengerForm';
 import { 
   ArrowRight, CheckCircle2, Shield, Users, CreditCard, Sparkles, 
   BarChart3, Globe2, Zap, Mail, Phone, Building2, MessageSquare, Loader2, X 
@@ -412,6 +413,7 @@ function App() {
     <BrowserRouter>
       <Toaster position="top-right" toastOptions={{ className: 'text-sm font-semibold rounded-xl shadow-lg border border-slate-100', success: { iconTheme: { primary: '#10b981', secondary: 'white' } }, error: { iconTheme: { primary: '#ef4444', secondary: 'white' } } }} />
       <Routes>
+        <Route path="passenger-info/:token" element={<GDPRPassengerForm />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<Hero />} />
           

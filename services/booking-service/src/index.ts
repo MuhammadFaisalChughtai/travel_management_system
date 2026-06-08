@@ -15,6 +15,36 @@ const app = express();
 const PORT = process.env.PORT || 4005;
 const prisma = new PrismaClient();
 
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_do_not_use_in_prod';
+
+// Simple helper to encrypt passenger info token
+function encryptToken(payload: object): string {
+  const text = JSON.stringify(payload);
+  const key = crypto.createHash('sha256').update(JWT_SECRET).digest();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return `${iv.toString('hex')}:${encrypted}`;
+}
+
+// Simple helper to decrypt passenger info token
+function decryptToken(token: string): any {
+  try {
+    const [ivHex, encryptedHex] = token.split(':');
+    if (!ivHex || !encryptedHex) return null;
+    const key = crypto.createHash('sha256').update(JWT_SECRET).digest();
+    const iv = Buffer.from(ivHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return JSON.parse(decrypted);
+  } catch (err) {
+    console.error('Decrypt token error:', err);
+    return null;
+  }
+}
+
 app.use(helmet());
 const corsOptions = {
   origin: '*',
@@ -5632,6 +5662,216 @@ app.post('/finance/templates/:id/compile', requireGatewayHeaders, async (req: Cu
   } catch (error) {
     console.error('Compile Document Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /bookings/:id/passengers/:passengerId/send-gdpr-request — Send GDPR request link via email
+app.post('/:id/passengers/:passengerId/send-gdpr-request', requireGatewayHeaders, requirePermission(Permission.UPDATE_BOOKING), async (req: CustomRequest, res: Response) => {
+  try {
+    const bookingId = parseInt(req.params.id);
+    const passengerId = parseInt(req.params.passengerId);
+    const tenantIdNumeric = parseInt(req.tenantId!);
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { customers: true }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Not Found', message: 'Booking not found' });
+    }
+
+    if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
+    }
+
+    const passenger = booking.customers.find(c => c.id === passengerId);
+    if (!passenger) {
+      return res.status(404).json({ error: 'Not Found', message: 'Passenger not found in booking' });
+    }
+
+    const emailToSend = req.body.email || passenger.email;
+    if (!emailToSend) {
+      return res.status(400).json({ error: 'Bad Request', message: 'Passenger email address is required' });
+    }
+
+    // If a new email was provided, update it on the passenger model first
+    if (emailToSend !== passenger.email) {
+      await prisma.bookingCustomer.update({
+        where: { id: passenger.id },
+        data: { email: emailToSend }
+      });
+      passenger.email = emailToSend;
+    }
+
+    // Generate secure token using crypto
+    const tokenPayload = {
+      bookingId,
+      passengerId,
+      tenantId: tenantIdNumeric,
+      expiry: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days validity
+    };
+    const token = encryptToken(tokenPayload);
+
+    // Fetch company context to get company name
+    const companyContext = await prisma.companyContext.findUnique({
+      where: { tenantId: tenantIdNumeric }
+    });
+    const companyName = companyContext?.companyName || 'Your Travel Agency';
+
+    // Construct GDPR Form link
+    const requestOrigin = req.headers['origin'] || req.headers['referer'] || 'https://travel.techbarred.com';
+    const parsedOrigin = new URL(requestOrigin as string).origin;
+    const gdprLink = `${parsedOrigin}/passenger-info/${encodeURIComponent(token)}`;
+
+    // Construct email html
+    const subject = `Action Required: Complete your travel details (UK GDPR) - Ref: ${booking.bookingReference}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+        <h2 style="color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-top: 0;">Travel Details & UK GDPR Consent</h2>
+        <p>Hello <strong>${passenger.firstName} ${passenger.lastName}</strong>,</p>
+        <p>To finalize and secure your upcoming booking with booking reference <strong>${booking.bookingReference}</strong>, we require your passport details and personal travel information.</p>
+        <p>In strict compliance with <strong>UK GDPR</strong>, your personal information is encrypted, stored securely, and only processed for booking fulfillment with suppliers (airlines, hotels, etc.). It will not be shared for advertising purposes.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${gdprLink}" target="_blank" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;">
+            Securely Fill Passenger Details
+          </a>
+        </div>
+        <p style="font-size: 12px; color: #64748b;">If the button above does not work, copy and paste the link below into your browser:</p>
+        <p style="font-size: 11px; word-break: break-all; color: #2563eb;"><a href="${gdprLink}">${gdprLink}</a></p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+        <p style="font-size: 13px; color: #475569;">Best regards,<br/><strong>${companyName} Team</strong></p>
+      </div>
+    `;
+
+    // Call auth-service to dispatch the email under the tenant's own SMTP settings
+    const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
+    const emailRes = await fetch(`${authUrl}/tenants/send-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tenant-id': String(tenantIdNumeric)
+      },
+      body: JSON.stringify({
+        to: emailToSend,
+        subject,
+        html
+      })
+    });
+
+    if (!emailRes.ok) {
+      const errText = await emailRes.text();
+      console.error('Email send failed at auth-service:', errText);
+      return res.status(502).json({ error: 'Bad Gateway', message: 'Failed to dispatch email via SMTP service.' });
+    }
+
+    res.status(200).json({ message: 'GDPR passenger request email sent successfully!' });
+  } catch (error: any) {
+    console.error('Send GDPR Request Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error?.message });
+  }
+});
+
+// GET /public/passenger-info/:token — Public retrieval of passenger info
+app.get('/public/passenger-info/:token', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const decoded = decryptToken(token);
+
+    if (!decoded || !decoded.bookingId || !decoded.passengerId) {
+      return res.status(400).json({ error: 'Invalid Request', message: 'This link is invalid or has expired.' });
+    }
+
+    if (decoded.expiry && Date.now() > decoded.expiry) {
+      return res.status(410).json({ error: 'Gone', message: 'This secure link has expired. Please ask your travel advisor to resend it.' });
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: decoded.bookingId },
+      include: { customers: true }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Not Found', message: 'Booking not found.' });
+    }
+
+    const passenger = booking.customers.find(c => c.id === decoded.passengerId);
+    if (!passenger) {
+      return res.status(404).json({ error: 'Not Found', message: 'Passenger not found.' });
+    }
+
+    // Fetch company name
+    const companyContext = await prisma.companyContext.findUnique({
+      where: { tenantId: decoded.tenantId }
+    });
+
+    res.status(200).json({
+      passenger: {
+        id: passenger.id,
+        title: passenger.title,
+        firstName: passenger.firstName,
+        lastName: passenger.lastName,
+        email: passenger.email,
+        phoneNumber: passenger.phoneNumber,
+        passportNumber: passenger.passportNumber,
+        passportExpiryDate: passenger.passportExpiryDate,
+        ageCategory: passenger.ageCategory,
+        role: passenger.role
+      },
+      bookingReference: booking.bookingReference,
+      companyName: companyContext?.companyName || 'Your Travel Agency'
+    });
+  } catch (error: any) {
+    console.error('Get Public Passenger Info Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// PUT /public/passenger-info/:token — Public submission of updated passenger info
+app.put('/public/passenger-info/:token', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const decoded = decryptToken(token);
+
+    if (!decoded || !decoded.bookingId || !decoded.passengerId) {
+      return res.status(400).json({ error: 'Invalid Request', message: 'This link is invalid or has expired.' });
+    }
+
+    if (decoded.expiry && Date.now() > decoded.expiry) {
+      return res.status(410).json({ error: 'Gone', message: 'This secure link has expired.' });
+    }
+
+    const { title, firstName, lastName, email, phoneNumber, passportNumber, passportExpiryDate, ageCategory, gdprConsent } = req.body;
+
+    if (!firstName || !lastName) {
+      return res.status(400).json({ error: 'Validation failed', message: 'First Name and Last Name are required.' });
+    }
+
+    if (!gdprConsent) {
+      return res.status(400).json({ error: 'Validation failed', message: 'You must consent to the GDPR privacy terms to submit your information.' });
+    }
+
+    // Update passenger details
+    const updatedPassenger = await prisma.bookingCustomer.update({
+      where: { id: decoded.passengerId },
+      data: {
+        title: title || null,
+        firstName,
+        lastName,
+        email: email || null,
+        phoneNumber: phoneNumber || null,
+        passportNumber: passportNumber || null,
+        passportExpiryDate: passportExpiryDate ? new Date(passportExpiryDate) : null,
+        ...(ageCategory && { ageCategory })
+      }
+    });
+
+    console.log(`Passenger ${decoded.passengerId} details updated securely via GDPR form for booking ${decoded.bookingId}.`);
+
+    res.status(200).json({ message: 'Your passenger details have been updated successfully!', passenger: updatedPassenger });
+  } catch (error: any) {
+    console.error('Update Public Passenger Info Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error?.message });
   }
 });
 

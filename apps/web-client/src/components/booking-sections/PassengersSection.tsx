@@ -1,4 +1,4 @@
-import { Users, Edit, Trash2, AlertCircle } from 'lucide-react';
+import { Users, Edit, Trash2, AlertCircle, Mail } from 'lucide-react';
 import type { Passenger } from '../../types/booking';
 import { EmptyState } from '../shared/EmptyState';
 
@@ -7,9 +7,10 @@ interface PassengersSectionProps {
   passengers: Passenger[];
   onEdit?: (item: any) => void;
   onDelete?: (item: any) => void;
+  onSendGdprRequest?: (item: any) => void;
 }
 
-export function PassengersSection({ passengers, onEdit, onDelete }: PassengersSectionProps) {
+export function PassengersSection({ passengers, onEdit, onDelete, onSendGdprRequest }: PassengersSectionProps) {
   const isExpiringSoon = (expiryStr: string | null | undefined) => {
     if (!expiryStr) return false;
     const expiry = new Date(expiryStr);
@@ -52,7 +53,21 @@ export function PassengersSection({ passengers, onEdit, onDelete }: PassengersSe
                       <div className="flex flex-col gap-1 items-start">
                         <span>{p.title} {p.firstName} {p.lastName}</span>
                         {i === 0 && (
-                          <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider border border-emerald-100/50 flex items-center gap-1"><Users className="w-2.5 h-2.5" /> Lead Passenger</span>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider border border-emerald-100/50 flex items-center gap-1">
+                              <Users className="w-2.5 h-2.5" /> Lead Passenger
+                            </span>
+                            {onSendGdprRequest && (
+                              <button
+                                type="button"
+                                onClick={() => onSendGdprRequest(p)}
+                                className="inline-flex items-center gap-1 text-[8px] font-bold text-primary-600 hover:text-primary-700 bg-primary-50/50 hover:bg-primary-50 px-2 py-0.5 rounded border border-primary-100 transition-all cursor-pointer active:scale-95"
+                                title="Send secure email link to passenger to fill their passport & GDPR consent details."
+                              >
+                                <Mail className="w-2.5 h-2.5" /> Send GDPR Info Request
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>

@@ -554,6 +554,96 @@ app.get('/tenants/profile', requireTenantContext, async (req: any, res: Response
   }
 });
 
+app.put('/tenants/profile', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { name, domain, description, industry, location, email, phone, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass } = req.body;
+
+    const updatedTenant = await (prisma as any).tenant.update({
+      where: { id: tenantId },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(domain !== undefined && { domain }),
+        ...(description !== undefined && { description }),
+        ...(industry !== undefined && { industry }),
+        ...(location !== undefined && { location }),
+        ...(email !== undefined && { email }),
+        ...(phone !== undefined && { phone }),
+        ...(smtpHost !== undefined && { smtpHost: smtpHost || null }),
+        ...(smtpPort !== undefined && { smtpPort: smtpPort === null || smtpPort === '' ? null : parseInt(smtpPort) }),
+        ...(smtpSecure !== undefined && { smtpSecure: !!smtpSecure }),
+        ...(smtpUser !== undefined && { smtpUser: smtpUser || null }),
+        ...(smtpPass !== undefined && { smtpPass: smtpPass || null })
+      }
+    });
+
+    res.status(200).json({ message: 'Tenant profile updated successfully', tenant: updatedTenant });
+  } catch (error: any) {
+    console.error('Update Tenant Profile Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error?.message });
+  }
+});
+
+app.post('/tenants/send-email', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { to, subject, html, text } = req.body;
+
+    if (!to || !subject || (!html && !text)) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const tenant = await (prisma as any).tenant.findUnique({
+      where: { id: tenantId }
+    });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    let transporter;
+    let fromEmail = tenant.email || 'operations@travelbooker.co.uk';
+    let fromName = tenant.name || 'Travel Agency';
+
+    if (tenant.smtpHost && tenant.smtpPort && tenant.smtpUser && tenant.smtpPass) {
+      console.log(`Using custom SMTP for tenant ${tenantId}: ${tenant.smtpHost}`);
+      transporter = nodemailer.createTransport({
+        host: tenant.smtpHost,
+        port: tenant.smtpPort,
+        secure: !!tenant.smtpSecure,
+        auth: {
+          user: tenant.smtpUser,
+          pass: tenant.smtpPass,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+      if (tenant.smtpUser.includes('@')) {
+        fromEmail = tenant.smtpUser;
+      }
+    } else {
+      console.log(`Using default system SMTP for tenant ${tenantId}`);
+      transporter = await getSmtpTransporter();
+      const userSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
+      if (userSetting?.value) {
+        fromEmail = userSetting.value;
+      }
+    }
+
+    const mailOptions = {
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject,
+      ...(html && { html }),
+      ...(text && { text })
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: 'Email sent successfully' });
+  } catch (error: any) {
+    console.error('Send Tenant Email Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error?.message });
+  }
+});
+
 // GET /agents — list all agents for current tenant
 app.get('/agents', requireTenantContext, async (req: any, res: Response) => {
   try {

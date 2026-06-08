@@ -1467,7 +1467,59 @@ async function getSmtpTransporter() {
   });
 }
 
+// Helper to create tenant-specific SMTP transporter (falls back to system-wide)
+async function getTenantSmtpTransporter(tenantId: number): Promise<{ transporter: any; fromEmail: string; fromName: string; tenant: any }> {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+
+  // Use tenant SMTP if configured
+  if (tenant?.smtpHost && tenant?.smtpUser && tenant?.smtpPass) {
+    const transporter = nodemailer.createTransport({
+      host: tenant.smtpHost,
+      port: tenant.smtpPort || 587,
+      secure: tenant.smtpSecure || false,
+      auth: { user: tenant.smtpUser, pass: tenant.smtpPass },
+      tls: { rejectUnauthorized: false }
+    });
+    return { transporter, fromEmail: tenant.smtpUser, fromName: tenant.name, tenant };
+  }
+
+  // Fall back to system-wide SMTP
+  const transporter = await getSmtpTransporter();
+  const userSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
+  const fromEmail = userSetting?.value || 'muhammadfaisalchughtai@gmail.com';
+  return { transporter, fromEmail, fromName: tenant?.name || 'Travel Agency', tenant };
+}
+
+// POST /tenants/send-email — Internal endpoint (called by booking-service) to send branded email
+app.post('/tenants/send-email', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    if (!tenantId) return res.status(400).json({ error: 'Missing x-tenant-id header' });
+
+    const { to, subject, html } = req.body;
+    if (!to || !subject || !html) {
+      return res.status(400).json({ error: 'Missing required fields: to, subject, html' });
+    }
+
+    const { transporter, fromEmail, fromName, tenant } = await getTenantSmtpTransporter(tenantId);
+
+    await transporter.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject,
+      html,
+    });
+
+    console.log(`[Tenant ${tenantId}] Email sent to ${to} via ${fromEmail}`);
+    return res.status(200).json({ message: 'Email dispatched successfully' });
+  } catch (err: any) {
+    console.error('Tenant send-email error:', err);
+    return res.status(500).json({ error: 'Failed to send email', message: err.message });
+  }
+});
+
 // POST /request-demo — Public endpoint to submit a demo request
+
 app.post('/request-demo', async (req: Request, res: Response) => {
   try {
     const { fullName, email, companyName, phoneNumber, agencySize, gdsSystems, message } = req.body;
@@ -2096,6 +2148,222 @@ app.get('/my-permissions', requireTenantContext, async (req: any, res: Response)
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+// ─── Agent Attendance Endpoints ───────────────────────────────────────────────
+
+// GET /agents/attendance — all agents' attendance with filters
+app.get('/agents/attendance', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    if (!tenantId) return res.status(400).json({ error: 'Missing tenant' });
+
+    const { agentId, from, to, view } = req.query as Record<string, string>;
+
+    // Build date range
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+    const now = new Date();
+
+    if (view === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (view === 'week') {
+      const day = now.getDay(); // 0=Sun
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      startDate = monday;
+      endDate = sunday;
+    } else if (view === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (from || to) {
+      if (from) { startDate = new Date(from); startDate.setHours(0, 0, 0, 0); }
+      if (to) { endDate = new Date(to); endDate.setHours(23, 59, 59, 999); }
+    }
+
+    const where: any = { tenantId };
+    if (agentId) where.agentId = parseInt(agentId);
+    if (startDate || endDate) {
+      where.checkIn = {};
+      if (startDate) where.checkIn.gte = startDate;
+      if (endDate) where.checkIn.lte = endDate;
+    }
+
+    const records = await prisma.agentAttendance.findMany({
+      where,
+      include: { agent: { select: { id: true, name: true, email: true, jobStatus: true } } },
+      orderBy: { checkIn: 'desc' },
+    });
+
+    // Compute duration
+    const data = records.map((r: any) => ({
+      ...r,
+      durationMinutes: r.checkOut
+        ? Math.round((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
+        : null,
+    }));
+
+    // Summary stats
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayRecords = await prisma.agentAttendance.findMany({ where: { tenantId, checkIn: { gte: todayStart, lte: todayEnd } } });
+    const currentlyIn = await prisma.agentAttendance.count({ where: { tenantId, checkOut: null } });
+
+    return res.json({
+      attendance: data,
+      total: data.length,
+      summary: {
+        todayCheckIns: todayRecords.length,
+        currentlyIn,
+      },
+    });
+  } catch (err) {
+    console.error('GET attendance error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET /agents/:id/attendance — single agent attendance
+app.get('/agents/:id/attendance', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+
+    const { from, to, view } = req.query as Record<string, string>;
+    const now = new Date();
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+
+    if (view === 'week') {
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      startDate = monday;
+      endDate = sunday;
+    } else if (view === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (from || to) {
+      if (from) { startDate = new Date(from); startDate.setHours(0, 0, 0, 0); }
+      if (to) { endDate = new Date(to); endDate.setHours(23, 59, 59, 999); }
+    }
+
+    const where: any = { tenantId, agentId };
+    if (startDate || endDate) {
+      where.checkIn = {};
+      if (startDate) where.checkIn.gte = startDate;
+      if (endDate) where.checkIn.lte = endDate;
+    }
+
+    const records = await prisma.agentAttendance.findMany({
+      where,
+      orderBy: { checkIn: 'desc' },
+    });
+
+    // Check if currently checked in
+    const openRecord = await prisma.agentAttendance.findFirst({
+      where: { tenantId, agentId, checkOut: null },
+      orderBy: { checkIn: 'desc' },
+    });
+
+    const data = records.map((r: any) => ({
+      ...r,
+      durationMinutes: r.checkOut
+        ? Math.round((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
+        : null,
+    }));
+
+    return res.json({ attendance: data, total: data.length, isCheckedIn: !!openRecord, openRecord: openRecord || null });
+  } catch (err) {
+    console.error('GET agent attendance error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /agents/:id/attendance/checkin
+app.post('/agents/:id/attendance/checkin', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+    const { notes } = req.body || {};
+
+    // Verify agent belongs to tenant
+    const agent = await prisma.agent.findFirst({ where: { id: agentId, tenantId } });
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    // Check if already checked in
+    const existing = await prisma.agentAttendance.findFirst({
+      where: { tenantId, agentId, checkOut: null },
+      orderBy: { checkIn: 'desc' },
+    });
+    if (existing) {
+      return res.status(400).json({ error: 'Agent is already checked in', record: existing });
+    }
+
+    const record = await prisma.agentAttendance.create({
+      data: {
+        agentId,
+        tenantId,
+        checkIn: new Date(),
+        notes: notes || null,
+      },
+      include: { agent: { select: { id: true, name: true, email: true } } },
+    });
+
+    return res.status(201).json({ message: 'Checked in successfully', record });
+  } catch (err) {
+    console.error('Check-in error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /agents/:id/attendance/checkout
+app.post('/agents/:id/attendance/checkout', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+    const { notes } = req.body || {};
+
+    // Find open check-in record
+    const openRecord = await prisma.agentAttendance.findFirst({
+      where: { tenantId, agentId, checkOut: null },
+      orderBy: { checkIn: 'desc' },
+    });
+
+    if (!openRecord) {
+      return res.status(400).json({ error: 'Agent is not currently checked in' });
+    }
+
+    const checkOutTime = new Date();
+    const record = await prisma.agentAttendance.update({
+      where: { id: openRecord.id },
+      data: {
+        checkOut: checkOutTime,
+        notes: notes || openRecord.notes,
+      },
+      include: { agent: { select: { id: true, name: true, email: true } } },
+    });
+
+    const durationMinutes = Math.round(
+      (checkOutTime.getTime() - new Date(openRecord.checkIn).getTime()) / 60000
+    );
+
+    return res.json({ message: 'Checked out successfully', record, durationMinutes });
+  } catch (err) {
+    console.error('Check-out error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ─── End Attendance ────────────────────────────────────────────────────────────
 
 app.listen(PORT, async () => {
   await initPermissions();

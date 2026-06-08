@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../api/axios";
 import type { BookingDetail } from "../types/booking";
 import { useAuthStore } from "../store/authStore";
+import { EmptyState } from './shared/EmptyState';
 
 import { AccordionSection } from "./AccordionSection";
 import { SummaryLedgerSection } from "./booking-sections/SummaryLedgerSection";
@@ -1109,9 +1110,12 @@ export function BookingDetailsModal({
                 >
                   <div className="space-y-4 p-4 bg-slate-50/50 rounded-xl border border-slate-200/50">
                     {!booking.priceLogs || booking.priceLogs.length === 0 ? (
-                      <div className="text-center py-6 text-slate-400 text-sm font-medium">
-                        No service price additions or modifications logged for this booking.
-                      </div>
+                      <EmptyState
+                        icon={History}
+                        title="No audit logs yet"
+                        description="No service price additions or modifications have been logged for this booking."
+                        size="sm"
+                      />
                     ) : (
                       <div className="flow-root">
                         <ul className="-mb-8">

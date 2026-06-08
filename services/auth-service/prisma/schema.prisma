@@ -115,6 +115,7 @@ model Agent {
   marginSegments AgentMarginSegment[]
   wallet         AgentWallet?
   users          User[]
+  attendance     AgentAttendance[]
 }
 
 model AgentMarginSegment {
@@ -179,6 +180,23 @@ model DemoRequest {
   status      String   @default("pending")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model AgentAttendance {
+  id          Int       @id @default(autoincrement())
+  agentId     Int
+  tenantId    Int
+  checkIn     DateTime
+  checkOut    DateTime?
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([agentId])
+  @@index([checkIn])
 }
 
 model SystemSetting {

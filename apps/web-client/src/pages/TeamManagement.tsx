@@ -416,6 +416,8 @@ export function TeamManagement() {
   const [showMatrix, setShowMatrix] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [tableUsers, setTableUsers] = useState<User[]>([]);
   const [totalTableItems, setTotalTableItems] = useState(0);
@@ -451,14 +453,18 @@ export function TeamManagement() {
 
   useEffect(() => { fetchData(); }, [currentPage, search]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to remove this user from your company?')) return;
+  const handleDelete = async () => {
+    if (!deletingUserId) return;
+    setDeleteLoading(true);
     try {
-      await api.delete(`/auth/users/${id}`);
-      toast.success('User removed successfully');
+      await api.delete(`/auth/users/${deletingUserId}`);
+      toast.success('Team member removed successfully');
+      setDeletingUserId(null);
       fetchData();
     } catch (err) {
-      toast.error('Failed to remove user');
+      toast.error('Failed to remove team member');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -577,7 +583,7 @@ export function TeamManagement() {
                               </button>
                               {user.role !== 'MAIN_COMPANY_ADMIN' ? (
                                 <button 
-                                  onClick={() => handleDelete(user.id)}
+                                  onClick={() => setDeletingUserId(user.id)}
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                                   title="Remove Member"
                                 >
@@ -611,6 +617,72 @@ export function TeamManagement() {
       <AnimatePresence>
         {showMatrix && <PermissionsMatrixModal onClose={() => setShowMatrix(false)} />}
         {showInvite && <InviteMemberModal onClose={() => setShowInvite(false)} onCreated={fetchData} editingUser={editingUser} agents={agents} />}
+        {deletingUserId && (
+          <motion.div
+            key="delete-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+              onClick={() => !deleteLoading && setDeletingUserId(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 220 }}
+              className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-rose-600 to-red-500 px-6 py-5 text-white text-center relative overflow-hidden">
+                <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+                <div className="relative z-10">
+                  <div className="w-14 h-14 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center mx-auto mb-3 shadow-lg">
+                    <Trash2 className="w-7 h-7 text-white" />
+                  </div>
+                  <h3 className="text-[17px] font-extrabold tracking-tight">Remove Team Member?</h3>
+                  <p className="text-[12px] text-rose-100 mt-1 font-medium">This action cannot be undone</p>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="px-6 py-5 text-center">
+                <p className="text-slate-600 text-[13px] leading-relaxed">
+                  You are about to permanently remove this user from your company workspace.
+                  They will lose all access immediately.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="px-6 pb-6 flex gap-3">
+                <button
+                  onClick={() => setDeletingUserId(null)}
+                  disabled={deleteLoading}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleteLoading}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-[13px] font-bold shadow-md shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {deleteLoading
+                    ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    : <Trash2 className="w-4 h-4" />
+                  }
+                  {deleteLoading ? 'Removing...' : 'Yes, Remove'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

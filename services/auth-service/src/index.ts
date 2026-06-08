@@ -557,12 +557,13 @@ app.get('/tenants/profile', requireTenantContext, async (req: any, res: Response
 app.put('/tenants/profile', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.tenantId!);
-    const { name, domain, description, industry, location, email, phone, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass } = req.body;
+    const { name, logo, domain, description, industry, location, email, phone, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass } = req.body;
 
     const updatedTenant = await (prisma as any).tenant.update({
       where: { id: tenantId },
       data: {
         ...(name !== undefined && { name }),
+        ...(logo !== undefined && { logo: logo || null }),
         ...(domain !== undefined && { domain }),
         ...(description !== undefined && { description }),
         ...(industry !== undefined && { industry }),

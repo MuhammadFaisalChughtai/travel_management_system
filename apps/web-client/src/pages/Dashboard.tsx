@@ -21,6 +21,8 @@ import {
   Lock,
   Unlock,
   Server,
+  Upload,
+  Loader2,
   
   Filter, Hash,
   UserCog,
@@ -274,6 +276,26 @@ export function Dashboard() {
   }, [isAuthenticated]);
 
   const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post('/auth/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setCompanyInfo(prev => ({ ...prev, logo: response.data.url }));
+      toast.success('Logo uploaded successfully. Click Save Changes to apply.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,6 +303,7 @@ export function Dashboard() {
     try {
       const payload = {
         name: companyInfo.name,
+        logo: companyInfo.logo,
         domain: companyInfo.domain,
         description: companyInfo.description,
         industry: companyInfo.industry,
@@ -294,7 +317,7 @@ export function Dashboard() {
         smtpPass: companyInfo.smtpPass
       };
       await api.put('/auth/tenants/profile', payload);
-      toast.success('Company profile and SMTP settings saved successfully!');
+      toast.success('Company profile, logo, and SMTP settings saved successfully!');
       fetchCompanyProfile();
     } catch (err: any) {
       console.error('Failed to save company profile:', err);
@@ -1822,11 +1845,29 @@ export function Dashboard() {
               
               {/* Header profile cards */}
               <div className="flex flex-col sm:flex-row items-center gap-5 border-b border-slate-50 pb-5">
-                <img 
-                  src={companyInfo.logo} 
-                  alt="Company Logo" 
-                  className="w-20 h-20 rounded-2xl object-cover shadow-md border border-slate-100" 
-                />
+                <div className="relative group w-20 h-20">
+                  <img 
+                    src={companyInfo.logo} 
+                    alt="Company Logo" 
+                    className="w-20 h-20 rounded-2xl object-cover shadow-md border border-slate-100" 
+                  />
+                  <label className="absolute inset-0 bg-slate-900/60 text-white rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-[10px] font-bold gap-1 border border-slate-800">
+                    <Upload className="w-4 h-4" />
+                    <span>Upload</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleLogoUpload} 
+                      className="hidden" 
+                      disabled={uploadingLogo}
+                    />
+                  </label>
+                  {uploadingLogo && (
+                    <div className="absolute inset-0 bg-slate-900/40 rounded-2xl flex items-center justify-center">
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-1 text-center sm:text-left">
                   <h3 className="text-lg font-black text-slate-900">{companyInfo.name}</h3>
                   <p className="text-xs text-slate-400 font-semibold">{companyInfo.plan}</p>

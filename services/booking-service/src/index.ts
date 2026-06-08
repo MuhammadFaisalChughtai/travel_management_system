@@ -5713,39 +5713,152 @@ app.post('/:id/passengers/:passengerId/send-gdpr-request', requireGatewayHeaders
     };
     const token = encryptToken(tokenPayload);
 
-    // Fetch company context to get company name
-    const companyContext = await prisma.companyContext.findUnique({
-      where: { tenantId: tenantIdNumeric }
-    });
-    const companyName = companyContext?.companyName || 'Your Travel Agency';
+    // Fetch company branding from this service's CompanyContext
+    const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
+    let companyCtx: any = null;
+    try {
+      companyCtx = await prisma.companyContext.findUnique({ where: { tenantId: tenantIdNumeric } });
+    } catch (_) {}
+
+    const companyName  = companyCtx?.companyName  || 'Your Travel Agency';
+    const companyLogo  = companyCtx?.logoPrimary  || null;
+    const companyEmail = companyCtx?.emailSender  || null;
+    const companyPhone = companyCtx?.landlineFormat || null;
+    const companyAddr  = companyCtx?.officeAddress || null;
+    const accentColor  = '#1e3a8a';
 
     // Construct GDPR Form link
     const requestOrigin = req.headers['origin'] || req.headers['referer'] || 'https://travel.techbarred.com';
     const parsedOrigin = new URL(requestOrigin as string).origin;
     const gdprLink = `${parsedOrigin}/passenger-info/${encodeURIComponent(token)}`;
 
-    // Construct email html
+    // Build branded email HTML
     const subject = `Action Required: Complete your travel details (UK GDPR) - Ref: ${booking.bookingReference}`;
     const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-        <h2 style="color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-top: 0;">Travel Details & UK GDPR Consent</h2>
-        <p>Hello <strong>${passenger.firstName} ${passenger.lastName}</strong>,</p>
-        <p>To finalize and secure your upcoming booking with booking reference <strong>${booking.bookingReference}</strong>, we require your passport details and personal travel information.</p>
-        <p>In strict compliance with <strong>UK GDPR</strong>, your personal information is encrypted, stored securely, and only processed for booking fulfillment with suppliers (airlines, hotels, etc.). It will not be shared for advertising purposes.</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${gdprLink}" target="_blank" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;">
-            Securely Fill Passenger Details
-          </a>
-        </div>
-        <p style="font-size: 12px; color: #64748b;">If the button above does not work, copy and paste the link below into your browser:</p>
-        <p style="font-size: 11px; word-break: break-all; color: #2563eb;"><a href="${gdprLink}">${gdprLink}</a></p>
-        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-        <p style="font-size: 13px; color: #475569;">Best regards,<br/><strong>${companyName} Team</strong></p>
-      </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Complete Your Travel Details</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- HEADER -->
+          <tr>
+            <td style="background:linear-gradient(135deg,${accentColor} 0%,#1d4ed8 100%);padding:28px 32px;text-align:center;">
+              ${companyLogo
+                ? `<img src="${companyLogo}" alt="${companyName}" style="max-height:60px;max-width:200px;object-fit:contain;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto;" />`
+                : `<div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:12px;padding:10px 24px;margin-bottom:12px;">
+                    <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-0.5px;">${companyName}</span>
+                  </div>`
+              }
+              <h1 style="color:#ffffff;font-size:15px;font-weight:700;margin:0;letter-spacing:0.3px;opacity:0.9;">Secure Travel Information Request</h1>
+            </td>
+          </tr>
+
+          <!-- REFERENCE BADGE -->
+          <tr>
+            <td style="background:#1d4ed8;padding:0 32px 20px;text-align:center;">
+              <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 20px;border:1px solid rgba(255,255,255,0.25);">
+                <span style="color:#bfdbfe;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Booking Reference</span>
+                <span style="color:#ffffff;font-size:16px;font-weight:800;margin-left:10px;font-family:monospace;">${booking.bookingReference}</span>
+              </div>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="background:#ffffff;padding:36px 32px;">
+              <p style="font-size:16px;color:#1e293b;font-weight:700;margin:0 0 8px;">Hello ${passenger.firstName} ${passenger.lastName},</p>
+              <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">
+                We hope this message finds you well. To finalise and secure your upcoming trip booked with
+                <strong style="color:#1e3a8a;">${companyName}</strong>, we kindly ask you to complete your
+                passenger details — including your passport information — using the secure link below.
+              </p>
+
+              <!-- GDPR NOTICE BOX -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:28px;">
+                <tr>
+                  <td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 20px;">
+                    <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:#1e3a8a;letter-spacing:0.5px;text-transform:uppercase;">🔒 UK GDPR Compliance Notice</p>
+                    <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">
+                      Your personal information is encrypted in transit, stored securely, and processed solely for
+                      the purpose of fulfilling your travel booking with suppliers (airlines, hotels, and other
+                      service providers). <strong>It will never be shared for marketing or advertising purposes.</strong>
+                      You have the right to access, correct, or request deletion of your data at any time.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA BUTTON -->
+              <table role="presentation" cellspacing="0" cellpadding="0" width="100%" style="margin-bottom:20px;">
+                <tr>
+                  <td align="center">
+                    <a href="${gdprLink}" target="_blank"
+                       style="display:inline-block;background:linear-gradient(135deg,${accentColor},#2563eb);color:#ffffff;
+                              padding:14px 36px;text-decoration:none;font-weight:800;font-size:14px;
+                              border-radius:10px;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(37,99,235,0.35);">
+                      ✅&nbsp; Securely Fill My Passenger Details
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size:12px;color:#64748b;text-align:center;margin:0 0 6px;">
+                If the button doesn't work, copy and paste this link into your browser:
+              </p>
+              <p style="font-size:11px;color:#2563eb;word-break:break-all;text-align:center;margin:0 0 28px;">
+                <a href="${gdprLink}" style="color:#2563eb;">${gdprLink}</a>
+              </p>
+
+              <!-- EXPIRY NOTE -->
+              <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0;padding-top:16px;border-top:1px solid #f1f5f9;">
+                ⏰ This link is valid for <strong>7 days</strong>. Please complete your details at your earliest convenience.
+              </p>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 32px;">
+              <p style="margin:0 0 4px;font-size:13px;color:#334155;font-weight:700;">Kind regards,</p>
+              <p style="margin:0 0 16px;font-size:14px;color:${accentColor};font-weight:800;">${companyName} Team</p>
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                ${companyEmail ? `<tr><td style="padding:2px 0;font-size:12px;color:#64748b;">📧&nbsp; <a href="mailto:${companyEmail}" style="color:#2563eb;text-decoration:none;">${companyEmail}</a></td></tr>` : ''}
+                ${companyPhone ? `<tr><td style="padding:2px 0;font-size:12px;color:#64748b;">📞&nbsp; ${companyPhone}</td></tr>` : ''}
+                ${companyAddr  ? `<tr><td style="padding:2px 0;font-size:12px;color:#64748b;">📍&nbsp; ${companyAddr}</td></tr>` : ''}
+              </table>
+            </td>
+          </tr>
+
+          <!-- LEGAL FOOTER -->
+          <tr>
+            <td style="background:#1e293b;padding:16px 32px;text-align:center;border-radius:0 0 16px 16px;">
+              <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">
+                This email was sent by <strong style="color:#cbd5e1;">${companyName}</strong> on behalf of your booking.
+                If you did not request this or believe it was sent in error, please disregard it or
+                contact us at ${companyEmail ? `<a href="mailto:${companyEmail}" style="color:#60a5fa;">${companyEmail}</a>` : 'our support team'}.
+                <br/>This communication is compliant with the <strong style="color:#cbd5e1;">UK GDPR (2018)</strong> and
+                the <strong style="color:#cbd5e1;">Data Protection Act 2018</strong>.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
     `;
 
     // Call auth-service to dispatch the email under the tenant's own SMTP settings
-    const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
     const emailRes = await fetch(`${authUrl}/tenants/send-email`, {
       method: 'POST',
       headers: {
@@ -5771,6 +5884,7 @@ app.post('/:id/passengers/:passengerId/send-gdpr-request', requireGatewayHeaders
     res.status(500).json({ error: 'Internal Server Error', message: error?.message });
   }
 });
+
 
 // GET /public/passenger-info/:token — Public retrieval of passenger info
 app.get('/public/passenger-info/:token', async (req: Request, res: Response) => {

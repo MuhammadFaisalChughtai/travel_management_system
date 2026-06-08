@@ -289,7 +289,7 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
     email: editingUser?.email || '',
     password: '',
     roleName: editingUser?.role || 'AGENT',
-    agentId: editingUser?.agentId || ''
+    agentId: editingUser?.agentId ? String(editingUser.agentId) : ''
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -372,6 +372,7 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Link to Agent Profile (Optional)</label>
               <select
                 value={form.agentId}
+                disabled={!!editingUser}
                 onChange={e => {
                   const selectedId = e.target.value;
                   const selectedAgent = agents.find(a => String(a.id) === selectedId);
@@ -384,14 +385,20 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
                     email: (!editingUser && selectedAgent?.email) ? selectedAgent.email : prev.email,
                   }));
                 }}
-                className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] font-medium outline-none transition-all shadow-sm cursor-pointer"
+                className={`w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] font-medium outline-none transition-all shadow-sm ${
+                  editingUser ? 'cursor-not-allowed opacity-60 bg-slate-50' : 'cursor-pointer'
+                }`}
               >
                 <option value="">-- No Agent Linked --</option>
                 {agents.map(a => (
                   <option key={a.id} value={a.id}>{a.name}{a.email ? ` — ${a.email}` : ''}</option>
                 ))}
               </select>
-              <p className="mt-1.5 text-[10px] text-slate-400 leading-normal">Selecting an agent auto-fills their name and email. Linking ensures their bookings and commissions are tracked to this user.</p>
+              <p className="mt-1.5 text-[10px] text-slate-400 leading-normal">
+                {editingUser
+                  ? '🔒 Agent link cannot be changed when editing. Manage this from the Agents section.'
+                  : 'Selecting an agent auto-fills their name and email. Linking ensures their bookings and commissions are tracked to this user.'}
+              </p>
 
             </div>
           </div>

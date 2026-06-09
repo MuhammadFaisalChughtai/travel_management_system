@@ -109,6 +109,7 @@ model Agent {
   client      String?  @db.VarChar(255)
   pcc         String?  @db.VarChar(100)
   jobStatus   String   @default("Active") @db.VarChar(50)
+  basicSalary Decimal? @db.Decimal(10, 2)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -116,6 +117,7 @@ model Agent {
   wallet         AgentWallet?
   users          User[]
   attendance     AgentAttendance[]
+  payrolls       AgentPayroll[]
 }
 
 model AgentMarginSegment {
@@ -197,6 +199,28 @@ model AgentAttendance {
   @@index([tenantId])
   @@index([agentId])
   @@index([checkIn])
+}
+
+model AgentPayroll {
+  id                 Int       @id @default(autoincrement())
+  agentId            Int
+  tenantId           Int
+  periodFrom         DateTime
+  periodTo           DateTime
+  basicSalary        Decimal   @default(0.00) @db.Decimal(10, 2)
+  totalMarginEarned  Decimal   @default(0.00) @db.Decimal(10, 2)
+  totalPaid          Decimal   @default(0.00) @db.Decimal(10, 2)
+  status             String    @default("Draft") @db.VarChar(20)
+  sentAt             DateTime?
+  notes              String?   @db.Text
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  agent              Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([agentId])
+  @@index([periodFrom])
 }
 
 model SystemSetting {

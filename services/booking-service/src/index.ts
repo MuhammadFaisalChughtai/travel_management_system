@@ -5989,6 +5989,54 @@ app.put('/public/passenger-info/:token', async (req: Request, res: Response) => 
   }
 });
 
+// GET /finance/agent-margin-summary — Internal: total margin earned by agent in period (for payroll)
+app.get('/finance/agent-margin-summary', requireGatewayHeaders, async (req: CustomRequest, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId!);
+    const { agentId, from, to } = req.query as Record<string, string>;
+
+    if (!agentId) return res.status(400).json({ error: 'agentId is required' });
+
+    const where: any = {
+      tenantId,
+      agentId: parseInt(agentId),
+      status: { not: 'cancelled' },
+    };
+
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = new Date(from);
+      if (to) where.date.lte = new Date(to);
+    }
+
+    const bookings = await prisma.booking.findMany({
+      where,
+      select: { agentMargin: true, bookingReference: true, id: true, date: true, totalPrice: true },
+    });
+
+    const totalMargin = bookings.reduce((sum: number, b: any) => sum + Number(b.agentMargin || 0), 0);
+    const bookingCount = bookings.length;
+
+    return res.json({
+      agentId: parseInt(agentId),
+      periodFrom: from || null,
+      periodTo: to || null,
+      totalMarginEarned: totalMargin.toFixed(2),
+      bookingCount,
+      bookings: bookings.map((b: any) => ({
+        id: b.id,
+        reference: b.bookingReference,
+        date: b.date,
+        totalPrice: Number(b.totalPrice),
+        agentMargin: Number(b.agentMargin),
+      })),
+    });
+  } catch (err) {
+    console.error('Agent margin summary error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Booking Service is running on port ${PORT}`);
 });

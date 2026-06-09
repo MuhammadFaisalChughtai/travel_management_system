@@ -30,7 +30,9 @@ import {
   Search,
   User,
   Tag,
-  FileText
+  FileText,
+  Clock,
+  Banknote
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
@@ -70,6 +72,8 @@ import {
 import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { AgentsPage } from './AgentsPage';
 import { Pagination } from '../components/shared/Pagination';
+import { AttendancePage } from './AttendancePage';
+import { PayrollPage } from './PayrollPage';
 
 function hasPermission(user: any, permission: string): boolean {
   if (!user) return false;
@@ -102,6 +106,8 @@ const TAB_PERMISSIONS: Record<string, string> = {
   overview: 'READ_DASHBOARD',
   bookings: 'READ_BOOKING',
   agents: 'READ_AGENT',
+  attendance: 'READ_AGENT',
+  payroll: 'READ_AGENT',
   vendors: 'READ_VENDOR',
   payments: 'READ_TRANSACTION',
   catalog: 'READ_SERVICE',
@@ -114,6 +120,8 @@ const SIDEBAR_ITEMS = [
   { id: 'overview', icon: Home, label: 'Overview' },
   { id: 'bookings', icon: Calendar, label: 'My Bookings' },
   { id: 'agents', icon: Users, label: 'Agents' },
+  { id: 'attendance', icon: Clock, label: 'Attendance', adminOnly: false },
+  { id: 'payroll', icon: Banknote, label: 'Payroll', adminOnly: false },
   { id: 'vendors', icon: UserCog, label: 'Vendors Registry' },
   { id: 'payments', icon: CreditCard, label: 'Finance & Payments' },
   { id: 'catalog', icon: Tag, label: 'Service Catalog', adminOnly: true },
@@ -844,6 +852,18 @@ export function Dashboard() {
         {sidebarTab === 'agents' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <AgentsPage />
+          </div>
+        )}
+
+        {sidebarTab === 'attendance' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <AttendancePage />
+          </div>
+        )}
+
+        {sidebarTab === 'payroll' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <PayrollPage />
           </div>
         )}
 

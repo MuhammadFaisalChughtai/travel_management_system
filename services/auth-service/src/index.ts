@@ -1098,7 +1098,7 @@ app.patch('/agents/:id', requireTenantContext, async (req: any, res: Response) =
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);
-    const { name, email, phoneNumber, gdsSystem, client, pcc, jobStatus } = req.body;
+    const { name, email, phoneNumber, gdsSystem, client, pcc, jobStatus, basicSalary } = req.body;
 
     const existing = await (prisma as any).agent.findFirst({ where: { id, tenantId } });
     if (!existing) return res.status(404).json({ error: 'Not Found', message: 'Agent not found' });
@@ -1112,7 +1112,8 @@ app.patch('/agents/:id', requireTenantContext, async (req: any, res: Response) =
         gdsSystem: gdsSystem !== undefined ? gdsSystem || null : undefined,
         client: client !== undefined ? client || null : undefined,
         pcc: pcc !== undefined ? pcc || null : undefined,
-        ...(jobStatus && { jobStatus })
+        ...(jobStatus && { jobStatus }),
+        ...(basicSalary !== undefined && { basicSalary: basicSalary === '' || basicSalary === null ? null : parseFloat(basicSalary) }),
       },
       include: { marginSegments: { orderBy: { minAmount: 'asc' } } }
     });

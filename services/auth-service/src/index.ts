@@ -957,6 +957,8 @@ app.get('/agents/payroll', requireTenantContext, async (req: any, res: Response)
             name: true,
             email: true,
             basicSalary: true,
+            gdsSystem: true,
+            pcc: true,
           }
         }
       },
@@ -1101,8 +1103,9 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
       return res.status(404).json({ error: 'Payroll record not found' });
     }
 
-    if (!payroll.agent.email) {
-      return res.status(400).json({ error: 'Agent does not have an email address configured' });
+    const targetEmail = req.body.email || payroll.agent.email;
+    if (!targetEmail) {
+      return res.status(400).json({ error: 'Recipient email address is required' });
     }
 
     // Fetch tenant profile for branding information (logo, name)
@@ -1112,6 +1115,49 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
 
     const companyName = tenant?.name || 'Travel Booker';
     const logoUrl = tenant?.logo || '';
+
+    // Fetch unique attendance check-ins during the period
+    const attendanceRecords = await prisma.agentAttendance.findMany({
+      where: {
+        agentId: payroll.agentId,
+        tenantId,
+        checkIn: {
+          gte: payroll.periodFrom,
+          lte: new Date(new Date(payroll.periodTo).setHours(23, 59, 59, 999))
+        }
+      }
+    });
+
+    const uniqueDays = new Set(
+      attendanceRecords.map(r => new Date(r.checkIn).toLocaleDateString('en-GB'))
+    );
+    const daysPresent = uniqueDays.size;
+
+    // Calculate total weekdays (working days)
+    let weekdaysCount = 0;
+    const curDate = new Date(payroll.periodFrom);
+    const endDate = new Date(payroll.periodTo);
+    while (curDate <= endDate) {
+      const day = curDate.getDay();
+      if (day !== 0 && day !== 6) { // 0 = Sunday, 6 = Saturday
+        weekdaysCount++;
+      }
+      curDate.setDate(curDate.getDate() + 1);
+    }
+    const totalWorkdays = weekdaysCount || 1; // avoid division by 0
+    const absents = Math.max(0, totalWorkdays - daysPresent);
+
+    const basicSalaryVal = Number(payroll.basicSalary);
+    const marginEarnedVal = Number(payroll.totalMarginEarned);
+    const gdsAllowance = payroll.agent.gdsSystem ? 120.00 : 0.00;
+    const travelAllowance = 80.00;
+    const totalAllowances = gdsAllowance + travelAllowance;
+    const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances;
+    
+    const dailyRate = basicSalaryVal / totalWorkdays;
+    const absentDeduction = dailyRate * absents;
+    const totalDeductions = absentDeduction;
+    const finalNetPay = Math.max(0, grossEarnings - totalDeductions);
 
     // Create a beautiful branded HTML email content
     const periodFromStr = new Date(payroll.periodFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -1123,68 +1169,158 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
       <head>
         <meta charset="utf-8">
         <style>
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #334155; margin: 0; padding: 0; background-color: #f8fafc; }
-          .container { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #f1f5f9; }
-          .header { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 30px; text-align: center; color: white; }
-          .logo { max-height: 50px; margin-bottom: 15px; }
-          .header h1 { margin: 0; font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-          .header p { margin: 5px 0 0 0; font-size: 13px; color: #94a3b8; }
-          .content { padding: 30px; }
-          .greeting { font-size: 16px; font-weight: bold; margin-bottom: 20px; }
-          .period-badge { display: inline-block; padding: 6px 12px; background-color: #f1f5f9; border-radius: 9999px; font-size: 12px; font-weight: bold; color: #475569; margin-bottom: 25px; }
-          .table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-          .table th { text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; }
-          .table td { padding: 14px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
-          .table tr:last-child td { border-bottom: none; }
-          .amount { text-align: right; font-variant-numeric: tabular-nums; }
-          .total-row { background-color: #f8fafc; font-weight: bold; }
-          .total-row td { border-top: 2px solid #e2e8f0; border-bottom: 2px double #e2e8f0 !important; font-size: 14px; color: #0f172a; }
-          .notes { font-size: 12px; color: #64748b; background-color: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #cbd5e1; margin-bottom: 30px; line-height: 1.5; }
-          .footer { background-color: #f8fafc; padding: 20px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; margin: 0; padding: 0; background-color: #f1f5f9; }
+          .container { max-width: 650px; margin: 40px auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+          .header { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 35px 30px; text-align: center; color: white; position: relative; }
+          .logo { max-height: 50px; margin-bottom: 12px; }
+          .header h1 { margin: 0; font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #38bdf8; }
+          .header p { margin: 4px 0 0 0; font-size: 14px; color: #cbd5e1; font-weight: 500; }
+          
+          .content { padding: 35px 30px; }
+          
+          /* Info block */
+          .info-section { display: table; width: 100%; border-collapse: collapse; margin-bottom: 25px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 20px; }
+          .info-col { display: table-cell; width: 50%; vertical-align: top; }
+          .info-label { font-size: 11px; text-transform: uppercase; font-weight: bold; color: #64748b; letter-spacing: 0.5px; margin-bottom: 4px; }
+          .info-value { font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 12px; }
+          
+          /* Attendance block */
+          .attendance-box { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; margin-bottom: 30px; }
+          .attendance-title { font-size: 11px; text-transform: uppercase; font-weight: 800; color: #475569; letter-spacing: 0.5px; margin-bottom: 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px; }
+          .attendance-grid { display: table; width: 100%; }
+          .attendance-item { display: table-cell; width: 33.33%; text-align: center; }
+          .attendance-count { font-size: 18px; font-weight: 800; color: #0f172a; }
+          .attendance-lbl { font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px; }
+          
+          /* Table breakdown */
+          .slip-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          .slip-table th { text-align: left; padding: 10px 12px; background-color: #f8fafc; font-size: 11px; text-transform: uppercase; color: #475569; font-weight: bold; border-top: 1px solid #e2e8f0; border-bottom: 2px solid #e2e8f0; }
+          .slip-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #334155; }
+          .slip-table .number { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+          .slip-table .section-title { font-weight: bold; color: #0f172a; background-color: #f8fafc; padding: 6px 12px; font-size: 11px; text-transform: uppercase; border-left: 3px solid #6366f1; }
+          
+          .subtotal-row td { font-weight: bold; color: #0f172a; background-color: #f8fafc; border-top: 1px solid #cbd5e1; }
+          .net-pay-row { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color: #ffffff !important; }
+          .net-pay-row td { font-size: 16px; font-weight: 800; padding: 16px 12px; border: none; color: #ffffff !important; }
+          .net-pay-row .number { color: #38bdf8; font-size: 18px; }
+          
+          .notes-box { font-size: 12px; color: #475569; background-color: #fef3c7; border: 1px solid #fde68a; border-left: 4px solid #d97706; padding: 15px; border-radius: 8px; margin-bottom: 25px; line-height: 1.5; }
+          .footer { background-color: #f8fafc; padding: 25px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; line-height: 1.6; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
             ${logoUrl ? `<img src="${logoUrl}" alt="${companyName} Logo" class="logo" />` : ''}
-            <h1>Payroll Slip</h1>
+            <h1>Official Salary Slip</h1>
             <p>${companyName}</p>
           </div>
+          
           <div class="content">
-            <div class="greeting">Hi ${payroll.agent.name},</div>
-            <p>Please find below the breakdown of your payroll for the specified period:</p>
-            <div class="period-badge">Period: ${periodFromStr} &ndash; ${periodToStr}</div>
+            <!-- Employee & Slip Meta Info -->
+            <div class="info-section">
+              <div class="info-col">
+                <div class="info-label">Employee / Agent</div>
+                <div class="info-value">${payroll.agent.name}</div>
+                
+                <div class="info-label">Personal Email</div>
+                <div class="info-value">${targetEmail}</div>
+              </div>
+              <div class="info-col">
+                <div class="info-label">Pay Period</div>
+                <div class="info-value">${periodFromStr} &ndash; ${periodToStr}</div>
+                
+                <div class="info-label">GDS PCC & System</div>
+                <div class="info-value">${payroll.agent.gdsSystem || 'None'} / ${payroll.agent.pcc || 'None'}</div>
+              </div>
+            </div>
             
-            <table class="table">
+            <!-- Attendance Summary -->
+            <div class="attendance-box">
+              <div class="attendance-title">Attendance & Calendar Summary</div>
+              <div class="attendance-grid">
+                <div class="attendance-item">
+                  <div class="attendance-count">${totalWorkdays}</div>
+                  <div class="attendance-lbl">Total Workdays</div>
+                </div>
+                <div class="attendance-item">
+                  <div class="attendance-count" style="color: #16a34a;">${daysPresent}</div>
+                  <div class="attendance-lbl">Days Present</div>
+                </div>
+                <div class="attendance-item">
+                  <div class="attendance-count" style="color: #dc2626;">${absents}</div>
+                  <div class="attendance-lbl">Days Absent</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Salary Slip Tables -->
+            <table class="slip-table">
               <thead>
                 <tr>
                   <th>Description</th>
-                  <th style="text-align: right;">Amount</th>
+                  <th style="text-align: right; width: 120px;">Amount</th>
                 </tr>
               </thead>
               <tbody>
+                <!-- Earnings Section -->
                 <tr>
-                  <td>Basic Salary</td>
-                  <td class="amount">£${Number(payroll.basicSalary).toFixed(2)}</td>
+                  <td colspan="2" class="section-title">Earnings & Commissions</td>
                 </tr>
                 <tr>
-                  <td>Commission / Margin Earned</td>
-                  <td class="amount">£${Number(payroll.totalMarginEarned).toFixed(2)}</td>
+                  <td>Basic Salary (Monthly contract)</td>
+                  <td class="number">£${basicSalaryVal.toFixed(2)}</td>
                 </tr>
-                <tr class="total-row">
-                  <td>Total Net Payable</td>
-                  <td class="amount">£${Number(payroll.totalPaid).toFixed(2)}</td>
+                <tr>
+                  <td>Commission / Margin Share (dynamic yield)</td>
+                  <td class="number">£${marginEarnedVal.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Travel & Internet connectivity allowance (Amenities)</td>
+                  <td class="number">£${travelAllowance.toFixed(2)}</td>
+                </tr>
+                ${gdsAllowance > 0 ? `
+                <tr>
+                  <td>GDS Terminal Premium allowance (Amenities)</td>
+                  <td class="number">£${gdsAllowance.toFixed(2)}</td>
+                </tr>
+                ` : ''}
+                <tr class="subtotal-row">
+                  <td>Total Gross Earnings</td>
+                  <td class="number">£${grossEarnings.toFixed(2)}</td>
+                </tr>
+                
+                <!-- Deductions Section -->
+                <tr>
+                  <td colspan="2" class="section-title" style="border-left-color: #ef4444;">Deductions & Adjustments</td>
+                </tr>
+                <tr>
+                  <td>Absenteeism Penalty (${absents} days absent @ £${dailyRate.toFixed(2)}/day)</td>
+                  <td class="number" style="color: #dc2626;">-£${absentDeduction.toFixed(2)}</td>
+                </tr>
+                <tr class="subtotal-row">
+                  <td>Total Deductions</td>
+                  <td class="number" style="color: #dc2626;">£${totalDeductions.toFixed(2)}</td>
+                </tr>
+                
+                <!-- Net Pay Section -->
+                <tr class="net-pay-row">
+                  <td>Total Net Payable (Net Salary)</td>
+                  <td class="number">£${finalNetPay.toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
 
-            ${payroll.notes ? `<div class="notes"><strong>Notes:</strong><br/>${payroll.notes}</div>` : ''}
+            ${payroll.notes ? `<div class="notes-box"><strong>Notes & Remarks:</strong><br/>${payroll.notes}</div>` : ''}
             
-            <p style="font-size: 13px; line-height: 1.5; margin: 0 0 10px 0;">If you have any questions regarding this statement, please contact the finance administrator.</p>
+            <p style="font-size: 12px; line-height: 1.5; color: #64748b; margin: 30px 0 0 0; text-align: center;">
+              This is a secure official statement generated by your employer. If you have any inquiries regarding this document, please contact the finance team.
+            </p>
           </div>
+          
           <div class="footer">
             &copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.<br/>
-            This is an automated payroll statement. Please do not reply directly to this email.
+            Sent via custom secure company mail server (SMTP). This is an automated notification. Please do not reply directly.
           </div>
         </div>
       </body>
@@ -1196,7 +1332,7 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
 
     await transporter.sendMail({
       from: `"${fromName}" <${fromEmail}>`,
-      to: payroll.agent.email,
+      to: targetEmail,
       subject: `Payroll Slip: ${periodFromStr} - ${periodToStr}`,
       html: htmlContent
     });

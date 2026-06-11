@@ -16,6 +16,8 @@ interface Agent {
   email: string | null;
   jobStatus: string;
   basicSalary: number | null;
+  gdsSystem?: string | null;
+  pcc?: string | null;
 }
 
 interface Payroll {
@@ -30,7 +32,15 @@ interface Payroll {
   sentAt: string | null;
   notes: string | null;
   createdAt: string;
-  agent: { id: number; name: string; email: string | null; basicSalary: number | null; jobStatus: string };
+  agent: {
+    id: number;
+    name: string;
+    email: string | null;
+    basicSalary: number | null;
+    jobStatus: string;
+    gdsSystem?: string | null;
+    pcc?: string | null;
+  };
 }
 
 function fmt(n: number | string) {
@@ -241,7 +251,8 @@ export function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
   const [salaryAgent, setSalaryAgent] = useState<Agent | null>(null);
-  const [sendingId, setSendingId] = useState<number | null>(null);
+  const [sendSlipPayroll, setSendSlipPayroll] = useState<Payroll | null>(null);
+  const [viewSlipPayroll, setViewSlipPayroll] = useState<Payroll | null>(null);
   const [markingPaidId, setMarkingPaidId] = useState<number | null>(null);
   const [filterAgent, setFilterAgent] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -268,18 +279,7 @@ export function PayrollPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleSendSlip = async (payrollId: number) => {
-    setSendingId(payrollId);
-    try {
-      await api.post(`/agents/payroll/${payrollId}/send`);
-      toast.success('Payroll slip sent via email!');
-      fetchData();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Failed to send payroll slip');
-    } finally {
-      setSendingId(null);
-    }
-  };
+  // handleSendSlip replaced by SendPayrollSlipModal
 
   const handleMarkPaid = async (payrollId: number) => {
     setMarkingPaidId(payrollId);
@@ -486,19 +486,25 @@ export function PayrollPage() {
                       <td className="py-3 px-5">
                         <div className="flex items-center justify-center gap-1.5">
                           {/* Send Slip */}
-                          {p.status !== 'Paid' && p.agent?.email && (
+                          {p.status !== 'Paid' && (
                             <button
-                              onClick={() => handleSendSlip(p.id)}
-                              disabled={sendingId === p.id}
+                              onClick={() => setSendSlipPayroll(p)}
                               title="Send payroll slip via email"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-bold transition-all"
                             >
-                              {sendingId === p.id
-                                ? <div className="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-700 rounded-full animate-spin" />
-                                : <Send className="w-3 h-3" />}
+                              <Send className="w-3 h-3" />
                               {p.status === 'Sent' ? 'Resend' : 'Send Slip'}
                             </button>
                           )}
+                          {/* View Slip */}
+                          <button
+                            onClick={() => setViewSlipPayroll(p)}
+                            title="View / Print Salary Slip"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold transition-all"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            View Slip
+                          </button>
                           {/* Mark Paid */}
                           {p.status !== 'Paid' && (
                             <button
@@ -542,7 +548,463 @@ export function PayrollPage() {
         {salaryAgent && (
           <SetSalaryModal agent={salaryAgent} onClose={() => setSalaryAgent(null)} onSaved={() => { fetchData(); setSalaryAgent(null); }} />
         )}
+        {sendSlipPayroll && (
+          <SendPayrollSlipModal
+            payroll={sendSlipPayroll}
+            onClose={() => setSendSlipPayroll(null)}
+            onSent={fetchData}
+          />
+        )}
+        {viewSlipPayroll && (
+          <ViewSalarySlipModal
+            payroll={viewSlipPayroll}
+            onClose={() => setViewSlipPayroll(null)}
+          />
+        )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ─── Send Payroll Slip Modal ──────────────────────────────────────────────────
+interface SendPayrollSlipModalProps {
+  payroll: Payroll;
+  onClose: () => void;
+  onSent: () => void;
+}
+
+function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModalProps) {
+  const [email, setEmail] = useState(payroll.agent.email || '');
+  const [loading, setLoading] = useState(false);
+  const [smtpHost, setSmtpHost] = useState<string | null>(null);
+  const [smtpUser, setSmtpUser] = useState<string | null>(null);
+  const [checkingSmtp, setCheckingSmtp] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    api.get('/auth/tenants/profile')
+      .then(res => {
+        if (!active) return;
+        const tenant = res.data.tenant;
+        if (tenant?.smtpHost && tenant?.smtpUser) {
+          setSmtpHost(tenant.smtpHost);
+          setSmtpUser(tenant.smtpUser);
+        }
+        setCheckingSmtp(false);
+      })
+      .catch(() => {
+        if (active) setCheckingSmtp(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSend = async () => {
+    if (!email) {
+      toast.error('Please enter a recipient email address');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post(`/agents/payroll/${payroll.id}/send`, { email });
+      toast.success('Payroll slip sent successfully!');
+      onSent();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Failed to send payroll slip');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isCompanySmtpActive = !!smtpHost;
+
+  return (
+    <motion.div
+      key="send-slip-modal"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+    >
+      <motion.div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        onClick={() => !loading && onClose()}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 240 }}
+        className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+      >
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 text-white relative overflow-hidden">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+          <div className="relative z-10 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center">
+              <Send className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-[16px] font-extrabold">Send Payroll Slip</h3>
+              <p className="text-[11px] text-indigo-100">Dispatched directly using SMTP settings</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="absolute right-4 top-4 w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Agent Name</label>
+            <div className="text-[13px] font-bold text-slate-800 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl">
+              {payroll.agent?.name}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Recipient Email *</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="e.g. agent@personal.com"
+              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500"
+            />
+            <p className="mt-1 text-[10px] text-slate-400">Payroll statement will be sent to this personal address.</p>
+          </div>
+
+          {checkingSmtp ? (
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 py-1">
+              <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+              <span>Verifying SMTP configuration...</span>
+            </div>
+          ) : isCompanySmtpActive ? (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[11.5px] text-emerald-800 flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block font-bold mb-0.5">Company SMTP Active</strong>
+                Email will be sent using your SMTP server: <code className="font-mono bg-emerald-100/50 px-1 rounded">{smtpHost}</code> as <code className="font-mono bg-emerald-100/50 px-1 rounded">{smtpUser}</code>.
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[11.5px] text-amber-800 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block font-bold mb-0.5">System Default SMTP Fallback</strong>
+                No custom company SMTP settings found. This email will send via default platform email.
+                <span className="block mt-1 font-semibold text-amber-900">
+                  Tip: Configure company SMTP under Dashboard settings to send from your own domain.
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={loading}
+              className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-[13px] font-bold shadow-md shadow-primary-500/30 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              {loading ? 'Sending...' : 'Send Payroll Slip'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── View Salary Slip Modal (Printable) ───────────────────────────────────────
+interface ViewSalarySlipModalProps {
+  payroll: Payroll;
+  onClose: () => void;
+}
+
+function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tenant, setTenant] = useState<any>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.get(`/agents/${payroll.agentId}/attendance`, {
+        params: { from: payroll.periodFrom.slice(0, 10), to: payroll.periodTo.slice(0, 10) }
+      }),
+      api.get('/auth/tenants/profile')
+    ]).then(([attRes, profileRes]) => {
+      if (!active) return;
+      setAttendance(attRes.data || []);
+      setTenant(profileRes.data.tenant || null);
+      setLoading(false);
+    }).catch(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [payroll]);
+
+  // Compute workdays
+  let weekdaysCount = 0;
+  const curDate = new Date(payroll.periodFrom);
+  const endDate = new Date(payroll.periodTo);
+  while (curDate <= endDate) {
+    const day = curDate.getDay();
+    if (day !== 0 && day !== 6) {
+      weekdaysCount++;
+    }
+    curDate.setDate(curDate.getDate() + 1);
+  }
+  const totalWorkdays = weekdaysCount || 1;
+
+  const uniqueDays = new Set(
+    attendance.map(r => new Date(r.checkIn).toLocaleDateString('en-GB'))
+  );
+  const daysPresent = uniqueDays.size;
+  const absents = Math.max(0, totalWorkdays - daysPresent);
+
+  const basicSalaryVal = Number(payroll.basicSalary);
+  const marginEarnedVal = Number(payroll.totalMarginEarned);
+  const gdsAllowance = payroll.agent?.gdsSystem ? 120.00 : 0.00;
+  const travelAllowance = 80.00;
+  const totalAllowances = gdsAllowance + travelAllowance;
+  const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances;
+  
+  const dailyRate = basicSalaryVal / totalWorkdays;
+  const absentDeduction = dailyRate * absents;
+  const totalDeductions = absentDeduction;
+  const finalNetPay = Math.max(0, grossEarnings - totalDeductions);
+
+  const periodFromStr = new Date(payroll.periodFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const periodToStr = new Date(payroll.periodTo).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  const companyName = tenant?.name || 'Travel Booker';
+  const logoUrl = tenant?.logo || '';
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <motion.div
+      key="view-slip-modal"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 overflow-y-auto"
+    >
+      <motion.div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm print:hidden"
+        onClick={onClose}
+      />
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #printable-slip, #printable-slip * {
+            visibility: visible !important;
+          }
+          #printable-slip {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: white !important;
+          }
+        }
+      `}</style>
+      
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 240 }}
+        className="relative z-10 bg-slate-50 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden print:bg-white print:shadow-none print:w-full print:max-w-none print:rounded-none max-h-[90vh] flex flex-col"
+      >
+        {/* Modal Header */}
+        <div className="bg-gradient-to-r from-slate-800 to-indigo-950 px-6 py-4 text-white flex items-center justify-between print:hidden">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-indigo-400" />
+            <span className="font-extrabold text-[15px]">Official Salary Slip Overview</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              disabled={loading}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5 rotate-90" /> Print / Save PDF
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto p-6 flex-1 print:overflow-visible print:p-0">
+          {loading ? (
+            <div className="py-12"><LoadingState message="Compiling salary slip details..." /></div>
+          ) : (
+            <div id="printable-slip" className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm print:border-none print:shadow-none print:rounded-none text-slate-800">
+              {/* Slip Header */}
+              <div className="flex justify-between items-start border-b border-slate-200 pb-5 mb-5">
+                <div>
+                  {logoUrl && <img src={logoUrl} alt="Logo" className="h-10 mb-2 object-contain" />}
+                  <h2 className="text-lg font-extrabold text-slate-800 tracking-tight">{companyName}</h2>
+                  <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Official Salary Slip</p>
+                </div>
+                <div className="text-right">
+                  <div className="inline-block bg-primary-50 border border-primary-100 text-primary-800 rounded-full px-3 py-1 text-[11px] font-bold">
+                    Pay Period: {periodFromStr} &ndash; {periodToStr}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 font-medium">Issue Date: {new Date(payroll.createdAt).toLocaleDateString('en-GB')}</p>
+                </div>
+              </div>
+
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 gap-6 border-b border-slate-100 pb-5 mb-5 text-[12px]">
+                <div className="space-y-2">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Employee / Agent</span>
+                    <span className="font-bold text-slate-800">{payroll.agent?.name}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Email Address</span>
+                    <span className="font-semibold text-slate-600">{payroll.agent?.email || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">GDS Terminal System</span>
+                    <span className="font-bold text-slate-800">{payroll.agent?.gdsSystem || 'None'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Pseudo City Code (PCC)</span>
+                    <span className="font-semibold text-slate-600">{payroll.agent?.pcc || 'None'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attendance Card */}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-6">
+                <h3 className="text-[10px] uppercase font-extrabold text-slate-500 tracking-wider mb-3 border-b border-slate-200 pb-1.5">
+                  Attendance & Calendar Summary
+                </h3>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <span className="block text-[15px] font-extrabold text-slate-800">{totalWorkdays}</span>
+                    <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">Total Workdays</span>
+                  </div>
+                  <div>
+                    <span className="block text-[15px] font-extrabold text-emerald-600">{daysPresent}</span>
+                    <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">Days Present</span>
+                  </div>
+                  <div>
+                    <span className="block text-[15px] font-extrabold text-red-600">{absents}</span>
+                    <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">Days Absent</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Breakdown Table */}
+              <table className="w-full text-left border-collapse text-[12px] mb-6">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400 font-bold border-t border-b border-slate-200">
+                    <th className="py-2.5 px-3">Description</th>
+                    <th className="py-2.5 px-3 text-right">Earnings</th>
+                    <th className="py-2.5 px-3 text-right">Deductions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {/* Earnings */}
+                  <tr>
+                    <td className="py-3 px-3 font-semibold text-slate-800">Basic Contract Salary</td>
+                    <td className="py-3 px-3 text-right font-bold text-slate-800">£{basicSalaryVal.toFixed(2)}</td>
+                    <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 font-semibold text-slate-800">Booking Commission / Margin Share</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">+£{marginEarnedVal.toFixed(2)}</td>
+                    <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 font-semibold text-slate-800">Travel & Internet connectivity allowance</td>
+                    <td className="py-3 px-3 text-right font-bold text-slate-800">+£{travelAllowance.toFixed(2)}</td>
+                    <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                  </tr>
+                  {gdsAllowance > 0 && (
+                    <tr>
+                      <td className="py-3 px-3 font-semibold text-slate-800">GDS Terminal Premium allowance</td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{gdsAllowance.toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                    </tr>
+                  )}
+
+                  {/* Deductions */}
+                  {absentDeduction > 0 && (
+                    <tr>
+                      <td className="py-3 px-3 font-semibold text-slate-800">
+                        Absenteeism Penalty ({absents} day{absents !== 1 ? 's' : ''} @ £{dailyRate.toFixed(2)}/day)
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                      <td className="py-3 px-3 text-right font-bold text-red-600">-£{absentDeduction.toFixed(2)}</td>
+                    </tr>
+                  )}
+
+                  {/* Totals */}
+                  <tr className="bg-slate-50 font-bold border-t border-slate-200">
+                    <td className="py-2.5 px-3 text-slate-700">Subtotals</td>
+                    <td className="py-2.5 px-3 text-right text-slate-800">£{grossEarnings.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right text-red-600">£{totalDeductions.toFixed(2)}</td>
+                  </tr>
+
+                  {/* Net Pay Callout */}
+                  <tr className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white font-bold">
+                    <td className="py-3.5 px-4 rounded-l-xl text-[13px] border-none">Total Net Payable (Net Salary)</td>
+                    <td colSpan={2} className="py-3.5 px-4 text-right text-[15px] text-sky-400 font-black rounded-r-xl border-none">
+                      £{finalNetPay.toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Notes */}
+              {payroll.notes && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-[11px] text-amber-900 leading-relaxed">
+                  <strong>Notes & Remarks:</strong>
+                  <p className="mt-1">{payroll.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }

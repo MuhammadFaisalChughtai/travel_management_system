@@ -1722,6 +1722,7 @@ export function Dashboard() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase border-b border-slate-100">
+                        <th className="py-3 px-5 text-center w-12">#</th>
                         <th className="py-3 px-5">Invoice Reference</th>
                         <th className="py-3 px-5">Departure Date</th>
                         <th className="py-3 px-5">Assigned Agent</th>
@@ -1736,7 +1737,7 @@ export function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
-                      {tableBookings.map((b) => {
+                      {tableBookings.map((b, index) => {
                         const bookingTotal = Number(b.totalPrice) || 0;
                         const clientPayments = b.payments?.filter((p: any) => p.paymentType === 'Received from Client' && (!p.status || p.status === 'approved')).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
                         const legacyVendorPayments = b.payments?.filter((p: any) => p.paymentType === 'Sent to Vendor').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -1762,6 +1763,8 @@ export function Dashboard() {
                         }
                         const agentMargin = (netProfit * marginPercentage) / 100;
 
+                        const counter = (bookingsPage - 1) * 10 + index + 1;
+
                         return (
                         <tr 
                           key={b.id} 
@@ -1771,6 +1774,7 @@ export function Dashboard() {
                             setIsDetailsModalOpen(true);
                           }}
                         >
+                          <td className="py-3.5 px-5 text-center font-bold text-slate-400">{counter}</td>
                           <td className="py-3.5 px-5 font-black text-slate-900">{b.bookingReference}</td>
                           <td className="py-3.5 px-5 font-mono text-slate-500">{b.departureDate ? new Date(b.departureDate).toLocaleDateString() : 'N/A'}</td>
                           <td className="py-3.5 px-5 font-bold text-slate-700">{b.agentName || 'System'}</td>

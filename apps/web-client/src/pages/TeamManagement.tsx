@@ -117,21 +117,21 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-7xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-6 py-5 flex justify-between items-center shadow-lg relative overflow-hidden shrink-0">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-          <div className="absolute bottom-0 left-16 w-32 h-32 bg-indigo-50/30 rounded-full blur-2xl -mb-10"></div>
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-7xl relative z-10 overflow-hidden flex flex-col max-h-[85vh]">
+        <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-4 py-3 flex justify-between items-center shadow-lg relative overflow-hidden shrink-0">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12"></div>
+          <div className="absolute bottom-0 left-10 w-24 h-24 bg-indigo-50/30 rounded-full blur-xl -mb-6"></div>
           
-          <div className="relative z-10 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
-              <ShieldAlert className="w-5 h-5" />
+          <div className="relative z-10 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
+              <ShieldAlert className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-white text-[16px] tracking-wide">Permissions Matrix</h3>
-              <p className="text-[12px] text-indigo-200 font-medium">Enforce and edit workspace role-based restrictions</p>
+              <h3 className="font-extrabold text-white text-[13px] tracking-wide">Permissions Matrix</h3>
+              <p className="text-[10px] text-indigo-200 font-medium">Enforce and edit workspace role-based restrictions</p>
             </div>
           </div>
-          <button onClick={onClose} className="relative z-10 w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="relative z-10 w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"><X className="w-3.5 h-3.5" /></button>
         </div>
         <div className="p-0 overflow-x-auto overflow-y-auto flex-1 min-h-[200px] flex flex-col">
           {loading ? (
@@ -145,23 +145,23 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
           ) : (
             <table className="min-w-[1050px] w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
-                  <th className="p-4 pl-6 font-semibold w-[22%] text-slate-600">Module / Section</th>
-                  <th className="p-4 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Users className="w-4 h-4 text-slate-400" />
+                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
+                  <th className="p-2.5 pl-4 font-semibold w-[22%] text-slate-600">Module / Section</th>
+                  <th className="p-2.5 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
+                    <div className="flex items-center justify-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-slate-400" />
                       <span>Agent</span>
                     </div>
                   </th>
-                  <th className="p-4 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Shield className="w-4 h-4 text-primary-500" />
+                  <th className="p-2.5 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
+                    <div className="flex items-center justify-center gap-1">
+                      <Shield className="w-3.5 h-3.5 text-primary-500" />
                       <span>Company Admin</span>
                     </div>
                   </th>
-                  <th className="p-4 border-l border-slate-200 text-center text-indigo-700 bg-indigo-50/40 font-extrabold w-[26%]">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-indigo-500" />
+                  <th className="p-2.5 border-l border-slate-200 text-center text-indigo-700 bg-indigo-50/40 font-extrabold w-[26%]">
+                    <div className="flex items-center justify-center gap-1">
+                      <Lock className="w-3 h-3 text-indigo-500" />
                       <span>Main Company Admin (Locked)</span>
                     </div>
                   </th>
@@ -170,9 +170,9 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
               <tbody className="divide-y divide-slate-100">
                 {matrix.map((row, i) => (
                   <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 pl-6 text-[13px] font-bold text-slate-800">
-                      <div className="flex items-center gap-3">
-                        <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shadow-xs">
+                    <td className="p-2.5 pl-4 text-xs font-bold text-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded bg-slate-50 border border-slate-100 flex items-center justify-center shadow-xs">
                           {getModuleIcon(row.module)}
                         </div>
                         <span>{row.module}</span>
@@ -180,15 +180,15 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                     </td>
                     
                     {/* AGENT */}
-                    <td className="p-4 border-l border-slate-100">
-                      <div className="flex flex-wrap gap-2 justify-center items-center max-w-[340px] mx-auto">
+                    <td className="p-2.5 border-l border-slate-100">
+                      <div className="flex flex-wrap gap-1.5 justify-center items-center max-w-[340px] mx-auto">
                         {row.permissions?.map(perm => {
                           const isChecked = rolePermissions.AGENT?.includes(perm.name) || false;
                           return (
                             <label 
                               key={perm.name} 
                               className={`
-                                inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer select-none
+                                inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-semibold transition-all cursor-pointer select-none
                                 ${isChecked 
                                   ? 'bg-primary-50/80 border-primary-200 text-primary-700 shadow-xs' 
                                   : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300'
@@ -199,7 +199,7 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                                 type="checkbox"
                                 checked={isChecked}
                                 onChange={(e) => handleCheckboxChange('AGENT', perm.name, e.target.checked)}
-                                className="rounded-md w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                                className="rounded w-3 h-3 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
                               />
                               <span>{perm.label}</span>
                             </label>
@@ -209,15 +209,15 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                     </td>
                     
                     {/* COMPANY ADMIN */}
-                    <td className="p-4 border-l border-slate-100">
-                      <div className="flex flex-wrap gap-2 justify-center items-center max-w-[340px] mx-auto">
+                    <td className="p-2.5 border-l border-slate-100">
+                      <div className="flex flex-wrap gap-1.5 justify-center items-center max-w-[340px] mx-auto">
                         {row.permissions?.map(perm => {
                           const isChecked = rolePermissions.COMPANY_ADMIN?.includes(perm.name) || false;
                           return (
                             <label 
                               key={perm.name} 
                               className={`
-                                inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer select-none
+                                inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-semibold transition-all cursor-pointer select-none
                                 ${isChecked 
                                   ? 'bg-primary-50/80 border-primary-200 text-primary-700 shadow-xs' 
                                   : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300'
@@ -228,7 +228,7 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                                 type="checkbox"
                                 checked={isChecked}
                                 onChange={(e) => handleCheckboxChange('COMPANY_ADMIN', perm.name, e.target.checked)}
-                                className="rounded-md w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                                className="rounded w-3 h-3 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
                               />
                               <span>{perm.label}</span>
                             </label>
@@ -236,17 +236,17 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                         })}
                       </div>
                     </td>
-
+ 
                     {/* MAIN COMPANY ADMIN (LOCKED) */}
-                    <td className="p-4 border-l border-slate-100 bg-indigo-50/10">
-                      <div className="flex flex-wrap gap-2 justify-center items-center max-w-[340px] mx-auto">
+                    <td className="p-2.5 border-l border-slate-100 bg-indigo-50/10">
+                      <div className="flex flex-wrap gap-1.5 justify-center items-center max-w-[340px] mx-auto">
                         {row.permissions?.map(perm => {
                           const isChecked = rolePermissions.MAIN_COMPANY_ADMIN?.includes(perm.name) || false;
                           return (
                             <label 
                               key={perm.name} 
                               className={`
-                                inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-not-allowed select-none
+                                inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-semibold transition-all cursor-not-allowed select-none
                                 ${isChecked 
                                   ? 'bg-indigo-50/50 border-indigo-100 text-indigo-700/60 font-bold shadow-xs' 
                                   : 'bg-slate-50/50 border-slate-100 text-slate-300'
@@ -257,7 +257,7 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                                 type="checkbox"
                                 checked={isChecked}
                                 disabled
-                                className="rounded-md w-3.5 h-3.5 border-slate-200 text-indigo-400 bg-slate-100 cursor-not-allowed focus:ring-0"
+                                className="rounded w-3 h-3 border-slate-200 text-indigo-400 bg-slate-100 cursor-not-allowed focus:ring-0"
                               />
                               <span>{perm.label}</span>
                             </label>
@@ -271,10 +271,10 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
             </table>
           )}
         </div>
-        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
-          <button onClick={handleSave} disabled={saving || loading} className="px-6 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-[13px] font-bold shadow-md transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50">
-            {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
+        <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+          <button onClick={onClose} className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
+          <button onClick={handleSave} disabled={saving || loading} className="px-4 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
+            {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
             Save Changes
           </button>
         </div>
@@ -326,50 +326,50 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-3xl relative z-10 overflow-hidden flex flex-col">
-        <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-6 py-5 flex justify-between items-center shadow-lg relative overflow-hidden shrink-0">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-          <div className="absolute bottom-0 left-10 w-24 h-24 bg-indigo-500/30 rounded-full blur-xl -mb-6"></div>
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden flex flex-col">
+        <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-4 py-3 flex justify-between items-center shadow-lg relative overflow-hidden shrink-0">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl -mr-8 -mt-8"></div>
+          <div className="absolute bottom-0 left-6 w-16 h-16 bg-indigo-500/35 rounded-full blur-lg -mb-4"></div>
           
-          <div className="relative z-10 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
-              {editingUser ? <Edit3 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          <div className="relative z-10 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
+              {editingUser ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             </div>
             <div>
-              <h3 className="font-extrabold text-white text-[16px] tracking-wide">{editingUser ? 'Edit Team Member' : 'Invite Team Member'}</h3>
-              <p className="text-[12px] text-indigo-200 font-medium">Manage access and role permissions</p>
+              <h3 className="font-extrabold text-white text-[13px] tracking-wide">{editingUser ? 'Edit Team Member' : 'Invite Team Member'}</h3>
+              <p className="text-[10px] text-indigo-200 font-medium">Manage access and role permissions</p>
             </div>
           </div>
-          <button onClick={onClose} className="relative z-10 w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="relative z-10 w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"><X className="w-3.5 h-3.5" /></button>
         </div>
 
-        <div className="p-6">
-          {error && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-[13px] font-medium rounded-xl mb-5">{error}</div>}
+        <div className="p-4 max-h-[75vh] overflow-y-auto space-y-3.5">
+          {error && <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded-lg">{error}</div>}
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+          <div className="space-y-3">
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Full Name</label>
-              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400" placeholder="e.g. Sarah Jenkins" />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
+              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-semibold outline-none transition-all placeholder:text-slate-400" placeholder="Sarah Jenkins" />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
-              <input type="email" value={form.email} disabled={!!editingUser} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-400" placeholder="sarah@example.com" />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Address</label>
+              <input type="email" value={form.email} disabled={!!editingUser} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-semibold outline-none transition-all placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-400" placeholder="sarah@example.com" />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">{editingUser ? 'Reset Password (optional)' : 'Password'}</label>
-              <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400" placeholder="••••••••" />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{editingUser ? 'Reset Password (optional)' : 'Password'}</label>
+              <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-medium outline-none transition-all placeholder:text-slate-400" placeholder="••••••••" />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Assign Role</label>
-              <select value={form.roleName} onChange={e => setForm({ ...form, roleName: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] font-medium outline-none transition-all shadow-sm cursor-pointer">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assign Role</label>
+              <select value={form.roleName} onChange={e => setForm({ ...form, roleName: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-bold outline-none transition-all shadow-xs cursor-pointer">
                 <option value="AGENT">Agent (Standard Access)</option>
                 <option value="COMPANY_ADMIN">Company Admin (Manager Access)</option>
-                {editingUser?.role === 'MAIN_COMPANY_ADMIN' && <option value="MAIN_COMPANY_ADMIN">Main Company Admin (Full Access)</option>}
+                <option value="MAIN_COMPANY_ADMIN">Main Company Admin (Full Access)</option>
               </select>
-              <p className="mt-1.5 text-[10px] text-slate-400 leading-normal">Check the permissions matrix to see what each role can access.</p>
+              <p className="mt-1 text-[9px] text-slate-400 leading-normal">Check permissions matrix to see role restrictions.</p>
             </div>
-            <div className="md:col-span-2">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Link to Agent Profile (Optional)</label>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Link to Agent Profile (Optional)</label>
               <select
                 value={form.agentId}
                 disabled={!!editingUser}
@@ -379,13 +379,11 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
                   setForm(prev => ({
                     ...prev,
                     agentId: selectedId,
-                    // Auto-fill name from agent (always)
                     name: selectedAgent ? selectedAgent.name : prev.name,
-                    // Auto-fill email only if not editing an existing user and agent has an email
                     email: (!editingUser && selectedAgent?.email) ? selectedAgent.email : prev.email,
                   }));
                 }}
-                className={`w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] font-medium outline-none transition-all shadow-sm ${
+                className={`w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-bold outline-none transition-all shadow-xs ${
                   editingUser ? 'cursor-not-allowed opacity-60 bg-slate-50' : 'cursor-pointer'
                 }`}
               >
@@ -394,21 +392,20 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
                   <option key={a.id} value={a.id}>{a.name}{a.email ? ` — ${a.email}` : ''}</option>
                 ))}
               </select>
-              <p className="mt-1.5 text-[10px] text-slate-400 leading-normal">
+              <p className="mt-1 text-[9px] text-slate-400 leading-normal">
                 {editingUser
                   ? '🔒 Agent link cannot be changed when editing. Manage this from the Agents section.'
-                  : 'Selecting an agent auto-fills their name and email. Linking ensures their bookings and commissions are tracked to this user.'}
+                  : 'Linking ensures bookings and commissions are tracked to this user.'}
               </p>
-
             </div>
           </div>
         </div>
         
-        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} className="px-6 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-[13px] font-bold shadow-md transition-all flex items-center gap-2 active:scale-95">
-            {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (editingUser ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />)}
-            {editingUser ? 'Save Changes' : 'Send Invite'}
+        <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+          <button onClick={onClose} className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
+          <button onClick={handleSubmit} disabled={saving} className="px-4 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95">
+            {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (editingUser ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />)}
+            {editingUser ? 'Save' : 'Invite'}
           </button>
         </div>
       </motion.div>

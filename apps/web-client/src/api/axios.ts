@@ -1,8 +1,19 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
+const getBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+      return 'http://localhost:4000/api';
+    }
+  }
+  return envUrl || 'http://localhost:4000/api';
+};
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api', // Points to API Gateway
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },

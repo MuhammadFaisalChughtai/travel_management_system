@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import axios from 'axios';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -706,6 +707,517 @@ app.get('/agents/by-name/:name', requireTenantContext, async (req: any, res: Res
     res.status(500).json({ error: 'Internal Server Error', message: error?.message });
   }
 });
+
+// ─── Agent Attendance Endpoints ───────────────────────────────────────────────
+
+// GET /agents/attendance — all agents' attendance with filters
+app.get('/agents/attendance', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    if (!tenantId) return res.status(400).json({ error: 'Missing tenant' });
+
+    const { agentId, from, to, view } = req.query as Record<string, string>;
+
+    // Build date range
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+    const now = new Date();
+
+    if (view === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (view === 'week') {
+      const day = now.getDay(); // 0=Sun
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      startDate = monday;
+      endDate = sunday;
+    } else if (view === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (from || to) {
+      if (from) { startDate = new Date(from); startDate.setHours(0, 0, 0, 0); }
+      if (to) { endDate = new Date(to); endDate.setHours(23, 59, 59, 999); }
+    }
+
+    const where: any = { tenantId };
+    if (agentId) where.agentId = parseInt(agentId);
+    if (startDate || endDate) {
+      where.checkIn = {};
+      if (startDate) where.checkIn.gte = startDate;
+      if (endDate) where.checkIn.lte = endDate;
+    }
+
+    const records = await prisma.agentAttendance.findMany({
+      where,
+      include: { agent: { select: { id: true, name: true, email: true, jobStatus: true } } },
+      orderBy: { checkIn: 'desc' },
+    });
+
+    // Compute duration
+    const data = records.map((r: any) => ({
+      ...r,
+      durationMinutes: r.checkOut
+        ? Math.round((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
+        : null,
+    }));
+
+    // Summary stats
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayRecords = await prisma.agentAttendance.findMany({ where: { tenantId, checkIn: { gte: todayStart, lte: todayEnd } } });
+    const currentlyIn = await prisma.agentAttendance.count({ where: { tenantId, checkOut: null } });
+
+    return res.json({
+      attendance: data,
+      total: data.length,
+      summary: {
+        todayCheckIns: todayRecords.length,
+        currentlyIn,
+      },
+    });
+  } catch (err) {
+    console.error('GET attendance error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET /agents/:id/attendance — single agent attendance
+app.get('/agents/:id/attendance', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+
+    const { from, to, view } = req.query as Record<string, string>;
+    const now = new Date();
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+
+    if (view === 'week') {
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      startDate = monday;
+      endDate = sunday;
+    } else if (view === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (from || to) {
+      if (from) { startDate = new Date(from); startDate.setHours(0, 0, 0, 0); }
+      if (to) { endDate = new Date(to); endDate.setHours(23, 59, 59, 999); }
+    }
+
+    const where: any = { tenantId, agentId };
+    if (startDate || endDate) {
+      where.checkIn = {};
+      if (startDate) where.checkIn.gte = startDate;
+      if (endDate) where.checkIn.lte = endDate;
+    }
+
+    const records = await prisma.agentAttendance.findMany({
+      where,
+      orderBy: { checkIn: 'desc' },
+    });
+
+    // Check if currently checked in
+    const openRecord = await prisma.agentAttendance.findFirst({
+      where: { tenantId, agentId, checkOut: null },
+      orderBy: { checkIn: 'desc' },
+    });
+
+    const data = records.map((r: any) => ({
+      ...r,
+      durationMinutes: r.checkOut
+        ? Math.round((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
+        : null,
+    }));
+
+    return res.json({ attendance: data, total: data.length, isCheckedIn: !!openRecord, openRecord: openRecord || null });
+  } catch (err) {
+    console.error('GET agent attendance error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /agents/:id/attendance/checkin
+app.post('/agents/:id/attendance/checkin', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+    const { notes } = req.body || {};
+
+    // Verify agent belongs to tenant
+    const agent = await prisma.agent.findFirst({ where: { id: agentId, tenantId } });
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    // Check if already checked in
+    const existing = await prisma.agentAttendance.findFirst({
+      where: { tenantId, agentId, checkOut: null },
+      orderBy: { checkIn: 'desc' },
+    });
+    if (existing) {
+      return res.status(400).json({ error: 'Agent is already checked in', record: existing });
+    }
+
+    const record = await prisma.agentAttendance.create({
+      data: {
+        agentId,
+        tenantId,
+        checkIn: new Date(),
+        notes: notes || null,
+      },
+      include: { agent: { select: { id: true, name: true, email: true } } },
+    });
+
+    return res.status(201).json({ message: 'Checked in successfully', record });
+  } catch (err) {
+    console.error('Check-in error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /agents/:id/attendance/checkout
+app.post('/agents/:id/attendance/checkout', async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
+    const agentId = parseInt(req.params.id);
+    const { notes } = req.body || {};
+
+    // Find open check-in record
+    const openRecord = await prisma.agentAttendance.findFirst({
+      where: { tenantId, agentId, checkOut: null },
+      orderBy: { checkIn: 'desc' },
+    });
+
+    if (!openRecord) {
+      return res.status(400).json({ error: 'Agent is not currently checked in' });
+    }
+
+    const checkOutTime = new Date();
+    const record = await prisma.agentAttendance.update({
+      where: { id: openRecord.id },
+      data: {
+        checkOut: checkOutTime,
+        notes: notes || openRecord.notes,
+      },
+      include: { agent: { select: { id: true, name: true, email: true } } },
+    });
+
+    const durationMinutes = Math.round(
+      (checkOutTime.getTime() - new Date(openRecord.checkIn).getTime()) / 60000
+    );
+
+    return res.json({ message: 'Checked out successfully', record, durationMinutes });
+  } catch (err) {
+    console.error('Check-out error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ─── Agent Payroll Endpoints ───────────────────────────────────────────────────
+
+// GET /agents/payroll - list payroll records for the current tenant
+app.get('/agents/payroll', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId);
+    const { agentId, status, from, to } = req.query;
+
+    const where: any = { tenantId };
+
+    if (agentId) {
+      where.agentId = parseInt(agentId as string);
+    }
+    if (status) {
+      where.status = status as string;
+    }
+    if (from || to) {
+      where.periodFrom = {};
+      if (from) {
+        where.periodFrom.gte = new Date(from as string);
+      }
+      if (to) {
+        where.periodFrom.lte = new Date(to as string);
+      }
+    }
+
+    const payrolls = await prisma.agentPayroll.findMany({
+      where,
+      include: {
+        agent: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            basicSalary: true,
+          }
+        }
+      },
+      orderBy: {
+        periodFrom: 'desc'
+      }
+    });
+
+    return res.json({ payrolls });
+  } catch (err: any) {
+    console.error('GET /agents/payroll error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /agents/:id/payroll - generate payroll record for a given agent and period
+app.post('/agents/:id/payroll', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId);
+    const agentId = parseInt(req.params.id);
+    const { periodFrom, periodTo, notes } = req.body;
+
+    if (!periodFrom || !periodTo) {
+      return res.status(400).json({ error: 'Missing required fields: periodFrom and periodTo' });
+    }
+
+    // Find agent
+    const agent = await prisma.agent.findFirst({
+      where: { id: agentId, tenantId }
+    });
+
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    const basicSalary = agent.basicSalary ? Number(agent.basicSalary) : 0.00;
+
+    // Call booking-service to get total margin earned
+    const bookingServiceUrl = process.env.BOOKING_SERVICE_URL || 'http://booking-service:4005';
+    let totalMarginEarned = 0.00;
+
+    try {
+      const response = await axios.get(`${bookingServiceUrl}/finance/agent-margin-summary`, {
+        params: { agentId, from: periodFrom, to: periodTo },
+        headers: {
+          'X-Tenant-Id': String(tenantId),
+          'X-User-Id': String(req.headers['x-user-id'] || '1'),
+          'X-User-Role': String(req.headers['x-user-role'] || 'COMPANY_ADMIN'),
+        }
+      });
+      totalMarginEarned = response.data.totalMarginEarned ? parseFloat(response.data.totalMarginEarned) : 0.00;
+    } catch (apiErr: any) {
+      console.error('Failed to fetch agent margin summary from booking-service:', apiErr.message);
+      return res.status(502).json({ error: 'Failed to fetch agent margin summary from booking service' });
+    }
+
+    const totalPaid = basicSalary + totalMarginEarned;
+
+    const payroll = await prisma.agentPayroll.create({
+      data: {
+        agentId,
+        tenantId,
+        periodFrom: new Date(periodFrom),
+        periodTo: new Date(periodTo),
+        basicSalary,
+        totalMarginEarned,
+        totalPaid,
+        status: 'Draft',
+        notes: notes || null
+      },
+      include: {
+        agent: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    return res.status(201).json({ message: 'Payroll generated successfully', payroll });
+  } catch (err: any) {
+    console.error('POST /agents/:id/payroll error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// PATCH /agents/payroll/:id - mark as Paid / update status or notes
+app.patch('/agents/payroll/:id', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId);
+    const payrollId = parseInt(req.params.id);
+    const { status, notes } = req.body;
+
+    const existing = await prisma.agentPayroll.findFirst({
+      where: { id: payrollId, tenantId }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Payroll record not found' });
+    }
+
+    const updated = await prisma.agentPayroll.update({
+      where: { id: payrollId },
+      data: {
+        ...(status && { status }),
+        ...(notes !== undefined && { notes: notes || null })
+      },
+      include: {
+        agent: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    return res.json({ message: 'Payroll updated successfully', payroll: updated });
+  } catch (err: any) {
+    console.error('PATCH /agents/payroll/:id error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /agents/payroll/:id/send - send branded email payroll slip
+app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res: Response) => {
+  try {
+    const tenantId = parseInt(req.tenantId);
+    const payrollId = parseInt(req.params.id);
+
+    const payroll = await prisma.agentPayroll.findFirst({
+      where: { id: payrollId, tenantId },
+      include: {
+        agent: true
+      }
+    });
+
+    if (!payroll) {
+      return res.status(404).json({ error: 'Payroll record not found' });
+    }
+
+    if (!payroll.agent.email) {
+      return res.status(400).json({ error: 'Agent does not have an email address configured' });
+    }
+
+    // Fetch tenant profile for branding information (logo, name)
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+
+    const companyName = tenant?.name || 'Travel Booker';
+    const logoUrl = tenant?.logo || '';
+
+    // Create a beautiful branded HTML email content
+    const periodFromStr = new Date(payroll.periodFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const periodToStr = new Date(payroll.periodTo).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #334155; margin: 0; padding: 0; background-color: #f8fafc; }
+          .container { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #f1f5f9; }
+          .header { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 30px; text-align: center; color: white; }
+          .logo { max-height: 50px; margin-bottom: 15px; }
+          .header h1 { margin: 0; font-size: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+          .header p { margin: 5px 0 0 0; font-size: 13px; color: #94a3b8; }
+          .content { padding: 30px; }
+          .greeting { font-size: 16px; font-weight: bold; margin-bottom: 20px; }
+          .period-badge { display: inline-block; padding: 6px 12px; background-color: #f1f5f9; border-radius: 9999px; font-size: 12px; font-weight: bold; color: #475569; margin-bottom: 25px; }
+          .table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+          .table th { text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; }
+          .table td { padding: 14px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+          .table tr:last-child td { border-bottom: none; }
+          .amount { text-align: right; font-variant-numeric: tabular-nums; }
+          .total-row { background-color: #f8fafc; font-weight: bold; }
+          .total-row td { border-top: 2px solid #e2e8f0; border-bottom: 2px double #e2e8f0 !important; font-size: 14px; color: #0f172a; }
+          .notes { font-size: 12px; color: #64748b; background-color: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #cbd5e1; margin-bottom: 30px; line-height: 1.5; }
+          .footer { background-color: #f8fafc; padding: 20px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            ${logoUrl ? `<img src="${logoUrl}" alt="${companyName} Logo" class="logo" />` : ''}
+            <h1>Payroll Slip</h1>
+            <p>${companyName}</p>
+          </div>
+          <div class="content">
+            <div class="greeting">Hi ${payroll.agent.name},</div>
+            <p>Please find below the breakdown of your payroll for the specified period:</p>
+            <div class="period-badge">Period: ${periodFromStr} &ndash; ${periodToStr}</div>
+            
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th style="text-align: right;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Basic Salary</td>
+                  <td class="amount">£${Number(payroll.basicSalary).toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Commission / Margin Earned</td>
+                  <td class="amount">£${Number(payroll.totalMarginEarned).toFixed(2)}</td>
+                </tr>
+                <tr class="total-row">
+                  <td>Total Net Payable</td>
+                  <td class="amount">£${Number(payroll.totalPaid).toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            ${payroll.notes ? `<div class="notes"><strong>Notes:</strong><br/>${payroll.notes}</div>` : ''}
+            
+            <p style="font-size: 13px; line-height: 1.5; margin: 0 0 10px 0;">If you have any questions regarding this statement, please contact the finance administrator.</p>
+          </div>
+          <div class="footer">
+            &copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.<br/>
+            This is an automated payroll statement. Please do not reply directly to this email.
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Send the email using the tenant SMTP helper getTenantSmtpTransporter
+    const { transporter, fromEmail, fromName } = await getTenantSmtpTransporter(tenantId);
+
+    await transporter.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to: payroll.agent.email,
+      subject: `Payroll Slip: ${periodFromStr} - ${periodToStr}`,
+      html: htmlContent
+    });
+
+    // Update status to Sent and set sentAt
+    const updated = await prisma.agentPayroll.update({
+      where: { id: payrollId },
+      data: {
+        status: 'Sent',
+        sentAt: new Date()
+      }
+    });
+
+    return res.json({ message: 'Payroll slip sent successfully', payroll: updated });
+  } catch (err: any) {
+    console.error('POST /agents/payroll/:id/send error:', err);
+    return res.status(500).json({ error: 'Failed to send payroll slip', message: err.message });
+  }
+});
+
+// ─── End Attendance ────────────────────────────────────────────────────────────
 
 // GET /agents/:id — get single agent with margin segments
 app.get('/agents/:id', requireTenantContext, async (req: any, res: Response) => {
@@ -2150,221 +2662,7 @@ app.get('/my-permissions', requireTenantContext, async (req: any, res: Response)
   }
 });
 
-// ─── Agent Attendance Endpoints ───────────────────────────────────────────────
 
-// GET /agents/attendance — all agents' attendance with filters
-app.get('/agents/attendance', async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    if (!tenantId) return res.status(400).json({ error: 'Missing tenant' });
-
-    const { agentId, from, to, view } = req.query as Record<string, string>;
-
-    // Build date range
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    const now = new Date();
-
-    if (view === 'today') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    } else if (view === 'week') {
-      const day = now.getDay(); // 0=Sun
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - ((day + 6) % 7));
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-      startDate = monday;
-      endDate = sunday;
-    } else if (view === 'month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    } else if (from || to) {
-      if (from) { startDate = new Date(from); startDate.setHours(0, 0, 0, 0); }
-      if (to) { endDate = new Date(to); endDate.setHours(23, 59, 59, 999); }
-    }
-
-    const where: any = { tenantId };
-    if (agentId) where.agentId = parseInt(agentId);
-    if (startDate || endDate) {
-      where.checkIn = {};
-      if (startDate) where.checkIn.gte = startDate;
-      if (endDate) where.checkIn.lte = endDate;
-    }
-
-    const records = await prisma.agentAttendance.findMany({
-      where,
-      include: { agent: { select: { id: true, name: true, email: true, jobStatus: true } } },
-      orderBy: { checkIn: 'desc' },
-    });
-
-    // Compute duration
-    const data = records.map((r: any) => ({
-      ...r,
-      durationMinutes: r.checkOut
-        ? Math.round((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
-        : null,
-    }));
-
-    // Summary stats
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    const todayRecords = await prisma.agentAttendance.findMany({ where: { tenantId, checkIn: { gte: todayStart, lte: todayEnd } } });
-    const currentlyIn = await prisma.agentAttendance.count({ where: { tenantId, checkOut: null } });
-
-    return res.json({
-      attendance: data,
-      total: data.length,
-      summary: {
-        todayCheckIns: todayRecords.length,
-        currentlyIn,
-      },
-    });
-  } catch (err) {
-    console.error('GET attendance error:', err);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// GET /agents/:id/attendance — single agent attendance
-app.get('/agents/:id/attendance', async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const agentId = parseInt(req.params.id);
-
-    const { from, to, view } = req.query as Record<string, string>;
-    const now = new Date();
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-
-    if (view === 'week') {
-      const day = now.getDay();
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - ((day + 6) % 7));
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-      startDate = monday;
-      endDate = sunday;
-    } else if (view === 'month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    } else if (from || to) {
-      if (from) { startDate = new Date(from); startDate.setHours(0, 0, 0, 0); }
-      if (to) { endDate = new Date(to); endDate.setHours(23, 59, 59, 999); }
-    }
-
-    const where: any = { tenantId, agentId };
-    if (startDate || endDate) {
-      where.checkIn = {};
-      if (startDate) where.checkIn.gte = startDate;
-      if (endDate) where.checkIn.lte = endDate;
-    }
-
-    const records = await prisma.agentAttendance.findMany({
-      where,
-      orderBy: { checkIn: 'desc' },
-    });
-
-    // Check if currently checked in
-    const openRecord = await prisma.agentAttendance.findFirst({
-      where: { tenantId, agentId, checkOut: null },
-      orderBy: { checkIn: 'desc' },
-    });
-
-    const data = records.map((r: any) => ({
-      ...r,
-      durationMinutes: r.checkOut
-        ? Math.round((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
-        : null,
-    }));
-
-    return res.json({ attendance: data, total: data.length, isCheckedIn: !!openRecord, openRecord: openRecord || null });
-  } catch (err) {
-    console.error('GET agent attendance error:', err);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// POST /agents/:id/attendance/checkin
-app.post('/agents/:id/attendance/checkin', async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const agentId = parseInt(req.params.id);
-    const { notes } = req.body || {};
-
-    // Verify agent belongs to tenant
-    const agent = await prisma.agent.findFirst({ where: { id: agentId, tenantId } });
-    if (!agent) return res.status(404).json({ error: 'Agent not found' });
-
-    // Check if already checked in
-    const existing = await prisma.agentAttendance.findFirst({
-      where: { tenantId, agentId, checkOut: null },
-      orderBy: { checkIn: 'desc' },
-    });
-    if (existing) {
-      return res.status(400).json({ error: 'Agent is already checked in', record: existing });
-    }
-
-    const record = await prisma.agentAttendance.create({
-      data: {
-        agentId,
-        tenantId,
-        checkIn: new Date(),
-        notes: notes || null,
-      },
-      include: { agent: { select: { id: true, name: true, email: true } } },
-    });
-
-    return res.status(201).json({ message: 'Checked in successfully', record });
-  } catch (err) {
-    console.error('Check-in error:', err);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// POST /agents/:id/attendance/checkout
-app.post('/agents/:id/attendance/checkout', async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const agentId = parseInt(req.params.id);
-    const { notes } = req.body || {};
-
-    // Find open check-in record
-    const openRecord = await prisma.agentAttendance.findFirst({
-      where: { tenantId, agentId, checkOut: null },
-      orderBy: { checkIn: 'desc' },
-    });
-
-    if (!openRecord) {
-      return res.status(400).json({ error: 'Agent is not currently checked in' });
-    }
-
-    const checkOutTime = new Date();
-    const record = await prisma.agentAttendance.update({
-      where: { id: openRecord.id },
-      data: {
-        checkOut: checkOutTime,
-        notes: notes || openRecord.notes,
-      },
-      include: { agent: { select: { id: true, name: true, email: true } } },
-    });
-
-    const durationMinutes = Math.round(
-      (checkOutTime.getTime() - new Date(openRecord.checkIn).getTime()) / 60000
-    );
-
-    return res.json({ message: 'Checked out successfully', record, durationMinutes });
-  } catch (err) {
-    console.error('Check-out error:', err);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// ─── End Attendance ────────────────────────────────────────────────────────────
 
 app.listen(PORT, async () => {
   await initPermissions();

@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Clock, LogIn, LogOut, Search, Filter, Calendar,
-  Users, CheckCircle2, UserCheck, X, ChevronDown,
-  ClipboardList, AlertCircle, BarChart3
+  Clock, LogIn, LogOut, Search,
+  CheckCircle2, UserCheck, X, ChevronDown,
+  ClipboardList
 } from 'lucide-react';
 import { api } from '../api/axios';
 import toast from 'react-hot-toast';

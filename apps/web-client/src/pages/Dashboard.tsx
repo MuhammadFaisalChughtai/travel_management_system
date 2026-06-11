@@ -167,7 +167,7 @@ export function Dashboard() {
 
   // Sidebar navigation tab state
   const { tab } = useParams<{ tab?: string }>();
-  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog' | 'templates';
+  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog' | 'templates' | 'attendance' | 'payroll';
   
   useEffect(() => {
     if (user && permittedItems.length > 0) {

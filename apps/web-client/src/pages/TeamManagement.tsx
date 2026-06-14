@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users, Lock, Compass, Briefcase, FolderOpen, Landmark, Settings2 } from 'lucide-react';
+import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users, Lock, Compass, Briefcase, FolderOpen, Landmark, Settings2, Clock, Banknote, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/axios';
 import { EmptyState } from '../components/shared/EmptyState';
@@ -29,6 +29,21 @@ interface MatrixRow {
   permissions: PermissionItem[];
 }
 
+const MODULE_ORDER = [
+  'Agency Dashboard',
+  'Bookings & Itineraries',
+  'Agent Registry',
+  'Attendance',
+  'Payroll',
+  'Vendor Records',
+  'Client Records',
+  'Financials (Refunds/Profit)',
+  'Service Catalog',
+  'Document Studio',
+  'Team Management',
+  'System Settings'
+];
+
 function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
   const [matrix, setMatrix] = useState<MatrixRow[]>([]);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({
@@ -43,7 +58,13 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
     const fetchMatrix = async () => {
       try {
         const res = await api.get('/auth/roles/permissions/matrix');
-        setMatrix(res.data.matrix || []);
+        const rawMatrix = res.data.matrix || [];
+        const sortedMatrix = [...rawMatrix].sort((a, b) => {
+          const indexA = MODULE_ORDER.indexOf(a.module);
+          const indexB = MODULE_ORDER.indexOf(b.module);
+          return (indexA !== -1 ? indexA : 999) - (indexB !== -1 ? indexB : 999);
+        });
+        setMatrix(sortedMatrix);
         setRolePermissions(res.data.permissions || {
           AGENT: [],
           COMPANY_ADMIN: [],
@@ -108,6 +129,12 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
         return <Landmark className="w-4 h-4 text-emerald-500" />;
       case 'System Settings':
         return <Settings2 className="w-4 h-4 text-slate-500" />;
+      case 'Attendance':
+        return <Clock className="w-4 h-4 text-blue-500" />;
+      case 'Payroll':
+        return <Banknote className="w-4 h-4 text-amber-600" />;
+      case 'Document Studio':
+        return <FileText className="w-4 h-4 text-violet-500" />;
       default:
         return <Shield className="w-4 h-4 text-slate-400" />;
     }
@@ -145,21 +172,21 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
           ) : (
             <table className="min-w-[1050px] w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
-                  <th className="p-2.5 pl-4 font-semibold w-[22%] text-slate-600">Module / Section</th>
-                  <th className="p-2.5 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
+                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200 select-none">
+                  <th className="p-3 pl-4 font-semibold w-[35%] text-slate-600">Module / Subsection Permission</th>
+                  <th className="p-3 border-l border-slate-200 text-center w-[21%] text-slate-600 font-bold">
                     <div className="flex items-center justify-center gap-1">
                       <Users className="w-3.5 h-3.5 text-slate-400" />
                       <span>Agent</span>
                     </div>
                   </th>
-                  <th className="p-2.5 border-l border-slate-200 text-center w-[26%] text-slate-600 font-bold">
+                  <th className="p-3 border-l border-slate-200 text-center w-[21%] text-slate-600 font-bold">
                     <div className="flex items-center justify-center gap-1">
                       <Shield className="w-3.5 h-3.5 text-primary-500" />
                       <span>Company Admin</span>
                     </div>
                   </th>
-                  <th className="p-2.5 border-l border-slate-200 text-center text-indigo-700 bg-indigo-50/40 font-extrabold w-[26%]">
+                  <th className="p-3 border-l border-slate-200 text-center text-indigo-700 bg-indigo-50/40 font-extrabold w-[23%]">
                     <div className="flex items-center justify-center gap-1">
                       <Lock className="w-3 h-3 text-indigo-500" />
                       <span>Main Company Admin (Locked)</span>
@@ -167,105 +194,63 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200">
                 {matrix.map((row, i) => (
-                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-2.5 pl-4 text-xs font-bold text-slate-800">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1 rounded bg-slate-50 border border-slate-100 flex items-center justify-center shadow-xs">
-                          {getModuleIcon(row.module)}
+                  <Fragment key={i}>
+                    <tr className="bg-slate-100/70 border-b border-slate-200">
+                      <td colSpan={4} className="p-2.5 pl-4 text-[10.5px] font-extrabold text-indigo-900 uppercase tracking-wider select-none">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1 rounded bg-white border border-slate-200 flex items-center justify-center shadow-inner">
+                            {getModuleIcon(row.module)}
+                          </div>
+                          <span>{row.module}</span>
                         </div>
-                        <span>{row.module}</span>
-                      </div>
-                    </td>
-                    
-                    {/* AGENT */}
-                    <td className="p-2.5 border-l border-slate-100">
-                      <div className="flex flex-wrap gap-1.5 justify-center items-center max-w-[340px] mx-auto">
-                        {row.permissions?.map(perm => {
-                          const isChecked = rolePermissions.AGENT?.includes(perm.name) || false;
-                          return (
-                            <label 
-                              key={perm.name} 
-                              className={`
-                                inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-semibold transition-all cursor-pointer select-none
-                                ${isChecked 
-                                  ? 'bg-primary-50/80 border-primary-200 text-primary-700 shadow-xs' 
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300'
-                                }
-                              `}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => handleCheckboxChange('AGENT', perm.name, e.target.checked)}
-                                className="rounded w-3 h-3 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
-                              />
-                              <span>{perm.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    
-                    {/* COMPANY ADMIN */}
-                    <td className="p-2.5 border-l border-slate-100">
-                      <div className="flex flex-wrap gap-1.5 justify-center items-center max-w-[340px] mx-auto">
-                        {row.permissions?.map(perm => {
-                          const isChecked = rolePermissions.COMPANY_ADMIN?.includes(perm.name) || false;
-                          return (
-                            <label 
-                              key={perm.name} 
-                              className={`
-                                inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-semibold transition-all cursor-pointer select-none
-                                ${isChecked 
-                                  ? 'bg-primary-50/80 border-primary-200 text-primary-700 shadow-xs' 
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300'
-                                }
-                              `}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => handleCheckboxChange('COMPANY_ADMIN', perm.name, e.target.checked)}
-                                className="rounded w-3 h-3 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
-                              />
-                              <span>{perm.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </td>
- 
-                    {/* MAIN COMPANY ADMIN (LOCKED) */}
-                    <td className="p-2.5 border-l border-slate-100 bg-indigo-50/10">
-                      <div className="flex flex-wrap gap-1.5 justify-center items-center max-w-[340px] mx-auto">
-                        {row.permissions?.map(perm => {
-                          const isChecked = rolePermissions.MAIN_COMPANY_ADMIN?.includes(perm.name) || false;
-                          return (
-                            <label 
-                              key={perm.name} 
-                              className={`
-                                inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-semibold transition-all cursor-not-allowed select-none
-                                ${isChecked 
-                                  ? 'bg-indigo-50/50 border-indigo-100 text-indigo-700/60 font-bold shadow-xs' 
-                                  : 'bg-slate-50/50 border-slate-100 text-slate-300'
-                                }
-                              `}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                disabled
-                                className="rounded w-3 h-3 border-slate-200 text-indigo-400 bg-slate-100 cursor-not-allowed focus:ring-0"
-                              />
-                              <span>{perm.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                    {row.permissions?.map((perm) => {
+                      const isAgentChecked = rolePermissions.AGENT?.includes(perm.name) || false;
+                      const isCompanyAdminChecked = rolePermissions.COMPANY_ADMIN?.includes(perm.name) || false;
+                      const isMainAdminChecked = rolePermissions.MAIN_COMPANY_ADMIN?.includes(perm.name) || false;
+                      return (
+                        <tr key={perm.name} className="hover:bg-slate-50/50 transition-colors border-b border-slate-200">
+                          <td className="p-2.5 pl-8 text-[11px] font-bold text-slate-700 w-[35%] select-none flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>
+                            <span>{perm.label}</span>
+                          </td>
+                          
+                          {/* AGENT */}
+                          <td className="p-2.5 border-l border-slate-200 text-center w-[21%]">
+                            <input
+                              type="checkbox"
+                              checked={isAgentChecked}
+                              onChange={(e) => handleCheckboxChange('AGENT', perm.name, e.target.checked)}
+                              className="rounded w-4 h-4 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                            />
+                          </td>
+                          
+                          {/* COMPANY ADMIN */}
+                          <td className="p-2.5 border-l border-slate-200 text-center w-[21%]">
+                            <input
+                              type="checkbox"
+                              checked={isCompanyAdminChecked}
+                              onChange={(e) => handleCheckboxChange('COMPANY_ADMIN', perm.name, e.target.checked)}
+                              className="rounded w-4 h-4 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                            />
+                          </td>
+                          
+                          {/* MAIN COMPANY ADMIN (LOCKED) */}
+                          <td className="p-2.5 border-l border-slate-200 bg-indigo-50/5 text-center w-[23%]">
+                            <input
+                              type="checkbox"
+                              checked={isMainAdminChecked}
+                              disabled
+                              className="rounded w-4 h-4 border-slate-200 text-indigo-400 bg-slate-100 cursor-not-allowed focus:ring-0"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

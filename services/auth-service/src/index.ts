@@ -12,6 +12,7 @@ import multer from 'multer';
 import crypto from 'crypto';
 import path from 'path';
 import nodemailer from 'nodemailer';
+import PDFDocument from 'pdfkit';
 
 dotenv.config();
 
@@ -23,6 +24,188 @@ const prisma = new PrismaClient();
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+function getRequiredPermissionForPath(path: string, method: string): string | null {
+  const cleanPath = path.split('?')[0];
+
+  // Users endpoints
+  if (cleanPath === '/users') {
+    if (method === 'GET') return 'READ_USER';
+    if (method === 'POST') return 'CREATE_USER';
+  }
+  if (cleanPath.startsWith('/users/')) {
+    if (method === 'GET') return 'READ_USER';
+    if (method === 'PATCH' || method === 'PUT') return 'UPDATE_USER';
+    if (method === 'DELETE') return 'DELETE_USER';
+  }
+
+  // Vendors endpoints
+  if (cleanPath === '/vendors') {
+    if (method === 'GET') return 'READ_VENDOR';
+    if (method === 'POST') return 'CREATE_VENDOR';
+  }
+  if (cleanPath.startsWith('/vendors/by-name/')) {
+    return 'READ_VENDOR';
+  }
+  if (cleanPath.startsWith('/vendors/')) {
+    if (method === 'PATCH' || method === 'PUT') return 'UPDATE_VENDOR';
+    if (method === 'DELETE') return 'DELETE_VENDOR';
+  }
+
+  // Agents endpoints
+  if (cleanPath === '/agents') {
+    if (method === 'GET') return 'READ_AGENT';
+    if (method === 'POST') return 'CREATE_AGENT';
+  }
+  if (cleanPath.startsWith('/agents/by-name/')) {
+    return 'READ_AGENT';
+  }
+  if (cleanPath === '/agents/payroll') {
+    return 'READ_PAYROLL';
+  }
+  if (cleanPath.startsWith('/agents/payroll/')) {
+    const segments = cleanPath.split('/');
+    if (segments.length === 4 && segments[3] === 'send') { // /agents/payroll/:id/send
+      return 'CREATE_PAYROLL';
+    }
+    if (segments.length === 3) { // /agents/payroll/:id
+      if (method === 'PATCH' || method === 'PUT') return 'UPDATE_PAYROLL';
+    }
+  }
+  if (cleanPath === '/agents/attendance') {
+    return 'READ_ATTENDANCE';
+  }
+  if (cleanPath.startsWith('/agents/')) {
+    const segments = cleanPath.split('/');
+    if (segments.length === 4 && segments[3] === 'attendance') { // /agents/:id/attendance
+      return 'READ_ATTENDANCE';
+    }
+    if (segments.length === 5 && segments[3] === 'attendance' && segments[4] === 'checkin') { // /agents/:id/attendance/checkin
+      return 'CREATE_ATTENDANCE';
+    }
+    if (segments.length === 5 && segments[3] === 'attendance' && segments[4] === 'checkout') { // /agents/:id/attendance/checkout
+      return 'CREATE_ATTENDANCE';
+    }
+    if (segments.length === 4 && segments[3] === 'payroll') { // /agents/:id/payroll
+      return 'CREATE_PAYROLL';
+    }
+    if (cleanPath.endsWith('/margin-segments')) {
+      return 'UPDATE_AGENT';
+    }
+    if (cleanPath.endsWith('/wallet/debt')) {
+      return 'READ_AGENT';
+    }
+    if (cleanPath.endsWith('/wallet/transaction')) {
+      return 'UPDATE_AGENT';
+    }
+    if (segments.length === 3) { // /agents/:id
+      if (method === 'GET') return 'READ_AGENT';
+      if (method === 'PATCH' || method === 'PUT') return 'UPDATE_AGENT';
+      if (method === 'DELETE') return 'DELETE_AGENT';
+    }
+  }
+
+  // Roles & Permissions matrix
+  if (cleanPath.startsWith('/roles/permissions/matrix')) {
+    return 'MANAGE_SETTINGS';
+  }
+
+  // Tenant profile
+  if (cleanPath === '/tenants/profile') {
+    if (method === 'GET') return 'READ_USER';
+    if (method === 'PUT' || method === 'PATCH') return 'MANAGE_SETTINGS';
+  }
+  if (cleanPath === '/tenants/send-email') {
+    return 'MANAGE_SETTINGS';
+  }
+
+  return null;
+}
+
+async function checkAgentPermission(roleId: number, permissionName: string): Promise<boolean> {
+  const permission = await prisma.permission.findFirst({
+    where: { name: permissionName }
+  });
+  if (!permission) return false;
+
+  const hasPermission = await prisma.rolePermission.findUnique({
+    where: {
+      roleId_permissionId: {
+        roleId,
+        permissionId: permission.id
+      }
+    }
+  });
+  return !!hasPermission;
+}
+
+// Global middleware to enforce security checks on every request sent by an AGENT
+app.use(async (req: any, res: Response, next: any) => {
+  const userRole = req.headers['x-user-role'] || req.headers['X-User-Role'];
+  const userId = req.headers['x-user-id'] || req.headers['X-User-Id'];
+  const tenantIdStr = req.headers['x-tenant-id'] || req.headers['X-Tenant-Id'];
+
+  if (userRole === 'AGENT') {
+    // Bypass public / health endpoints / authentication
+    const path = req.path;
+    if (
+      path.startsWith('/auth/login') ||
+      path.startsWith('/auth/register') ||
+      path.startsWith('/auth/super-admin/register') ||
+      path.startsWith('/auth/request-demo') ||
+      path.startsWith('/verify-token') ||
+      path === '/health' ||
+      path === '/agents/verify-request' // Exclude our own verification endpoint
+    ) {
+      return next();
+    }
+
+    if (!userId || !tenantIdStr) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Missing user or tenant context' });
+    }
+
+    const uId = parseInt(userId as string);
+    const tId = parseInt(tenantIdStr as string);
+
+    if (isNaN(uId) || isNaN(tId)) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Invalid user or tenant ID' });
+    }
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: uId },
+        include: { role: true }
+      });
+
+      if (!user) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: User not found' });
+      }
+
+      if (user.tenantId !== tId) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Tenant context mismatch' });
+      }
+
+      if (user.role?.name !== 'AGENT') {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Role mismatch' });
+      }
+
+      // Route permission check
+      const requiredPermission = getRequiredPermissionForPath(req.path, req.method);
+      if (requiredPermission) {
+        const hasPermission = await checkAgentPermission(user.roleId || 0, requiredPermission);
+        if (!hasPermission) {
+          return res.status(403).json({ error: 'Forbidden', message: `Permission Denied: Missing ${requiredPermission} permission` });
+        }
+      }
+    } catch (error) {
+      console.error('Agent security check error:', error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  next();
+});
+
 
 // MinIO Setup
 const minioClient = new Minio.Client({
@@ -367,7 +550,7 @@ app.post('/login', async (req: any, res: Response) => {
     res.status(200).json({ 
       message: 'Login successful',
       token, 
-      user: { id: user.id, email: user.email, name: user.name, tenantId: user.tenantId, role: userRole, permissions } 
+      user: { id: user.id, email: user.email, name: user.name, tenantId: user.tenantId, role: userRole, permissions, agentId: user.agentId } 
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -459,10 +642,10 @@ app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
         }
       });
 
-      // 2. Create the ADMIN role for this tenant
+      // 2. Create the MAIN_COMPANY_ADMIN role for this tenant
       const adminRole = await tx.role.create({
         data: {
-          name: 'ADMIN',
+          name: 'MAIN_COMPANY_ADMIN',
           tenantId: tenant.id
         }
       });
@@ -484,6 +667,9 @@ app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
 
       return tenant;
     });
+
+    // Seed default roles and permissions for this tenant
+    await ensureRolePermissionsSeeded(newTenant.id);
 
     res.status(201).json({ message: 'Tenant and admin user created successfully', tenant: newTenant });
   } catch (error: any) {
@@ -646,6 +832,61 @@ app.post('/tenants/send-email', requireTenantContext, async (req: any, res: Resp
   }
 });
 
+app.get('/agents/verify-request', async (req: any, res: Response) => {
+  const userRole = req.headers['x-user-role'] || req.headers['X-User-Role'];
+  const userId = req.headers['x-user-id'] || req.headers['X-User-Id'];
+  const tenantIdStr = req.headers['x-tenant-id'] || req.headers['X-Tenant-Id'];
+  const permissionName = req.query.permission as string;
+
+  // We only run this check for AGENT role. If it is NOT an agent, we assume it's allowed or handled elsewhere.
+  if (userRole !== 'AGENT') {
+    return res.status(200).json({ allowed: true });
+  }
+
+  if (!userId || !tenantIdStr) {
+    return res.status(200).json({ allowed: false, message: 'Missing user or tenant context headers' });
+  }
+
+  const uId = parseInt(userId as string);
+  const tId = parseInt(tenantIdStr as string);
+
+  if (isNaN(uId) || isNaN(tId)) {
+    return res.status(200).json({ allowed: false, message: 'Invalid user or tenant ID' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: uId },
+      include: { role: true }
+    });
+
+    if (!user) {
+      return res.status(200).json({ allowed: false, message: 'User not found' });
+    }
+
+    if (user.tenantId !== tId) {
+      return res.status(200).json({ allowed: false, message: 'Tenant context mismatch' });
+    }
+
+    if (user.role?.name !== 'AGENT') {
+      return res.status(200).json({ allowed: false, message: 'Role mismatch' });
+    }
+
+    // Check permission if specified
+    if (permissionName) {
+      const hasPermission = await checkAgentPermission(user.roleId || 0, permissionName);
+      if (!hasPermission) {
+        return res.status(200).json({ allowed: false, message: `Missing required permission: ${permissionName}` });
+      }
+    }
+
+    return res.status(200).json({ allowed: true });
+  } catch (error) {
+    console.error('Verify Agent Request endpoint error:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // GET /agents — list all agents for current tenant
 app.get('/agents', requireTenantContext, async (req: any, res: Response) => {
   try {
@@ -744,8 +985,25 @@ app.get('/agents/attendance', async (req: Request, res: Response) => {
       if (to) { endDate = new Date(to); endDate.setHours(23, 59, 59, 999); }
     }
 
+    const userRole = req.headers['x-user-role'] || req.headers['X-User-Role'];
+    const userId = req.headers['x-user-id'] || req.headers['X-User-Id'];
+
     const where: any = { tenantId };
-    if (agentId) where.agentId = parseInt(agentId);
+    if (userRole === 'AGENT') {
+      if (!userId) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: User context required' });
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: parseInt(userId as string) }
+      });
+      if (user && user.agentId) {
+        where.agentId = user.agentId;
+      } else {
+        where.agentId = -1;
+      }
+    } else {
+      if (agentId) where.agentId = parseInt(agentId);
+    }
     if (startDate || endDate) {
       where.checkIn = {};
       if (startDate) where.checkIn.gte = startDate;
@@ -854,6 +1112,20 @@ app.post('/agents/:id/attendance/checkin', async (req: Request, res: Response) =
     const agentId = parseInt(req.params.id);
     const { notes } = req.body || {};
 
+    const userRole = req.headers['x-user-role'] || req.headers['X-User-Role'];
+    const userId = req.headers['x-user-id'] || req.headers['X-User-Id'];
+    if (userRole === 'AGENT') {
+      if (!userId) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: User context required' });
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: parseInt(userId as string) }
+      });
+      if (!user || user.agentId !== agentId) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Agents can only manage their own attendance' });
+      }
+    }
+
     // Verify agent belongs to tenant
     const agent = await prisma.agent.findFirst({ where: { id: agentId, tenantId } });
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
@@ -890,6 +1162,20 @@ app.post('/agents/:id/attendance/checkout', async (req: Request, res: Response) 
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const agentId = parseInt(req.params.id);
     const { notes } = req.body || {};
+
+    const userRole = req.headers['x-user-role'] || req.headers['X-User-Role'];
+    const userId = req.headers['x-user-id'] || req.headers['X-User-Id'];
+    if (userRole === 'AGENT') {
+      if (!userId) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: User context required' });
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: parseInt(userId as string) }
+      });
+      if (!user || user.agentId !== agentId) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Agents can only manage their own attendance' });
+      }
+    }
 
     // Find open check-in record
     const openRecord = await prisma.agentAttendance.findFirst({
@@ -956,6 +1242,7 @@ app.get('/agents/payroll', requireTenantContext, async (req: any, res: Response)
             id: true,
             name: true,
             email: true,
+            personalEmail: true,
             basicSalary: true,
             gdsSystem: true,
             pcc: true,
@@ -1034,7 +1321,8 @@ app.post('/agents/:id/payroll', requireTenantContext, async (req: any, res: Resp
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            personalEmail: true
           }
         }
       }
@@ -1073,7 +1361,8 @@ app.patch('/agents/payroll/:id', requireTenantContext, async (req: any, res: Res
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            personalEmail: true
           }
         }
       }
@@ -1103,10 +1392,21 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
       return res.status(404).json({ error: 'Payroll record not found' });
     }
 
-    const targetEmail = req.body.email || payroll.agent.email;
+    const targetEmail = req.body.email || payroll.agent.personalEmail || payroll.agent.email;
     if (!targetEmail) {
       return res.status(400).json({ error: 'Recipient email address is required' });
     }
+
+    const customTotalWorkdays = req.body.totalWorkdays !== undefined ? Number(req.body.totalWorkdays) : null;
+    const customDaysPresent = req.body.daysPresent !== undefined ? Number(req.body.daysPresent) : null;
+    const customAbsents = req.body.absents !== undefined ? Number(req.body.absents) : null;
+    const paidHolidaysCount = req.body.paidHolidaysCount !== undefined ? Number(req.body.paidHolidaysCount) : 0;
+    const paidHolidaysRate = req.body.paidHolidaysRate !== undefined ? Number(req.body.paidHolidaysRate) : 0;
+    const publicHolidaysCount = req.body.publicHolidaysCount !== undefined ? Number(req.body.publicHolidaysCount) : 0;
+    const publicHolidaysRate = req.body.publicHolidaysRate !== undefined ? Number(req.body.publicHolidaysRate) : 0;
+    const allowances = req.body.allowances || [];
+    const deductions = req.body.deductions || [];
+    const customNotes = req.body.notes !== undefined ? req.body.notes : payroll.notes;
 
     // Fetch tenant profile for branding information (logo, name)
     const tenant = await prisma.tenant.findUnique({
@@ -1114,24 +1414,28 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
     });
 
     const companyName = tenant?.name || 'Travel Booker';
-    const logoUrl = tenant?.logo || '';
+    const logoUrl = tenant?.logo || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80';
 
-    // Fetch unique attendance check-ins during the period
-    const attendanceRecords = await prisma.agentAttendance.findMany({
-      where: {
-        agentId: payroll.agentId,
-        tenantId,
-        checkIn: {
-          gte: payroll.periodFrom,
-          lte: new Date(new Date(payroll.periodTo).setHours(23, 59, 59, 999))
+    // Fetch unique attendance check-ins during the period if not overridden
+    let daysPresent = 0;
+    if (customDaysPresent !== null) {
+      daysPresent = customDaysPresent;
+    } else {
+      const attendanceRecords = await prisma.agentAttendance.findMany({
+        where: {
+          agentId: payroll.agentId,
+          tenantId,
+          checkIn: {
+            gte: payroll.periodFrom,
+            lte: new Date(new Date(payroll.periodTo).setHours(23, 59, 59, 999))
+          }
         }
-      }
-    });
-
-    const uniqueDays = new Set(
-      attendanceRecords.map(r => new Date(r.checkIn).toLocaleDateString('en-GB'))
-    );
-    const daysPresent = uniqueDays.size;
+      });
+      const uniqueDays = new Set(
+        attendanceRecords.map((r: any) => new Date(r.checkIn).toLocaleDateString('en-GB'))
+      );
+      daysPresent = uniqueDays.size;
+    }
 
     // Calculate total weekdays (working days)
     let weekdaysCount = 0;
@@ -1144,25 +1448,71 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
       }
       curDate.setDate(curDate.getDate() + 1);
     }
-    const totalWorkdays = weekdaysCount || 1; // avoid division by 0
-    const absents = Math.max(0, totalWorkdays - daysPresent);
+    const totalWorkdays = customTotalWorkdays !== null ? customTotalWorkdays : (weekdaysCount || 1);
+    const absents = customAbsents !== null ? customAbsents : Math.max(0, totalWorkdays - daysPresent);
 
     const basicSalaryVal = Number(payroll.basicSalary);
     const marginEarnedVal = Number(payroll.totalMarginEarned);
-    const gdsAllowance = payroll.agent.gdsSystem ? 120.00 : 0.00;
-    const travelAllowance = 80.00;
-    const totalAllowances = gdsAllowance + travelAllowance;
-    const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances;
-    
-    const dailyRate = basicSalaryVal / totalWorkdays;
+
+    let finalAllowances = allowances;
+    if (req.body.allowances === undefined) {
+      const gdsAllowance = payroll.agent.gdsSystem ? 120.00 : 0.00;
+      const travelAllowance = 80.00;
+      finalAllowances = [
+        { description: 'Travel & Internet connectivity allowance (Amenities)', amount: travelAllowance }
+      ];
+      if (gdsAllowance > 0) {
+        finalAllowances.push({ description: 'GDS Terminal Premium allowance (Amenities)', amount: gdsAllowance });
+      }
+    }
+
+    const totalAllowances = finalAllowances.reduce((sum: number, a: any) => sum + Number(a.amount), 0);
+    const dailyRate = totalWorkdays > 0 ? (basicSalaryVal / totalWorkdays) : 0;
     const absentDeduction = dailyRate * absents;
-    const totalDeductions = absentDeduction;
+    const holidayPay = (paidHolidaysCount * paidHolidaysRate) + (publicHolidaysCount * publicHolidaysRate);
+    
+    const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances + holidayPay;
+    
+    const customDeductionsVal = deductions.reduce((sum: number, d: any) => sum + Number(d.amount), 0);
+    const totalDeductions = absentDeduction + customDeductionsVal;
     const finalNetPay = Math.max(0, grossEarnings - totalDeductions);
 
-    // Create a beautiful branded HTML email content
+    // Create dates formats
     const periodFromStr = new Date(payroll.periodFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const periodToStr = new Date(payroll.periodTo).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const issueDateStr = new Date(payroll.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
+    // Generate PDF Slip
+    let logoBuffer: Buffer | null = null;
+    if (logoUrl) {
+      logoBuffer = await fetchLogoBuffer(logoUrl);
+    }
+
+    const pdfBuffer = await generateSalarySlipPdf({
+      companyName,
+      logoBuffer,
+      agentName: payroll.agent.name,
+      agentEmail: targetEmail,
+      periodFromStr,
+      periodToStr,
+      gdsSystem: payroll.agent.gdsSystem || 'None',
+      pcc: payroll.agent.pcc || 'None',
+      totalWorkdays,
+      daysPresent,
+      absents,
+      paidHolidaysCount,
+      paidHolidaysRate,
+      publicHolidaysCount,
+      publicHolidaysRate,
+      basicSalaryVal,
+      marginEarnedVal,
+      allowances: finalAllowances,
+      deductions,
+      notes: customNotes || undefined,
+      issueDateStr
+    });
+
+    // Create a beautiful branded HTML email content
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -1275,14 +1625,22 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
                   <td>Commission / Margin Share (dynamic yield)</td>
                   <td class="number">£${marginEarnedVal.toFixed(2)}</td>
                 </tr>
+                ${finalAllowances.map((a: any) => `
                 <tr>
-                  <td>Travel & Internet connectivity allowance (Amenities)</td>
-                  <td class="number">£${travelAllowance.toFixed(2)}</td>
+                  <td>${a.description}</td>
+                  <td class="number">£${Number(a.amount).toFixed(2)}</td>
                 </tr>
-                ${gdsAllowance > 0 ? `
+                `).join('')}
+                ${paidHolidaysCount > 0 ? `
                 <tr>
-                  <td>GDS Terminal Premium allowance (Amenities)</td>
-                  <td class="number">£${gdsAllowance.toFixed(2)}</td>
+                  <td>Paid Holidays (${paidHolidaysCount} days @ £${paidHolidaysRate.toFixed(2)}/day)</td>
+                  <td class="number">£${(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
+                </tr>
+                ` : ''}
+                ${publicHolidaysCount > 0 ? `
+                <tr>
+                  <td>Public Holidays (${publicHolidaysCount} days @ £${publicHolidaysRate.toFixed(2)}/day)</td>
+                  <td class="number">£${(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
                 </tr>
                 ` : ''}
                 <tr class="subtotal-row">
@@ -1294,10 +1652,18 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
                 <tr>
                   <td colspan="2" class="section-title" style="border-left-color: #ef4444;">Deductions & Adjustments</td>
                 </tr>
+                ${absents > 0 && dailyRate > 0 ? `
                 <tr>
                   <td>Absenteeism Penalty (${absents} days absent @ £${dailyRate.toFixed(2)}/day)</td>
                   <td class="number" style="color: #dc2626;">-£${absentDeduction.toFixed(2)}</td>
                 </tr>
+                ` : ''}
+                ${deductions.map((d: any) => `
+                <tr>
+                  <td>${d.description}</td>
+                  <td class="number" style="color: #dc2626;">-£${Number(d.amount).toFixed(2)}</td>
+                </tr>
+                `).join('')}
                 <tr class="subtotal-row">
                   <td>Total Deductions</td>
                   <td class="number" style="color: #dc2626;">£${totalDeductions.toFixed(2)}</td>
@@ -1311,7 +1677,7 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
               </tbody>
             </table>
 
-            ${payroll.notes ? `<div class="notes-box"><strong>Notes & Remarks:</strong><br/>${payroll.notes}</div>` : ''}
+            ${customNotes ? `<div class="notes-box"><strong>Notes & Remarks:</strong><br/>${customNotes}</div>` : ''}
             
             <p style="font-size: 12px; line-height: 1.5; color: #64748b; margin: 30px 0 0 0; text-align: center;">
               This is a secure official statement generated by your employer. If you have any inquiries regarding this document, please contact the finance team.
@@ -1334,19 +1700,63 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
       from: `"${fromName}" <${fromEmail}>`,
       to: targetEmail,
       subject: `Payroll Slip: ${periodFromStr} - ${periodToStr}`,
-      html: htmlContent
+      html: htmlContent,
+      attachments: [
+        {
+          filename: `SalarySlip_${payroll.agent.name.replace(/\s+/g, '_')}_${periodFromStr.replace(/\s+/g, '_')}.pdf`,
+          content: pdfBuffer
+        }
+      ]
     });
 
-    // Update status to Sent and set sentAt
+    // Update status to Sent, set sentAt, and save the customized calculations
     const updated = await prisma.agentPayroll.update({
       where: { id: payrollId },
       data: {
         status: 'Sent',
-        sentAt: new Date()
+        sentAt: new Date(),
+        totalPaid: finalNetPay,
+        notes: customNotes,
+        totalWorkdays,
+        daysPresent,
+        absents,
+        paidHolidaysCount,
+        paidHolidaysRate,
+        publicHolidaysCount,
+        publicHolidaysRate,
+        allowances: finalAllowances,
+        deductions: deductions
       }
     });
 
-    return res.json({ message: 'Payroll slip sent successfully', payroll: updated });
+    // Double entry ledger integration (without agent margin)
+    try {
+      const bookingServiceUrl = process.env.BOOKING_SERVICE_URL || 'http://booking-service:4005';
+      await axios.post(`${bookingServiceUrl}/finance/payroll-ledger-entry`, {
+        agentName: payroll.agent.name,
+        basicSalary: basicSalaryVal,
+        allowances: totalAllowances + holidayPay,
+        deductions: totalDeductions,
+        notes: customNotes || '',
+        periodFrom: periodFromStr,
+        periodTo: periodToStr,
+        payrollId: payrollId
+      }, {
+        headers: {
+          'X-Tenant-Id': String(tenantId),
+          'X-User-Id': String(req.headers['x-user-id'] || '1'),
+          'X-User-Role': String(req.headers['x-user-role'] || 'COMPANY_ADMIN'),
+        }
+      });
+    } catch (ledgerErr: any) {
+      console.error('Failed to register payroll in ledger:', ledgerErr.response?.data || ledgerErr.message);
+      return res.status(502).json({
+        error: 'Failed to register payroll in ledger',
+        message: ledgerErr.response?.data?.error || ledgerErr.message
+      });
+    }
+
+    return res.json({ message: 'Payroll slip sent successfully and logged in ledger', payroll: updated });
   } catch (err: any) {
     console.error('POST /agents/payroll/:id/send error:', err);
     return res.status(500).json({ error: 'Failed to send payroll slip', message: err.message });
@@ -1673,7 +2083,7 @@ app.delete('/users/:id', requireTenantContext, async (req: any, res: Response) =
 app.post('/agents', requireTenantContext, async (req: any, res: Response) => {
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
-    const { name, email, phoneNumber, gdsSystem, client, pcc, jobStatus } = req.body;
+    const { name, email, personalEmail, phoneNumber, gdsSystem, client, pcc, jobStatus } = req.body;
     if (!name) return res.status(400).json({ error: 'Validation failed', message: 'name is required' });
 
     const agent = await (prisma as any).agent.create({
@@ -1681,6 +2091,7 @@ app.post('/agents', requireTenantContext, async (req: any, res: Response) => {
         tenantId,
         name,
         email: email || null,
+        personalEmail: personalEmail || null,
         phoneNumber: phoneNumber || null,
         gdsSystem: gdsSystem || null,
         client: client || null,
@@ -1746,7 +2157,7 @@ app.patch('/agents/:id', requireTenantContext, async (req: any, res: Response) =
   try {
     const tenantId = parseInt(req.headers['x-tenant-id'] as string);
     const id = parseInt(req.params.id);
-    const { name, email, phoneNumber, gdsSystem, client, pcc, jobStatus, basicSalary } = req.body;
+    const { name, email, personalEmail, phoneNumber, gdsSystem, client, pcc, jobStatus, basicSalary } = req.body;
 
     const existing = await (prisma as any).agent.findFirst({ where: { id, tenantId } });
     if (!existing) return res.status(404).json({ error: 'Not Found', message: 'Agent not found' });
@@ -1756,6 +2167,7 @@ app.patch('/agents/:id', requireTenantContext, async (req: any, res: Response) =
       data: {
         ...(name && { name }),
         email: email !== undefined ? email || null : undefined,
+        personalEmail: personalEmail !== undefined ? personalEmail || null : undefined,
         phoneNumber: phoneNumber !== undefined ? phoneNumber || null : undefined,
         gdsSystem: gdsSystem !== undefined ? gdsSystem || null : undefined,
         client: client !== undefined ? client || null : undefined,
@@ -2116,6 +2528,190 @@ async function getSmtpTransporter() {
   });
 }
 
+interface PdfSlipData {
+  companyName: string;
+  logoBuffer: Buffer | null;
+  agentName: string;
+  agentEmail: string;
+  periodFromStr: string;
+  periodToStr: string;
+  gdsSystem: string;
+  pcc: string;
+  totalWorkdays: number;
+  daysPresent: number;
+  absents: number;
+  paidHolidaysCount: number;
+  paidHolidaysRate: number;
+  publicHolidaysCount: number;
+  publicHolidaysRate: number;
+  basicSalaryVal: number;
+  marginEarnedVal: number;
+  allowances: { description: string; amount: number }[];
+  deductions: { description: string; amount: number }[];
+  notes?: string;
+  issueDateStr: string;
+}
+
+async function fetchLogoBuffer(logoUrl: string): Promise<Buffer | null> {
+  if (!logoUrl) return null;
+  try {
+    let targetUrl = logoUrl;
+    if (targetUrl.includes('localhost:9010')) {
+      targetUrl = targetUrl.replace('localhost:9010', 'minio:9000');
+    }
+    if (targetUrl.includes('bucket.techbarred.com')) {
+      targetUrl = targetUrl.replace('https://bucket.techbarred.com', 'http://minio:9000');
+      targetUrl = targetUrl.replace('http://bucket.techbarred.com', 'http://minio:9000');
+    }
+    const response = await axios.get(targetUrl, { responseType: 'arraybuffer', timeout: 5000 });
+    return Buffer.from(response.data);
+  } catch (err) {
+    console.error('Failed to fetch logo buffer from URL:', logoUrl, err);
+    return null;
+  }
+}
+
+function generateSalarySlipPdf(data: PdfSlipData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const buffers: Buffer[] = [];
+      doc.on('data', chunk => buffers.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+      let headerY = 40;
+      if (data.logoBuffer) {
+        try {
+          doc.image(data.logoBuffer, 40, 40, { height: 40 });
+          headerY = 90;
+        } catch (e) {
+          console.error('PDF Logo rendering error:', e);
+        }
+      }
+
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(16).text(data.companyName.toUpperCase(), 40, headerY);
+      doc.fillColor('#64748b').font('Helvetica').fontSize(9).text('Official Salary Slip', 40, headerY + 18);
+      
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10).text(`Pay Period: ${data.periodFromStr} - ${data.periodToStr}`, 300, headerY, { align: 'right', width: 255 });
+      doc.fillColor('#64748b').font('Helvetica').fontSize(9).text(`Issued: ${data.issueDateStr}`, 300, headerY + 15, { align: 'right', width: 255 });
+
+      let currentY = headerY + 45;
+
+      doc.rect(40, currentY, 515, 6).fill('#1e1b4b');
+      currentY += 16;
+
+      doc.rect(40, currentY, 515, 65).lineWidth(1).strokeColor('#e2e8f0').stroke();
+      
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('EMPLOYEE / AGENT', 55, currentY + 10);
+      doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold').text(data.agentName, 55, currentY + 22);
+      doc.fillColor('#475569').fontSize(9).font('Helvetica').text(data.agentEmail, 55, currentY + 36);
+
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('GDS SYSTEM / PCC', 330, currentY + 10);
+      doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold').text(`${data.gdsSystem} / ${data.pcc}`, 330, currentY + 22);
+      currentY += 80;
+
+      doc.rect(40, currentY, 515, 45).fill('#f8fafc');
+      doc.rect(40, currentY, 515, 45).lineWidth(1).strokeColor('#e2e8f0').stroke();
+
+      doc.fillColor('#0f172a').fontSize(13).font('Helvetica-Bold').text(String(data.totalWorkdays), 40, currentY + 10, { width: 171, align: 'center' });
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('TOTAL WORKDAYS', 40, currentY + 26, { width: 171, align: 'center' });
+
+      doc.fillColor('#16a34a').fontSize(13).font('Helvetica-Bold').text(String(data.daysPresent), 211, currentY + 10, { width: 171, align: 'center' });
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('DAYS PRESENT', 211, currentY + 26, { width: 171, align: 'center' });
+
+      doc.fillColor('#dc2626').fontSize(13).font('Helvetica-Bold').text(String(data.absents), 382, currentY + 10, { width: 173, align: 'center' });
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('DAYS ABSENT', 382, currentY + 26, { width: 173, align: 'center' });
+
+      currentY += 60;
+
+      doc.rect(40, currentY, 515, 20).fill('#f1f5f9');
+      doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('DESCRIPTION', 50, currentY + 6);
+      doc.text('EARNINGS', 340, currentY + 6, { width: 100, align: 'right' });
+      doc.text('DEDUCTIONS', 440, currentY + 6, { width: 100, align: 'right' });
+      currentY += 20;
+
+      const drawRow = (desc: string, earn: string, ded: string, isBold: boolean = false) => {
+        doc.lineWidth(0.5).strokeColor('#e2e8f0').moveTo(40, currentY).lineTo(555, currentY).stroke();
+        
+        doc.fillColor('#0f172a').fontSize(9).font(isBold ? 'Helvetica-Bold' : 'Helvetica').text(desc, 50, currentY + 6);
+        if (earn) {
+          doc.fillColor(earn.startsWith('+') ? '#16a34a' : '#0f172a').font('Helvetica-Bold').text(earn, 340, currentY + 6, { width: 100, align: 'right' });
+        } else {
+          doc.fillColor('#cbd5e1').text('—', 340, currentY + 6, { width: 100, align: 'right' });
+        }
+        
+        if (ded) {
+          doc.fillColor('#dc2626').font('Helvetica-Bold').text(ded, 440, currentY + 6, { width: 100, align: 'right' });
+        } else {
+          doc.fillColor('#cbd5e1').text('—', 440, currentY + 6, { width: 100, align: 'right' });
+        }
+        currentY += 22;
+      };
+
+      const dailyRate = data.totalWorkdays > 0 ? (data.basicSalaryVal / data.totalWorkdays) : 0;
+      const absentDeduction = dailyRate * data.absents;
+      const totalAllowancesVal = data.allowances.reduce((sum, a) => sum + Number(a.amount), 0);
+      const holidayPay = (data.paidHolidaysCount * data.paidHolidaysRate) + (data.publicHolidaysCount * data.publicHolidaysRate);
+      const grossEarnings = data.basicSalaryVal + data.marginEarnedVal + totalAllowancesVal + holidayPay;
+      const totalDeductions = absentDeduction + data.deductions.reduce((sum, d) => sum + Number(d.amount), 0);
+      const finalNetPay = Math.max(0, grossEarnings - totalDeductions);
+
+      drawRow('Basic Contract Salary (Monthly contract)', `£${data.basicSalaryVal.toFixed(2)}`, '');
+      drawRow('Booking Commission / Margin Share', `+£${data.marginEarnedVal.toFixed(2)}`, '');
+
+      data.allowances.forEach(a => {
+        drawRow(a.description, `+£${Number(a.amount).toFixed(2)}`, '');
+      });
+
+      if (data.paidHolidaysCount > 0) {
+        drawRow(`Paid Holidays (${data.paidHolidaysCount} days @ £${data.paidHolidaysRate.toFixed(2)}/day)`, `+£${(data.paidHolidaysCount * data.paidHolidaysRate).toFixed(2)}`, '');
+      }
+
+      if (data.publicHolidaysCount > 0) {
+        drawRow(`Public Holidays (${data.publicHolidaysCount} days @ £${data.publicHolidaysRate.toFixed(2)}/day)`, `+£${(data.publicHolidaysCount * data.publicHolidaysRate).toFixed(2)}`, '');
+      }
+
+      if (data.absents > 0 && dailyRate > 0) {
+        drawRow(`Absenteeism Penalty (${data.absents} days absent @ £${dailyRate.toFixed(2)}/day)`, '', `-£${absentDeduction.toFixed(2)}`);
+      }
+
+      data.deductions.forEach(d => {
+        drawRow(d.description, '', `-£${Number(d.amount).toFixed(2)}`);
+      });
+
+      doc.lineWidth(1).strokeColor('#cbd5e1').moveTo(40, currentY).lineTo(555, currentY).stroke();
+      doc.rect(40, currentY, 515, 20).fill('#f8fafc');
+      doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('SUBTOTALS', 50, currentY + 6);
+      doc.fillColor('#0f172a').text(`£${grossEarnings.toFixed(2)}`, 340, currentY + 6, { width: 100, align: 'right' });
+      doc.fillColor('#dc2626').text(`£${totalDeductions.toFixed(2)}`, 440, currentY + 6, { width: 100, align: 'right' });
+      currentY += 20;
+
+      doc.rect(40, currentY, 515, 28).fill('#0f172a');
+      doc.fillColor('#ffffff').fontSize(10).font('Helvetica-Bold').text('TOTAL NET PAYABLE (NET SALARY)', 50, currentY + 9);
+      doc.fillColor('#38bdf8').fontSize(12).font('Helvetica-Bold').text(`£${finalNetPay.toFixed(2)}`, 340, currentY + 8, { width: 200, align: 'right' });
+      currentY += 28;
+
+      if (data.notes) {
+        currentY += 15;
+        doc.rect(40, currentY, 515, 45).fill('#fef3c7');
+        doc.rect(40, currentY, 515, 45).lineWidth(1).strokeColor('#fde68a').stroke();
+        doc.fillColor('#b45309').fontSize(8).font('Helvetica-Bold').text('NOTES & REMARKS', 50, currentY + 6);
+        doc.fillColor('#78350f').fontSize(8).font('Helvetica').text(data.notes, 50, currentY + 18, { width: 495 });
+        currentY += 45;
+      }
+
+      currentY += 30;
+      doc.lineWidth(0.5).strokeColor('#e2e8f0').moveTo(40, currentY).lineTo(555, currentY).stroke();
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica').text(`This is a secure official statement generated by your employer (${data.companyName}).`, 40, currentY + 10, { align: 'center', width: 515 });
+      doc.text('If you have any inquiries regarding this document, please contact the finance team.', 40, currentY + 20, { align: 'center', width: 515 });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 // Helper to create tenant-specific SMTP transporter (falls back to system-wide)
 async function getTenantSmtpTransporter(tenantId: number): Promise<{ transporter: any; fromEmail: string; fromName: string; tenant: any }> {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
@@ -2433,14 +3029,34 @@ const SYSTEM_PERMISSIONS = [
   { name: 'UPDATE_TRANSACTION', module: 'Financials (Refunds/Profit)' },
   { name: 'DELETE_TRANSACTION', module: 'Financials (Refunds/Profit)' },
 
-  { name: 'MANAGE_SETTINGS', module: 'System Settings' }
+  { name: 'MANAGE_SETTINGS', module: 'System Settings' },
+
+  // Attendance permissions
+  { name: 'CREATE_ATTENDANCE', module: 'Attendance' },
+  { name: 'READ_ATTENDANCE', module: 'Attendance' },
+  { name: 'UPDATE_ATTENDANCE', module: 'Attendance' },
+  { name: 'DELETE_ATTENDANCE', module: 'Attendance' },
+
+  // Payroll permissions
+  { name: 'CREATE_PAYROLL', module: 'Payroll' },
+  { name: 'READ_PAYROLL', module: 'Payroll' },
+  { name: 'UPDATE_PAYROLL', module: 'Payroll' },
+  { name: 'DELETE_PAYROLL', module: 'Payroll' },
+
+  // Document Studio permissions
+  { name: 'CREATE_TEMPLATE', module: 'Document Studio' },
+  { name: 'READ_TEMPLATE', module: 'Document Studio' },
+  { name: 'UPDATE_TEMPLATE', module: 'Document Studio' },
+  { name: 'DELETE_TEMPLATE', module: 'Document Studio' }
 ];
 
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   AGENT: [
     'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING',
     'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT',
-    'READ_VENDOR', 'READ_AGENT', 'READ_SERVICE', 'READ_TRANSACTION', 'READ_DASHBOARD'
+    'READ_VENDOR', 'READ_AGENT', 'READ_SERVICE', 'READ_TRANSACTION', 'READ_DASHBOARD',
+    'CREATE_ATTENDANCE', 'READ_ATTENDANCE',
+    'READ_PAYROLL'
   ],
   COMPANY_ADMIN: [
     'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
@@ -2450,7 +3066,10 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'CREATE_SERVICE', 'READ_SERVICE', 'UPDATE_SERVICE', 'DELETE_SERVICE',
     'READ_DASHBOARD',
     'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
-    'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION'
+    'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION',
+    'CREATE_ATTENDANCE', 'READ_ATTENDANCE', 'UPDATE_ATTENDANCE', 'DELETE_ATTENDANCE',
+    'CREATE_PAYROLL', 'READ_PAYROLL', 'UPDATE_PAYROLL', 'DELETE_PAYROLL',
+    'CREATE_TEMPLATE', 'READ_TEMPLATE', 'UPDATE_TEMPLATE', 'DELETE_TEMPLATE'
   ],
   MAIN_COMPANY_ADMIN: [
     'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
@@ -2461,7 +3080,10 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'READ_DASHBOARD',
     'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
     'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION',
-    'MANAGE_SETTINGS'
+    'MANAGE_SETTINGS',
+    'CREATE_ATTENDANCE', 'READ_ATTENDANCE', 'UPDATE_ATTENDANCE', 'DELETE_ATTENDANCE',
+    'CREATE_PAYROLL', 'READ_PAYROLL', 'UPDATE_PAYROLL', 'DELETE_PAYROLL',
+    'CREATE_TEMPLATE', 'READ_TEMPLATE', 'UPDATE_TEMPLATE', 'DELETE_TEMPLATE'
   ]
 };
 
@@ -2527,9 +3149,8 @@ async function ensureRolePermissionsSeeded(tenantId: number) {
       role = await prisma.role.create({
         data: { name, tenantId }
       });
+      await seedDefaultRolePermissions(role.id, name);
     }
-    
-    await seedDefaultRolePermissions(role.id, name);
   }
 }
 
@@ -2587,15 +3208,51 @@ function getPermissionsForAccessLevel(module: string, accessLevel: string): stri
 }
 
 const getPermissionLabel = (name: string): string => {
-  if (name.startsWith('CREATE_')) return 'Create';
-  if (name.startsWith('READ_')) {
-    if (name === 'READ_DASHBOARD') return 'Access';
-    return 'Read';
-  }
-  if (name.startsWith('UPDATE_')) return 'Update';
-  if (name.startsWith('DELETE_')) return 'Delete';
-  if (name.startsWith('MANAGE_')) return 'Manage';
-  return name;
+  const mapping: Record<string, string> = {
+    CREATE_BOOKING: 'Create bookings and itineraries',
+    READ_BOOKING: 'View bookings and itineraries',
+    UPDATE_BOOKING: 'Edit bookings and itineraries',
+    DELETE_BOOKING: 'Delete bookings and itineraries',
+    CREATE_CLIENT: 'Create client records',
+    READ_CLIENT: 'View client records',
+    UPDATE_CLIENT: 'Edit client records',
+    DELETE_CLIENT: 'Delete client records',
+    CREATE_VENDOR: 'Create vendor records',
+    READ_VENDOR: 'View vendor records',
+    UPDATE_VENDOR: 'Edit vendor records',
+    DELETE_VENDOR: 'Delete vendor records',
+    CREATE_AGENT: 'Add agents to registry',
+    READ_AGENT: 'View agent records & attendance',
+    UPDATE_AGENT: 'Edit agent registry records',
+    DELETE_AGENT: 'Delete agent records',
+    CREATE_SERVICE: 'Add services to catalog',
+    READ_SERVICE: 'View service catalog',
+    UPDATE_SERVICE: 'Edit service catalog items',
+    DELETE_SERVICE: 'Delete service catalog items',
+    READ_DASHBOARD: 'Access agency dashboard',
+    CREATE_USER: 'Add company team members',
+    READ_USER: 'View team members & roles',
+    UPDATE_USER: 'Edit team members & roles',
+    DELETE_USER: 'Delete team members',
+    CREATE_TRANSACTION: 'Log payments & cost transactions',
+    READ_TRANSACTION: 'View profit ledger & transactions',
+    UPDATE_TRANSACTION: 'Edit ledger transaction records',
+    DELETE_TRANSACTION: 'Delete ledger transactions',
+    MANAGE_SETTINGS: 'Edit system configurations & settings',
+    CREATE_ATTENDANCE: 'Log attendance (Clock In/Out)',
+    READ_ATTENDANCE: 'View attendance records',
+    UPDATE_ATTENDANCE: 'Edit attendance records',
+    DELETE_ATTENDANCE: 'Delete attendance records',
+    CREATE_PAYROLL: 'Generate salary slips',
+    READ_PAYROLL: 'View payroll & salary slips',
+    UPDATE_PAYROLL: 'Edit payroll & salary slips',
+    DELETE_PAYROLL: 'Delete payroll records',
+    CREATE_TEMPLATE: 'Create invoice & voucher templates',
+    READ_TEMPLATE: 'View document templates',
+    UPDATE_TEMPLATE: 'Edit document templates',
+    DELETE_TEMPLATE: 'Delete document templates'
+  };
+  return mapping[name] || name.toLowerCase().replace(/_/g, ' ');
 };
 
 // ─── ENDPOINTS ───────────────────────────────────────────────────────────────
@@ -2720,6 +3377,20 @@ app.get('/roles/permissions/check', async (req: any, res: Response) => {
     if (!roleName || isNaN(tenantId) || !permissionName) {
       return res.status(400).json({ error: 'Missing required query parameters' });
     }
+
+    const userRole = req.headers['x-user-role'] || req.headers['X-User-Role'];
+    const userId = req.headers['x-user-id'] || req.headers['X-User-Id'];
+    if (userRole === 'AGENT') {
+      if (!userId) {
+        return res.status(200).json({ allowed: false, message: 'Missing user context' });
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: parseInt(userId as string) }
+      });
+      if (!user || user.tenantId !== tenantId) {
+        return res.status(200).json({ allowed: false, message: 'Tenant context mismatch' });
+      }
+    }
     
     const isPlatformAdmin = req.headers['x-is-platform-admin'] === 'true';
     if (isPlatformAdmin || roleName === 'SUPER_ADMIN') {
@@ -2797,6 +3468,8 @@ app.get('/my-permissions', requireTenantContext, async (req: any, res: Response)
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
 
 
 

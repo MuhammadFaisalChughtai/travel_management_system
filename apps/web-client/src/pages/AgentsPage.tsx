@@ -25,6 +25,7 @@ interface Agent {
   id: number;
   name: string;
   email: string | null;
+  personalEmail: string | null;
   phoneNumber: string | null;
   gdsSystem: string | null;
   client: string | null;
@@ -523,6 +524,7 @@ function AgentFormModal({ onClose, onSaved, initialData }: { onClose: () => void
   const [form, setForm] = useState({
     name: initialData?.name || '', 
     email: initialData?.email || '', 
+    personalEmail: initialData?.personalEmail || '', 
     phoneNumber: initialData?.phoneNumber || '', 
     gdsSystem: initialData?.gdsSystem || '', 
     pcc: initialData?.pcc || '', 
@@ -594,11 +596,16 @@ function AgentFormModal({ onClose, onSaved, initialData }: { onClose: () => void
               </div>
               
               <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Email Address</label>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Company Email (Login Email)</label>
                 <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-medium outline-none transition-all placeholder:text-slate-400" placeholder="sarah@example.com" />
               </div>
               
               <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Personal Email (for Payroll)</label>
+                <input type="email" value={form.personalEmail} onChange={e => setForm({ ...form, personalEmail: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-medium outline-none transition-all placeholder:text-slate-400" placeholder="sarah.payroll@example.com" />
+              </div>
+              
+              <div className="md:col-span-2">
                 <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Phone Number</label>
                 <input type="text" value={form.phoneNumber} onChange={e => setForm({ ...form, phoneNumber: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-medium outline-none transition-all placeholder:text-slate-400" placeholder="+44 123 456 789" />
               </div>

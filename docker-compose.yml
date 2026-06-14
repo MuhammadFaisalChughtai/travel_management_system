@@ -96,7 +96,7 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadminpassword
       - MINIO_BUCKET=travelbooker-media
-      - MINIO_EXTERNAL_URL=http://localhost:9010
+      - MINIO_EXTERNAL_URL=https://bucket.techbarred.com
     networks:
       - travel_network
     depends_on:
@@ -113,6 +113,7 @@ services:
       - PORT=4005
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/travel_platform?schema=public
       - AUTH_SERVICE_URL=http://auth-service:4001
+      - JWT_SECRET=super_secret_jwt_key
     networks:
       - travel_network
     depends_on:

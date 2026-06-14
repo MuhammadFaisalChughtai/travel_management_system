@@ -9,6 +9,7 @@ import { api } from '../api/axios';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
+import { useAuthStore } from '../store/authStore';
 
 interface AttendanceRecord {
   id: number;
@@ -43,6 +44,10 @@ export function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ todayCheckIns: 0, currentlyIn: 0 });
 
+  const user = useAuthStore(state => state.user);
+  const isAgent = user?.role?.toUpperCase() === 'AGENT' || !!user?.agentId || agents.some(a => a.email === user?.email);
+  const loggedInAgent = agents.find(a => (user?.agentId && a.id === user.agentId) || a.email === user?.email || (user?.name && a.name.toLowerCase() === user.name.toLowerCase()));
+
   // Filters
   const [view, setView] = useState<ViewFilter>('today');
   const [selectedAgent, setSelectedAgent] = useState('');
@@ -67,7 +72,12 @@ export function AttendancePage() {
         if (fromDate) params.append('from', fromDate);
         if (toDate) params.append('to', toDate);
       }
-      if (selectedAgent) params.append('agentId', selectedAgent);
+      if (isAgent) {
+        const agentIdVal = loggedInAgent?.id || user?.agentId;
+        if (agentIdVal) params.append('agentId', String(agentIdVal));
+      } else if (selectedAgent) {
+        params.append('agentId', selectedAgent);
+      }
 
       const [attRes, agentsRes] = await Promise.all([
         api.get(`/agents/attendance?${params}`),
@@ -85,6 +95,15 @@ export function AttendancePage() {
   }, [view, selectedAgent, fromDate, toDate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (showCheckInModal && isAgent) {
+      const agentIdVal = loggedInAgent?.id || user?.agentId;
+      if (agentIdVal) {
+        setCheckInAgentId(String(agentIdVal));
+      }
+    }
+  }, [showCheckInModal, isAgent, loggedInAgent, user]);
 
   const handleCheckIn = async () => {
     if (!checkInAgentId) { toast.error('Please select an agent'); return; }
@@ -207,17 +226,19 @@ export function AttendancePage() {
           </AnimatePresence>
 
           {/* Agent filter */}
-          <div className="relative">
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            <select
-              value={selectedAgent}
-              onChange={e => setSelectedAgent(e.target.value)}
-              className="pl-3 pr-8 py-1.5 border border-slate-200 rounded-xl text-[12px] text-slate-700 outline-none focus:border-primary-500 appearance-none bg-white"
-            >
-              <option value="">All Agents</option>
-              {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
+          {!isAgent && (
+            <div className="relative">
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <select
+                value={selectedAgent}
+                onChange={e => setSelectedAgent(e.target.value)}
+                className="pl-3 pr-8 py-1.5 border border-slate-200 rounded-xl text-[12px] text-slate-700 outline-none focus:border-primary-500 appearance-none bg-white"
+              >
+                <option value="">All Agents</option>
+                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Search */}
           <div className="relative ml-auto">
@@ -358,15 +379,26 @@ export function AttendancePage() {
                   <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Agent *</label>
                   <select
                     value={checkInAgentId}
-                    onChange={e => setCheckInAgentId(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 bg-white"
+                    onChange={e => !isAgent && setCheckInAgentId(e.target.value)}
+                    disabled={isAgent}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 bg-white disabled:bg-slate-50 disabled:opacity-85 disabled:cursor-not-allowed"
                   >
-                    <option value="">-- Select Agent --</option>
-                    {agents.filter(a => !checkedInAgentIds.has(a.id)).map(a => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
+                    {isAgent ? (
+                      loggedInAgent ? (
+                        <option value={loggedInAgent.id}>{loggedInAgent.name}</option>
+                      ) : (
+                        <option value={user?.agentId || ''}>{user?.name || 'Logged In Agent'}</option>
+                      )
+                    ) : (
+                      <>
+                        <option value="">-- Select Agent --</option>
+                        {agents.filter(a => !checkedInAgentIds.has(a.id)).map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </>
+                    )}
                   </select>
-                  {agents.filter(a => checkedInAgentIds.has(a.id)).length > 0 && (
+                  {!isAgent && agents.filter(a => checkedInAgentIds.has(a.id)).length > 0 && (
                     <p className="mt-1 text-[10px] text-amber-600 font-medium">
                       ⚠️ Already checked in: {agents.filter(a => checkedInAgentIds.has(a.id)).map(a => a.name).join(', ')}
                     </p>

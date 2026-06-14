@@ -100,18 +100,19 @@ model RolePermission {
 }
 
 model Agent {
-  id          Int      @id @default(autoincrement())
-  tenantId    Int
-  name        String   @db.VarChar(255)
-  email       String?  @db.VarChar(255)
-  phoneNumber String?  @db.VarChar(50)
-  gdsSystem   String?  @db.VarChar(100)
-  client      String?  @db.VarChar(255)
-  pcc         String?  @db.VarChar(100)
-  jobStatus   String   @default("Active") @db.VarChar(50)
-  basicSalary Decimal? @db.Decimal(10, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  tenantId      Int
+  name          String   @db.VarChar(255)
+  email         String?  @db.VarChar(255)
+  personalEmail String?  @db.VarChar(255)
+  phoneNumber   String?  @db.VarChar(50)
+  gdsSystem     String?  @db.VarChar(100)
+  client        String?  @db.VarChar(255)
+  pcc           String?  @db.VarChar(100)
+  jobStatus     String   @default("Active") @db.VarChar(50)
+  basicSalary   Decimal? @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   marginSegments AgentMarginSegment[]
   wallet         AgentWallet?
@@ -202,21 +203,30 @@ model AgentAttendance {
 }
 
 model AgentPayroll {
-  id                 Int       @id @default(autoincrement())
-  agentId            Int
-  tenantId           Int
-  periodFrom         DateTime
-  periodTo           DateTime
-  basicSalary        Decimal   @default(0.00) @db.Decimal(10, 2)
-  totalMarginEarned  Decimal   @default(0.00) @db.Decimal(10, 2)
-  totalPaid          Decimal   @default(0.00) @db.Decimal(10, 2)
-  status             String    @default("Draft") @db.VarChar(20)
-  sentAt             DateTime?
-  notes              String?   @db.Text
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                  Int       @id @default(autoincrement())
+  agentId             Int
+  tenantId            Int
+  periodFrom          DateTime
+  periodTo            DateTime
+  basicSalary         Decimal   @default(0.00) @db.Decimal(10, 2)
+  totalMarginEarned   Decimal   @default(0.00) @db.Decimal(10, 2)
+  totalPaid           Decimal   @default(0.00) @db.Decimal(10, 2)
+  status              String    @default("Draft") @db.VarChar(20)
+  sentAt              DateTime?
+  notes               String?   @db.Text
+  totalWorkdays       Int?
+  daysPresent         Int?
+  absents             Int?
+  paidHolidaysCount   Int?
+  paidHolidaysRate    Decimal?  @db.Decimal(10, 2)
+  publicHolidaysCount Int?
+  publicHolidaysRate   Decimal?  @db.Decimal(10, 2)
+  allowances          Json?
+  deductions          Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  agent              Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent               Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([agentId])

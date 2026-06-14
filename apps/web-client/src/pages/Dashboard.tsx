@@ -106,14 +106,14 @@ const TAB_PERMISSIONS: Record<string, string> = {
   overview: 'READ_DASHBOARD',
   bookings: 'READ_BOOKING',
   agents: 'READ_AGENT',
-  attendance: 'READ_AGENT',
-  payroll: 'READ_AGENT',
+  attendance: 'READ_ATTENDANCE',
+  payroll: 'READ_PAYROLL',
   vendors: 'READ_VENDOR',
   payments: 'READ_TRANSACTION',
   catalog: 'READ_SERVICE',
   team: 'READ_USER',
   settings: 'MANAGE_SETTINGS',
-  templates: 'MANAGE_SETTINGS'
+  templates: 'READ_TEMPLATE'
 };
 
 const SIDEBAR_ITEMS = [

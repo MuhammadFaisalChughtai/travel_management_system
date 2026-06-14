@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Banknote, Send, CheckCircle2, Clock, ChevronDown,
   Plus, Pencil, X, Check, AlertCircle, TrendingUp,
-  Wallet, FileText, Users, RefreshCw
+  Wallet, FileText, Users, RefreshCw, Trash2, Printer
 } from 'lucide-react';
 import { api } from '../api/axios';
 import toast from 'react-hot-toast';
@@ -14,6 +14,7 @@ interface Agent {
   id: number;
   name: string;
   email: string | null;
+  personalEmail?: string | null;
   jobStatus: string;
   basicSalary: number | null;
   gdsSystem?: string | null;
@@ -31,11 +32,21 @@ interface Payroll {
   status: 'Draft' | 'Sent' | 'Paid';
   sentAt: string | null;
   notes: string | null;
+  totalWorkdays?: number | null;
+  daysPresent?: number | null;
+  absents?: number | null;
+  paidHolidaysCount?: number | null;
+  paidHolidaysRate?: number | null;
+  publicHolidaysCount?: number | null;
+  publicHolidaysRate?: number | null;
+  allowances?: any | null;
+  deductions?: any | null;
   createdAt: string;
   agent: {
     id: number;
     name: string;
     email: string | null;
+    personalEmail?: string | null;
     basicSalary: number | null;
     jobStatus: string;
     gdsSystem?: string | null;
@@ -574,31 +585,187 @@ interface SendPayrollSlipModalProps {
 }
 
 function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModalProps) {
-  const [email, setEmail] = useState(payroll.agent.email || '');
+  const [email, setEmail] = useState(payroll.agent.personalEmail || payroll.agent.email || '');
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   const [smtpHost, setSmtpHost] = useState<string | null>(null);
   const [smtpUser, setSmtpUser] = useState<string | null>(null);
   const [checkingSmtp, setCheckingSmtp] = useState(true);
+  const [tenant, setTenant] = useState<any>(null);
 
+  // Customization state
+  const [totalWorkdays, setTotalWorkdays] = useState(() => 
+    payroll.totalWorkdays !== null && payroll.totalWorkdays !== undefined ? Number(payroll.totalWorkdays) : 22
+  );
+  const [daysPresent, setDaysPresent] = useState(() => 
+    payroll.daysPresent !== null && payroll.daysPresent !== undefined ? Number(payroll.daysPresent) : 22
+  );
+  const [absents, setAbsents] = useState(() => 
+    payroll.absents !== null && payroll.absents !== undefined ? Number(payroll.absents) : 0
+  );
+
+  const [paidHolidaysCount, setPaidHolidaysCount] = useState(() => 
+    payroll.paidHolidaysCount !== null && payroll.paidHolidaysCount !== undefined ? Number(payroll.paidHolidaysCount) : 0
+  );
+  const [paidHolidaysRate, setPaidHolidaysRate] = useState(() => 
+    payroll.paidHolidaysRate !== null && payroll.paidHolidaysRate !== undefined ? Number(payroll.paidHolidaysRate) : 0
+  );
+  const [publicHolidaysCount, setPublicHolidaysCount] = useState(() => 
+    payroll.publicHolidaysCount !== null && payroll.publicHolidaysCount !== undefined ? Number(payroll.publicHolidaysCount) : 0
+  );
+  const [publicHolidaysRate, setPublicHolidaysRate] = useState(() => 
+    payroll.publicHolidaysRate !== null && payroll.publicHolidaysRate !== undefined ? Number(payroll.publicHolidaysRate) : 0
+  );
+
+  // Allowances & Deductions
+  const [allowances, setAllowances] = useState<{ description: string; amount: number }[]>(() => {
+    if (payroll.allowances !== null && payroll.allowances !== undefined) {
+      return typeof payroll.allowances === 'string' ? JSON.parse(payroll.allowances) : payroll.allowances;
+    }
+    return [];
+  });
+  const [deductions, setDeductions] = useState<{ description: string; amount: number }[]>(() => {
+    if (payroll.deductions !== null && payroll.deductions !== undefined) {
+      return typeof payroll.deductions === 'string' ? JSON.parse(payroll.deductions) : payroll.deductions;
+    }
+    return [];
+  });
+
+  // Add allowance/deduction form states
+  const [newAllowDesc, setNewAllowDesc] = useState('');
+  const [newAllowAmt, setNewAllowAmt] = useState('');
+  const [newDedDesc, setNewDedDesc] = useState('');
+  const [newDedAmt, setNewDedAmt] = useState('');
+
+  const [notes, setNotes] = useState(payroll.notes || '');
+
+  const basicSalaryVal = Number(payroll.basicSalary);
+  const marginEarnedVal = Number(payroll.totalMarginEarned);
+
+  // Fetch initial parameters
   useEffect(() => {
     let active = true;
+    const isSaved = payroll.totalWorkdays !== null && payroll.totalWorkdays !== undefined;
+    
+    // Check SMTP Settings
     api.get('/auth/tenants/profile')
       .then(res => {
         if (!active) return;
-        const tenant = res.data.tenant;
-        if (tenant?.smtpHost && tenant?.smtpUser) {
-          setSmtpHost(tenant.smtpHost);
-          setSmtpUser(tenant.smtpUser);
+        const tenantData = res.data.tenant;
+        setTenant(tenantData || null);
+        if (tenantData?.smtpHost && tenantData?.smtpUser) {
+          setSmtpHost(tenantData.smtpHost);
+          setSmtpUser(tenantData.smtpUser);
         }
         setCheckingSmtp(false);
       })
       .catch(() => {
         if (active) setCheckingSmtp(false);
       });
-    return () => {
-      active = false;
-    };
-  }, []);
+
+    // Fetch actual attendance
+    api.get(`/agents/${payroll.agentId}/attendance`, {
+      params: { from: payroll.periodFrom.slice(0, 10), to: payroll.periodTo.slice(0, 10) }
+    })
+      .then(attRes => {
+        if (!active) return;
+        const attList = attRes.data.attendance || [];
+        const uniqueDays = new Set(
+          attList.map((r: any) => new Date(r.checkIn).toLocaleDateString('en-GB'))
+        );
+        const computedPresent = uniqueDays.size;
+        
+        if (!isSaved) {
+          setDaysPresent(computedPresent);
+
+          // Compute calendar weekdays
+          let weekdaysCount = 0;
+          const curDate = new Date(payroll.periodFrom);
+          const endDate = new Date(payroll.periodTo);
+          while (curDate <= endDate) {
+            const day = curDate.getDay();
+            if (day !== 0 && day !== 6) weekdaysCount++;
+            curDate.setDate(curDate.getDate() + 1);
+          }
+          const defaultTotalWorkdays = weekdaysCount || 1;
+          setTotalWorkdays(defaultTotalWorkdays);
+
+          const computedAbsents = Math.max(0, defaultTotalWorkdays - computedPresent);
+          setAbsents(computedAbsents);
+
+          // Compute rates
+          const computedDailyRate = defaultTotalWorkdays > 0 ? (basicSalaryVal / defaultTotalWorkdays) : 0;
+          setPaidHolidaysRate(Number(computedDailyRate.toFixed(2)));
+          setPublicHolidaysRate(Number((computedDailyRate * 1.5).toFixed(2)));
+
+          // Default allowances
+          const gdsAllowance = payroll.agent?.gdsSystem ? 120.00 : 0.00;
+          const travelAllowance = 80.00;
+          const initialAllowances = [
+            { description: 'Travel & Internet connectivity allowance (Amenities)', amount: travelAllowance }
+          ];
+          if (gdsAllowance > 0) {
+            initialAllowances.push({ description: 'GDS Terminal Premium allowance (Amenities)', amount: gdsAllowance });
+          }
+          setAllowances(initialAllowances);
+        }
+
+        setLoadingData(false);
+      })
+      .catch(() => {
+        if (active) setLoadingData(false);
+      });
+
+    return () => { active = false; };
+  }, [payroll, basicSalaryVal]);
+
+  // Sync absents when present or workdays change, unless overridden
+  const handleWorkdaysChange = (val: number) => {
+    const sanitizedVal = Math.max(1, val);
+    setTotalWorkdays(sanitizedVal);
+    setAbsents(Math.max(0, sanitizedVal - daysPresent));
+    // update rates
+    const computedDailyRate = sanitizedVal > 0 ? (basicSalaryVal / sanitizedVal) : 0;
+    setPaidHolidaysRate(Number(computedDailyRate.toFixed(2)));
+    setPublicHolidaysRate(Number((computedDailyRate * 1.5).toFixed(2)));
+  };
+
+  const handlePresentChange = (val: number) => {
+    const sanitizedVal = Math.max(0, val);
+    setDaysPresent(sanitizedVal);
+    setAbsents(Math.max(0, totalWorkdays - sanitizedVal));
+  };
+
+  const addAllowance = () => {
+    if (!newAllowDesc || !newAllowAmt) return;
+    setAllowances([...allowances, { description: newAllowDesc, amount: Math.abs(Number(newAllowAmt)) }]);
+    setNewAllowDesc('');
+    setNewAllowAmt('');
+  };
+
+  const removeAllowance = (index: number) => {
+    setAllowances(allowances.filter((_, i) => i !== index));
+  };
+
+  const addDeduction = () => {
+    if (!newDedDesc || !newDedAmt) return;
+    setDeductions([...deductions, { description: newDedDesc, amount: Math.abs(Number(newDedAmt)) }]);
+    setNewDedDesc('');
+    setNewDedAmt('');
+  };
+
+  const removeDeduction = (index: number) => {
+    setDeductions(deductions.filter((_, i) => i !== index));
+  };
+
+  // Calculations
+  const totalAllowances = allowances.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  const dailyRate = totalWorkdays > 0 ? (basicSalaryVal / totalWorkdays) : 0;
+  const absentDeduction = dailyRate * absents;
+  const holidayPay = (paidHolidaysCount * paidHolidaysRate) + (publicHolidaysCount * publicHolidaysRate);
+  const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances + holidayPay;
+  const totalDeductions = absentDeduction + deductions.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+  const finalNetPay = Math.max(0, grossEarnings - totalDeductions);
 
   const handleSend = async () => {
     if (!email) {
@@ -607,8 +774,20 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
     }
     setLoading(true);
     try {
-      await api.post(`/agents/payroll/${payroll.id}/send`, { email });
-      toast.success('Payroll slip sent successfully!');
+      await api.post(`/agents/payroll/${payroll.id}/send`, {
+        email,
+        totalWorkdays,
+        daysPresent,
+        absents,
+        paidHolidaysCount,
+        paidHolidaysRate,
+        publicHolidaysCount,
+        publicHolidaysRate,
+        allowances,
+        deductions,
+        notes
+      });
+      toast.success('Payroll slip sent successfully with PDF attachment!');
       onSent();
       onClose();
     } catch (err: any) {
@@ -618,6 +797,15 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const periodFromStr = new Date(payroll.periodFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const periodToStr = new Date(payroll.periodTo).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const companyName = tenant?.name || 'Travel Booker';
+  const logoUrl = tenant?.logo || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80';
+
   const isCompanySmtpActive = !!smtpHost;
 
   return (
@@ -626,28 +814,50 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 overflow-y-auto"
     >
       <motion.div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm print:hidden"
         onClick={() => !loading && onClose()}
       />
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #printable-custom-slip, #printable-custom-slip * {
+            visibility: visible !important;
+          }
+          #printable-custom-slip {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: white !important;
+          }
+        }
+      `}</style>
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ type: 'spring', damping: 25, stiffness: 240 }}
-        className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+        className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden max-h-[92vh] flex flex-col print:shadow-none print:rounded-none print:max-h-none print:bg-white"
       >
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 text-white relative overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 text-white relative overflow-hidden shrink-0 flex items-center justify-between print:hidden">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
           <div className="relative z-10 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center">
-              <Send className="w-5 h-5" />
+              <Pencil className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-[16px] font-extrabold">Send Payroll Slip</h3>
-              <p className="text-[11px] text-indigo-100">Dispatched directly using SMTP settings</p>
+              <h3 className="text-[16px] font-extrabold">Customize & Send Salary Slip</h3>
+              <p className="text-[11px] text-indigo-100">Tailor wages, calendar parameters, and attachments before dispatch</p>
             </div>
           </div>
           <button
@@ -659,74 +869,449 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Agent Name</label>
-            <div className="text-[13px] font-bold text-slate-800 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl">
-              {payroll.agent?.name}
-            </div>
+        {loadingData ? (
+          <div className="p-12 text-center text-slate-500 font-bold text-sm">
+            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            Compiling payroll settings & attendance...
           </div>
+        ) : (
+          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row print:block">
+            {/* Left Column: Form Settings (Control Panel) */}
+            <div className="w-full lg:w-[45%] p-6 overflow-y-auto space-y-5 border-r border-slate-100 print:hidden shrink-0">
+              {/* Recipient details */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+                <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Recipient Settings</h4>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Agent Name</label>
+                  <div className="text-[12px] font-bold text-slate-800">{payroll.agent?.name}</div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Recipient Email *</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="e.g. agent@personal.com"
-              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500"
-            />
-            <p className="mt-1 text-[10px] text-slate-400">Payroll statement will be sent to this personal address.</p>
-          </div>
+              {/* Calendar Configs */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+                <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Calendar Parameters</h4>
+                
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Workdays (Presets)</label>
+                  <div className="flex gap-2 mb-2">
+                    {[22, 26, 30].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => handleWorkdaysChange(val)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${totalWorkdays === val ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        {val} Days
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    value={totalWorkdays}
+                    onChange={e => handleWorkdaysChange(Number(e.target.value))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                  />
+                </div>
 
-          {checkingSmtp ? (
-            <div className="flex items-center gap-2 text-[11px] text-slate-400 py-1">
-              <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-              <span>Verifying SMTP configuration...</span>
-            </div>
-          ) : isCompanySmtpActive ? (
-            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[11.5px] text-emerald-800 flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Days Present</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={daysPresent}
+                      onChange={e => handlePresentChange(Number(e.target.value))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Days Absent</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={absents}
+                      onChange={e => setAbsents(Math.max(0, Number(e.target.value)))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Holiday Configurations */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+                <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Holidays Settings</h4>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Paid Holiday Days</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={paidHolidaysCount}
+                      onChange={e => setPaidHolidaysCount(Math.max(0, Number(e.target.value)))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Paid Holiday Rate (£/day)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={paidHolidaysRate}
+                      onChange={e => setPaidHolidaysRate(Math.max(0, Number(e.target.value)))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Public Holiday Days</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={publicHolidaysCount}
+                      onChange={e => setPublicHolidaysCount(Math.max(0, Number(e.target.value)))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Public Holiday Rate (£/day)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={publicHolidaysRate}
+                      onChange={e => setPublicHolidaysRate(Math.max(0, Number(e.target.value)))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-800 text-[12px] outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Amenities/Allowances */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Amenities (Allowances)</h4>
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">+£{totalAllowances.toFixed(2)}</span>
+                </div>
+                
+                {allowances.length > 0 && (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {allowances.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center bg-white border border-slate-200 rounded-lg p-2 text-xs">
+                        <span className="font-semibold text-slate-700 truncate max-w-[70%]">{item.description}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800">£{item.amount.toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeAllowance(index)}
+                            className="text-red-500 hover:text-red-700 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Description (e.g. Travel)"
+                    value={newAllowDesc}
+                    onChange={e => setNewAllowDesc(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-850 text-[11px] outline-none"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Amount"
+                    value={newAllowAmt}
+                    onChange={e => setNewAllowAmt(e.target.value)}
+                    className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-850 text-[11px] outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={addAllowance}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg p-1.5 flex items-center justify-center shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Dynamic Custom Deductions */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Custom Deductions</h4>
+                </div>
+                
+                {deductions.length > 0 && (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {deductions.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center bg-white border border-slate-200 rounded-lg p-2 text-xs">
+                        <span className="font-semibold text-slate-700 truncate max-w-[70%]">{item.description}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-red-600">-£{item.amount.toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeDeduction(index)}
+                            className="text-red-500 hover:text-red-700 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Description (e.g. Loan Payment)"
+                    value={newDedDesc}
+                    onChange={e => setNewDedDesc(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-850 text-[11px] outline-none"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Amount"
+                    value={newDedAmt}
+                    onChange={e => setNewDedAmt(e.target.value)}
+                    className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-850 text-[11px] outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={addDeduction}
+                    className="bg-red-600 hover:bg-red-700 text-white rounded-lg p-1.5 flex items-center justify-center shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Notes & Remarks */}
               <div>
-                <strong className="block font-bold mb-0.5">Company SMTP Active</strong>
-                Email will be sent using your SMTP server: <code className="font-mono bg-emerald-100/50 px-1 rounded">{smtpHost}</code> as <code className="font-mono bg-emerald-100/50 px-1 rounded">{smtpUser}</code>.
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Notes & Remarks</label>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Add custom comments or notes onto the statement..."
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-850 text-[12px] h-20 outline-none focus:border-indigo-500 resize-none"
+                />
               </div>
             </div>
-          ) : (
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[11.5px] text-amber-800 flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <strong className="block font-bold mb-0.5">System Default SMTP Fallback</strong>
-                No custom company SMTP settings found. This email will send via default platform email.
-                <span className="block mt-1 font-semibold text-amber-900">
-                  Tip: Configure company SMTP under Dashboard settings to send from your own domain.
-                </span>
+
+            {/* Right Column: Interactive Live Slip Preview */}
+            <div className="flex-1 bg-slate-50 overflow-y-auto p-6 flex flex-col justify-between print:bg-white print:p-0">
+              <div id="printable-custom-slip" className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-slate-800 print:border-none print:shadow-none print:rounded-none">
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-slate-200 pb-5 mb-5">
+                  <div>
+                    {logoUrl && <img src={logoUrl} alt="Logo" className="h-10 mb-2 object-contain" />}
+                    <h2 className="text-md font-extrabold text-slate-800 tracking-tight">{companyName}</h2>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Official Salary Slip</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-800 rounded-full px-2.5 py-0.5 text-[10px] font-bold">
+                      Pay Period: {periodFromStr} &ndash; {periodToStr}
+                    </div>
+                    <p className="text-[9px] text-slate-400 mt-2 font-medium">Issue Date: {new Date(payroll.createdAt).toLocaleDateString('en-GB')}</p>
+                  </div>
+                </div>
+
+                {/* Employee / Meta grid */}
+                <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4 mb-4 text-[11px]">
+                  <div className="space-y-1.5">
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider">Employee / Agent</span>
+                      <span className="font-bold text-slate-800">{payroll.agent?.name}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider">Email Address</span>
+                      <span className="font-semibold text-slate-600">{email || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider">GDS Terminal System</span>
+                      <span className="font-bold text-slate-800">{payroll.agent?.gdsSystem || 'None'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider">Pseudo City Code (PCC)</span>
+                      <span className="font-semibold text-slate-600">{payroll.agent?.pcc || 'None'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Attendance Card */}
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-5 print:bg-slate-50">
+                  <h5 className="text-[9px] uppercase font-black text-slate-400 tracking-wider mb-2">Attendance Summary</h5>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <span className="block text-[14px] font-black text-slate-800">{totalWorkdays}</span>
+                      <span className="block text-[8px] uppercase font-bold text-slate-400 tracking-wider">Workdays</span>
+                    </div>
+                    <div>
+                      <span className="block text-[14px] font-black text-emerald-600">{daysPresent}</span>
+                      <span className="block text-[8px] uppercase font-bold text-slate-400 tracking-wider">Present</span>
+                    </div>
+                    <div>
+                      <span className="block text-[14px] font-black text-red-650">{absents}</span>
+                      <span className="block text-[8px] uppercase font-bold text-slate-400 tracking-wider">Absent</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial items table */}
+                <table className="w-full text-left border-collapse text-[11px] mb-5">
+                  <thead>
+                    <tr className="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 font-bold border-t border-b border-slate-200">
+                      <th className="py-2 px-3">Description</th>
+                      <th className="py-2 px-3 text-right">Earnings</th>
+                      <th className="py-2 px-3 text-right">Deductions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr>
+                      <td className="py-2 px-3 font-semibold text-slate-800">Basic Contract Salary</td>
+                      <td className="py-2 px-3 text-right font-bold text-slate-800">£{basicSalaryVal.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-3 font-semibold text-slate-800">Booking Commission / Margin Share</td>
+                      <td className="py-2 px-3 text-right font-bold text-emerald-600">+£{marginEarnedVal.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
+                    </tr>
+                    {allowances.map((item, i) => (
+                      <tr key={i}>
+                        <td className="py-2 px-3 font-semibold text-slate-800">{item.description}</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-800">+£{Number(item.amount).toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
+                      </tr>
+                    ))}
+                    {paidHolidaysCount > 0 && (
+                      <tr>
+                        <td className="py-2 px-3 font-semibold text-slate-800">Paid Holidays ({paidHolidaysCount} days @ £{paidHolidaysRate.toFixed(2)}/day)</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-800">+£{(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
+                      </tr>
+                    )}
+                    {publicHolidaysCount > 0 && (
+                      <tr>
+                        <td className="py-2 px-3 font-semibold text-slate-800">Public Holidays ({publicHolidaysCount} days @ £{publicHolidaysRate.toFixed(2)}/day)</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-800">+£{(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
+                      </tr>
+                    )}
+                    {absents > 0 && dailyRate > 0 && (
+                      <tr>
+                        <td className="py-2 px-3 font-semibold text-slate-800">Absenteeism Penalty ({absents} days absent @ £{dailyRate.toFixed(2)}/day)</td>
+                        <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
+                        <td className="py-2 px-3 text-right font-bold text-red-600">-£{absentDeduction.toFixed(2)}</td>
+                      </tr>
+                    )}
+                    {deductions.map((item, i) => (
+                      <tr key={i}>
+                        <td className="py-2 px-3 font-semibold text-slate-800">{item.description}</td>
+                        <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
+                        <td className="py-2 px-3 text-right font-bold text-red-600">-£{Number(item.amount).toFixed(2)}</td>
+                      </tr>
+                    ))}
+
+                    <tr className="bg-slate-50 font-bold border-t border-slate-200">
+                      <td className="py-2 px-3 text-slate-700">Subtotals</td>
+                      <td className="py-2 px-3 text-right text-slate-850">£{grossEarnings.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-red-650">£{totalDeductions.toFixed(2)}</td>
+                    </tr>
+
+                    <tr className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white font-bold">
+                      <td className="py-3 px-4 rounded-l-xl text-[12px] border-none">Total Net Payable (Net Salary)</td>
+                      <td colSpan={2} className="py-3 px-4 text-right text-[14px] text-sky-400 font-black rounded-r-xl border-none">
+                        £{finalNetPay.toFixed(2)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* Notes */}
+                {notes && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 text-[10px] text-amber-900 leading-relaxed">
+                    <strong>Notes & Remarks:</strong>
+                    <p className="mt-0.5">{notes}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* SMTP Warning & Action Buttons */}
+              <div className="mt-4 space-y-3 print:hidden shrink-0">
+                {checkingSmtp ? (
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 justify-center">
+                    <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                    <span>Verifying SMTP configuration...</span>
+                  </div>
+                ) : isCompanySmtpActive ? (
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 text-[10.5px] text-emerald-800 flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-bold">SMTP Active: {smtpHost} ({smtpUser})</strong>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-2.5 text-[10.5px] text-amber-800 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-bold">System Default SMTP Fallback</strong>
+                      Configure SMTP in Dashboard settings to send branded emails from your domain.
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={onClose}
+                    disabled={loading}
+                    className="py-2 px-4 rounded-xl border border-slate-200 text-slate-605 text-[12px] font-bold hover:bg-slate-50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handlePrint}
+                    disabled={loading}
+                    className="py-2 px-4 rounded-xl border border-slate-200 text-slate-700 bg-white text-[12px] font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4" /> Print / PDF
+                  </button>
+                  <button
+                    onClick={handleSend}
+                    disabled={loading}
+                    className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[12px] font-bold shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    {loading ? 'Sending...' : 'Send Branded Email & PDF'}
+                  </button>
+                </div>
               </div>
             </div>
-          )}
-
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSend}
-              disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-[13px] font-bold shadow-md shadow-primary-500/30 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-              {loading ? 'Sending...' : 'Send Payroll Slip'}
-            </button>
           </div>
-        </div>
+        )}
       </motion.div>
     </motion.div>
   );
@@ -752,7 +1337,7 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
       api.get('/auth/tenants/profile')
     ]).then(([attRes, profileRes]) => {
       if (!active) return;
-      setAttendance(attRes.data || []);
+      setAttendance(attRes.data.attendance || []);
       setTenant(profileRes.data.tenant || null);
       setLoading(false);
     }).catch(() => {
@@ -772,24 +1357,55 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
     }
     curDate.setDate(curDate.getDate() + 1);
   }
-  const totalWorkdays = weekdaysCount || 1;
+  const defaultTotalWorkdays = weekdaysCount || 1;
 
   const uniqueDays = new Set(
     attendance.map(r => new Date(r.checkIn).toLocaleDateString('en-GB'))
   );
-  const daysPresent = uniqueDays.size;
-  const absents = Math.max(0, totalWorkdays - daysPresent);
+
+  const isSaved = payroll.totalWorkdays !== null && payroll.totalWorkdays !== undefined;
+
+  const totalWorkdays = isSaved ? Number(payroll.totalWorkdays) : defaultTotalWorkdays;
+  const daysPresent = isSaved ? Number(payroll.daysPresent) : uniqueDays.size;
+  const absents = isSaved ? Number(payroll.absents) : Math.max(0, totalWorkdays - daysPresent);
+
+  const paidHolidaysCount = isSaved ? Number(payroll.paidHolidaysCount || 0) : 0;
+  const paidHolidaysRate = isSaved ? Number(payroll.paidHolidaysRate || 0) : 0;
+  const publicHolidaysCount = isSaved ? Number(payroll.publicHolidaysCount || 0) : 0;
+  const publicHolidaysRate = isSaved ? Number(payroll.publicHolidaysRate || 0) : 0;
+
+  const holidayPay = (paidHolidaysCount * paidHolidaysRate) + (publicHolidaysCount * publicHolidaysRate);
 
   const basicSalaryVal = Number(payroll.basicSalary);
   const marginEarnedVal = Number(payroll.totalMarginEarned);
-  const gdsAllowance = payroll.agent?.gdsSystem ? 120.00 : 0.00;
-  const travelAllowance = 80.00;
-  const totalAllowances = gdsAllowance + travelAllowance;
-  const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances;
-  
-  const dailyRate = basicSalaryVal / totalWorkdays;
+
+  // Allowances
+  const defaultGdsAllowance = payroll.agent?.gdsSystem ? 120.00 : 0.00;
+  const defaultTravelAllowance = 80.00;
+  const defaultAllowances = [
+    { description: 'Travel & Internet connectivity allowance (Amenities)', amount: defaultTravelAllowance }
+  ];
+  if (defaultGdsAllowance > 0) {
+    defaultAllowances.push({ description: 'GDS Terminal Premium allowance (Amenities)', amount: defaultGdsAllowance });
+  }
+
+  const allowances: { description: string; amount: number }[] = isSaved && payroll.allowances
+    ? (typeof payroll.allowances === 'string' ? JSON.parse(payroll.allowances) : payroll.allowances)
+    : defaultAllowances;
+
+  const totalAllowances = allowances.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances + holidayPay;
+
+  // Deductions
+  const dailyRate = totalWorkdays > 0 ? (basicSalaryVal / totalWorkdays) : 0;
   const absentDeduction = dailyRate * absents;
-  const totalDeductions = absentDeduction;
+
+  const customDeductions: { description: string; amount: number }[] = isSaved && payroll.deductions
+    ? (typeof payroll.deductions === 'string' ? JSON.parse(payroll.deductions) : payroll.deductions)
+    : [];
+
+  const customDeductionsVal = customDeductions.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+  const totalDeductions = absentDeduction + customDeductionsVal;
   const finalNetPay = Math.max(0, grossEarnings - totalDeductions);
 
   const periodFromStr = new Date(payroll.periodFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -953,15 +1569,24 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
                     <td className="py-3 px-3 text-right font-bold text-emerald-600">+£{marginEarnedVal.toFixed(2)}</td>
                     <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
                   </tr>
-                  <tr>
-                    <td className="py-3 px-3 font-semibold text-slate-800">Travel & Internet connectivity allowance</td>
-                    <td className="py-3 px-3 text-right font-bold text-slate-800">+£{travelAllowance.toFixed(2)}</td>
-                    <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
-                  </tr>
-                  {gdsAllowance > 0 && (
+                  {allowances.map((allow, idx) => (
+                    <tr key={`allow-${idx}`}>
+                      <td className="py-3 px-3 font-semibold text-slate-800">{allow.description}</td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{Number(allow.amount).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                    </tr>
+                  ))}
+                  {paidHolidaysCount > 0 && (
                     <tr>
-                      <td className="py-3 px-3 font-semibold text-slate-800">GDS Terminal Premium allowance</td>
-                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{gdsAllowance.toFixed(2)}</td>
+                      <td className="py-3 px-3 font-semibold text-slate-800">Paid Holidays ({paidHolidaysCount} days @ £{paidHolidaysRate.toFixed(2)}/day)</td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                    </tr>
+                  )}
+                  {publicHolidaysCount > 0 && (
+                    <tr>
+                      <td className="py-3 px-3 font-semibold text-slate-800">Public Holidays ({publicHolidaysCount} days @ £{publicHolidaysRate.toFixed(2)}/day)</td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
                       <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
                     </tr>
                   )}
@@ -976,6 +1601,13 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
                       <td className="py-3 px-3 text-right font-bold text-red-600">-£{absentDeduction.toFixed(2)}</td>
                     </tr>
                   )}
+                  {customDeductions.map((ded, idx) => (
+                    <tr key={`ded-${idx}`}>
+                      <td className="py-3 px-3 font-semibold text-slate-800">{ded.description}</td>
+                      <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
+                      <td className="py-3 px-3 text-right font-bold text-red-600">-£{Number(ded.amount).toFixed(2)}</td>
+                    </tr>
+                  ))}
 
                   {/* Totals */}
                   <tr className="bg-slate-50 font-bold border-t border-slate-200">

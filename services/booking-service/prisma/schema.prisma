@@ -83,6 +83,8 @@ model BookingCustomer {
   phoneNumber        String?   @db.VarChar(50)
   passportNumber     String?   @db.VarChar(255)
   passportExpiryDate DateTime? @db.Date
+  dob                DateTime? @db.Date
+  passportImage      String?   @db.Text
   agentName          String?   @db.VarChar(255)
   role               String?   @db.VarChar(50) // 'Leader', 'Family Member'
   createdAt          DateTime  @default(now())

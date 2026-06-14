@@ -9,6 +9,7 @@ interface User {
   role?: string;
   isPlatformAdmin?: boolean;
   permissions?: string[];
+  agentId?: number;
 }
 
 interface AuthState {

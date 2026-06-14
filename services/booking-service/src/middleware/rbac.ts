@@ -12,7 +12,10 @@ const RolePermissions: Record<Role, Permission[]> = {
   [Role.AGENT]: [
     Permission.CREATE_BOOKING, Permission.READ_BOOKING, Permission.UPDATE_BOOKING,
     Permission.CREATE_CLIENT, Permission.READ_CLIENT, Permission.UPDATE_CLIENT,
-    Permission.READ_VENDOR
+    Permission.READ_VENDOR,
+    // Attendance/Payroll defaults for Agent
+    Permission.CREATE_ATTENDANCE, Permission.READ_ATTENDANCE,
+    Permission.READ_PAYROLL
   ],
   [Role.COMPANY_ADMIN]: [
     Permission.CREATE_BOOKING, Permission.READ_BOOKING, Permission.UPDATE_BOOKING, Permission.DELETE_BOOKING,
@@ -20,7 +23,11 @@ const RolePermissions: Record<Role, Permission[]> = {
     Permission.CREATE_VENDOR, Permission.READ_VENDOR, Permission.UPDATE_VENDOR, Permission.DELETE_VENDOR,
     Permission.READ_DASHBOARD,
     Permission.CREATE_USER, Permission.READ_USER, Permission.UPDATE_USER, Permission.DELETE_USER,
-    Permission.CREATE_TRANSACTION, Permission.READ_TRANSACTION, Permission.UPDATE_TRANSACTION, Permission.DELETE_TRANSACTION
+    Permission.CREATE_TRANSACTION, Permission.READ_TRANSACTION, Permission.UPDATE_TRANSACTION, Permission.DELETE_TRANSACTION,
+    // Attendance/Payroll/Templates for Company Admin
+    Permission.CREATE_ATTENDANCE, Permission.READ_ATTENDANCE, Permission.UPDATE_ATTENDANCE, Permission.DELETE_ATTENDANCE,
+    Permission.CREATE_PAYROLL, Permission.READ_PAYROLL, Permission.UPDATE_PAYROLL, Permission.DELETE_PAYROLL,
+    Permission.CREATE_TEMPLATE, Permission.READ_TEMPLATE, Permission.UPDATE_TEMPLATE, Permission.DELETE_TEMPLATE
   ],
   [Role.MAIN_COMPANY_ADMIN]: [
     ...Object.values(Permission) 
@@ -71,7 +78,19 @@ const getFriendlyPermissionName = (permission: string): string => {
     READ_TRANSACTION: 'view financial records',
     UPDATE_TRANSACTION: 'edit financial records',
     DELETE_TRANSACTION: 'delete financial records',
-    MANAGE_SETTINGS: 'manage system settings'
+    MANAGE_SETTINGS: 'manage system settings',
+    CREATE_ATTENDANCE: 'log attendance (clock in/out)',
+    READ_ATTENDANCE: 'view attendance records',
+    UPDATE_ATTENDANCE: 'edit attendance records',
+    DELETE_ATTENDANCE: 'delete attendance records',
+    CREATE_PAYROLL: 'generate payroll slips',
+    READ_PAYROLL: 'view payroll slips',
+    UPDATE_PAYROLL: 'edit payroll slips',
+    DELETE_PAYROLL: 'delete payroll slips',
+    CREATE_TEMPLATE: 'create document templates',
+    READ_TEMPLATE: 'view document templates',
+    UPDATE_TEMPLATE: 'edit document templates',
+    DELETE_TEMPLATE: 'delete document templates'
   };
   return mapping[permission] || permission.toLowerCase().replace(/_/g, ' ');
 };

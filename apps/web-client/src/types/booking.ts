@@ -8,6 +8,8 @@ export interface Passenger {
   phoneNumber: string | null;
   passportNumber: string | null;
   passportExpiryDate: string | null;
+  dob?: string | null;
+  passportImage?: string | null;
   role: string | null;
 }
 

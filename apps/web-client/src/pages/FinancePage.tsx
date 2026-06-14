@@ -247,9 +247,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
     }
   }, [activeTab, search]);
 
-  const [ledgerPage, setLedgerPage] = useState(1);
-  const ledgerPerPage = 10;
-  useEffect(() => { setLedgerPage(1); }, [ledgerTransactions]);
+
 
   useEffect(() => { setApprovalPage(1); }, [approvalPayments]);
 
@@ -279,7 +277,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
   };
 
   const [ledgerFilters, setLedgerFilters] = useState({
-    dateStart: '',
+    dateStart: new Date(new Date().setDate(new Date().getDate() - 10)).toISOString().split('T')[0],
     dateEnd: '',
     agentName: '',
     vendorName: '',
@@ -524,7 +522,6 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-slate-600 font-medium">
                     {ledgerTransactions
-                      .slice((ledgerPage - 1) * ledgerPerPage, ledgerPage * ledgerPerPage)
                       .map((txn) => {
                         const debit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.debitAmount), 0) || 0;
                         const credit = txn.entries?.reduce((sum: number, e: any) => sum + parseFloat(e.creditAmount), 0) || 0;
@@ -626,15 +623,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   </tbody>
                 </table>
               </div>
-              {ledgerTransactions.length > 0 && (
-                <Pagination 
-                  currentPage={ledgerPage} 
-                  totalPages={Math.ceil(ledgerTransactions.length / ledgerPerPage)} 
-                  onPageChange={setLedgerPage} 
-                  itemsPerPage={ledgerPerPage} 
-                  totalItems={ledgerTransactions.length} 
-                />
-              )}
+
             </div>
           </div>
         )

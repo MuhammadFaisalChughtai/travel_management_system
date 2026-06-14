@@ -4686,6 +4686,7 @@ app.get(
       const tenantId = parseInt(req.tenantId!);
       const { dateStart, dateEnd, vendorName, agentName, reference } =
         req.query;
+      const endLimit = dateEnd ? new Date(dateEnd as string) : new Date();
 
       const whereTransaction: any = { tenantId };
 
@@ -4759,6 +4760,31 @@ app.get(
       const accounts = await prisma.ledgerAccount.findMany({
         where: { tenantId },
       });
+
+      // Group ledger entries by accountId and sum their debit/credit up to endLimit
+      const balanceSummaries = await prisma.ledgerEntry.groupBy({
+        by: ['accountId'],
+        _sum: {
+          debitAmount: true,
+          creditAmount: true
+        },
+        where: {
+          account: { tenantId },
+          transaction: {
+            transactionDate: {
+              lte: endLimit
+            }
+          }
+        }
+      });
+
+      // Map the computed balances to the accounts
+      for (const account of accounts) {
+        const summary = balanceSummaries.find(s => s.accountId === account.id);
+        const debitSum = summary?._sum?.debitAmount ? Number(summary._sum.debitAmount) : 0;
+        const creditSum = summary?._sum?.creditAmount ? Number(summary._sum.creditAmount) : 0;
+        account.balance = (creditSum - debitSum) as any;
+      }
 
       // Collect all bookingIds across all allocations to enrich response with booking references
       const bookingIds = new Set<number>();
@@ -4860,7 +4886,6 @@ app.get(
 
       let cumulativeExpenses = 0;
       const startLimit = dateStart ? new Date(dateStart as string) : undefined;
-      const endLimit = dateEnd ? new Date(dateEnd as string) : new Date();
 
       for (const exp of allExpenses) {
         if (exp.type === "one-time") {

@@ -9,6 +9,7 @@ import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
 import { SuperAdminLogin } from './pages/SuperAdminLogin';
 import { BookingDetailsPage } from './pages/BookingDetailsPage';
 import GDPRPassengerForm from './pages/GDPRPassengerForm';
+import { ResetPassword } from './pages/ResetPassword';
 import { 
   ArrowRight, CheckCircle2, Shield, Users, CreditCard, Sparkles, 
   BarChart3, Globe2, Zap, Mail, Phone, Building2, MessageSquare, Loader2, X 
@@ -421,6 +422,7 @@ function App() {
           <Route element={<AuthRoute />}>
             <Route path="login" element={<Login />} />
             <Route path="super-admin/login" element={<SuperAdminLogin />} />
+            <Route path="reset-password" element={<ResetPassword />} />
           </Route>
           
           <Route path="register" element={<Navigate to="/login" replace />} />

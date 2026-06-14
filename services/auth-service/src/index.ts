@@ -573,6 +573,125 @@ app.post('/login', async (req: any, res: Response) => {
   }
 });
 
+// Forgot Password Endpoint - always uses Super Admin SMTP settings
+app.post('/forgot-password', async (req: any, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { tenant: true }
+    });
+
+    // For security, return success even if user not found to prevent user enumeration
+    if (!user) {
+      return res.status(200).json({ message: 'If the email is registered, a password reset link has been sent.' });
+    }
+
+    // Generate token
+    const token = crypto.randomBytes(32).toString('hex');
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: token,
+        resetPasswordSentAt: new Date()
+      }
+    });
+
+    // Resolve request origin dynamically to build the link
+    const requestOrigin = req.headers.origin || req.headers.referer || 'http://localhost:3000';
+    const parsedOrigin = new URL(requestOrigin as string).origin;
+    const resetLink = `${parsedOrigin}/reset-password?token=${token}`;
+
+    // Always use Super Admin SMTP settings (getSmtpTransporter)
+    const transporter = await getSmtpTransporter();
+    
+    // Retrieve SMTP user setting to use as "from" address
+    const userSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
+    const fromEmail = userSetting?.value || 'muhammadfaisalchughtai@gmail.com';
+    const companyName = user.tenant.name || 'Travel Booking Management System';
+
+    const mailOptions = {
+      from: `"${companyName} Support" <${fromEmail}>`,
+      to: user.email,
+      subject: 'Reset Your Password - Travel Booking Management System',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #1e3a8a; text-align: center;">Reset Your Password</h2>
+          <p>Hello ${user.name || 'User'},</p>
+          <p>We received a request to reset your password for your Travel Booking Management System account. Click the button below to set a new password:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetLink}" target="_blank" style="background-color: #1e3a8a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+          </div>
+          <p>This password reset link is valid for <strong>1 hour</strong>.</p>
+          <p>If you did not request a password reset, please ignore this email or contact your system administrator.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+          <p style="font-size: 11px; color: #64748b; text-align: center;">This is an automated security email. Please do not reply directly.</p>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Password reset link sent to ${user.email} using Super Admin SMTP`);
+
+    res.status(200).json({ message: 'If the email is registered, a password reset link has been sent.' });
+  } catch (error: any) {
+    console.error('Forgot Password Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Reset Password Endpoint
+app.post('/reset-password', async (req: any, res: Response) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and new password are required.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { resetPasswordToken: token }
+    });
+
+    if (!user || !user.resetPasswordSentAt) {
+      return res.status(400).json({ error: 'Invalid or expired reset token.' });
+    }
+
+    // Check token expiry (1 hour)
+    const tokenSentTime = new Date(user.resetPasswordSentAt).getTime();
+    if (Date.now() - tokenSentTime > 3600000) {
+      return res.status(400).json({ error: 'Reset token has expired.' });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Update password and clear token
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        encryptedPassword: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordSentAt: null
+      }
+    });
+
+    res.status(200).json({ message: 'Your password has been successfully reset.' });
+  } catch (error: any) {
+    console.error('Reset Password Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // Verify Token Route
 app.post('/verify-token', (req: any, res: Response) => {
   const token = req.body.token || req.headers.authorization?.split(' ')[1];
@@ -693,42 +812,6 @@ app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
   }
 });
 
-app.put('/tenants/:id', requirePlatformAdmin, async (req: any, res: Response) => {
-  try {
-    const id = parseInt(req.params.id);
-    const parsedData = updateTenantSchema.parse(req.body);
-
-    if (parsedData.domain) {
-      const existingDomain = await prisma.tenant.findFirst({
-        where: { domain: parsedData.domain, NOT: { id } }
-      });
-      if (existingDomain) {
-        return res.status(409).json({ error: 'Tenant domain already registered' });
-      }
-    }
-
-    const updateData: any = { ...parsedData };
-    if (parsedData.trialEndsAt !== undefined) {
-      updateData.trialEndsAt = parsedData.trialEndsAt ? new Date(parsedData.trialEndsAt) : null;
-    }
-
-    const updatedTenant = await prisma.tenant.update({
-      where: { id },
-      data: updateData
-    });
-
-    res.status(200).json({ message: 'Tenant updated successfully', tenant: updatedTenant });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: (error as any).errors });
-    }
-    console.error('Update Tenant Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// ─── AGENT MANAGEMENT ROUTES ─────────────────────────────────────────────────
-
 // Helper: require tenant context (from gateway headers)
 const requireTenantContext = (req: any, res: Response, next: any) => {
   const tenantId = req.headers['x-tenant-id'];
@@ -783,6 +866,42 @@ app.put('/tenants/profile', requireTenantContext, async (req: any, res: Response
     res.status(500).json({ error: 'Internal Server Error', message: error?.message });
   }
 });
+
+app.put('/tenants/:id', requirePlatformAdmin, async (req: any, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const parsedData = updateTenantSchema.parse(req.body);
+
+    if (parsedData.domain) {
+      const existingDomain = await prisma.tenant.findFirst({
+        where: { domain: parsedData.domain, NOT: { id } }
+      });
+      if (existingDomain) {
+        return res.status(409).json({ error: 'Tenant domain already registered' });
+      }
+    }
+
+    const updateData: any = { ...parsedData };
+    if (parsedData.trialEndsAt !== undefined) {
+      updateData.trialEndsAt = parsedData.trialEndsAt ? new Date(parsedData.trialEndsAt) : null;
+    }
+
+    const updatedTenant = await prisma.tenant.update({
+      where: { id },
+      data: updateData
+    });
+
+    res.status(200).json({ message: 'Tenant updated successfully', tenant: updatedTenant });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: (error as any).errors });
+    }
+    console.error('Update Tenant Error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ─── AGENT MANAGEMENT ROUTES ─────────────────────────────────────────────────
 
 app.post('/tenants/send-email', requireTenantContext, async (req: any, res: Response) => {
   try {

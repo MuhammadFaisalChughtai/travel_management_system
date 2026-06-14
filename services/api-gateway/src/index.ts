@@ -44,11 +44,15 @@ const authenticateAndPropagate = async (req: Request, res: Response, next: NextF
     path.startsWith('/auth/super-admin/register') ||
     path.startsWith('/auth/request-demo') ||
     path.startsWith('/auth/upload') ||
+    path.startsWith('/auth/forgot-password') ||
+    path.startsWith('/auth/reset-password') ||
     path.startsWith('/api/auth/login') ||
     path.startsWith('/api/auth/register') ||
     path.startsWith('/api/auth/super-admin/register') ||
     path.startsWith('/api/auth/request-demo') ||
     path.startsWith('/api/auth/upload') ||
+    path.startsWith('/api/auth/forgot-password') ||
+    path.startsWith('/api/auth/reset-password') ||
     path.startsWith('/api/public') ||
     path.startsWith('/public')
   ) {

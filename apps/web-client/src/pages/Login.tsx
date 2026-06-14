@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, Navigation2, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Navigation2, Loader2, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../api/axios';
 import { useAuthStore } from '../store/authStore';
 import { TechbarredLogo } from '../components/TechbarredLogo';
+import toast from 'react-hot-toast';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -13,8 +14,28 @@ export function Login() {
   const [error, setError] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore(state => state.setAuth);
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setErrorMessage('');
+    try {
+      await api.post('/auth/forgot-password', { email: forgotEmail });
+      setForgotSuccess(true);
+      toast.success('Reset link sent if email exists.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send reset link');
+      setErrorMessage(err.response?.data?.message || '');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const rememberedEmail = localStorage.getItem('remembered_email');
@@ -69,11 +90,14 @@ export function Login() {
             <Navigation2 className="h-6 w-6" />
           </div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight uppercase leading-tight">
-            Travel Booking<br />
-            <span className="text-primary-900">Management System</span>
+            {isForgotMode ? (
+              <>Reset Your<br /><span className="text-primary-900">Password</span></>
+            ) : (
+              <>Travel Booking<br /><span className="text-primary-900">Management System</span></>
+            )}
           </h1>
           <p className="mt-2 text-[11px] font-semibold text-slate-500 uppercase tracking-widest">
-            Secure Agent Portal
+            {isForgotMode ? 'Password Recovery' : 'Secure Agent Portal'}
           </p>
         </div>
 
@@ -86,90 +110,172 @@ export function Login() {
           </div>
         )}
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-3">
-            <div>
-              <label htmlFor="email-address" className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wide">Work Email</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-4 w-4 text-slate-400" />
+        {isForgotMode ? (
+          forgotSuccess ? (
+            <div className="space-y-4 text-center py-4">
+              <div className="mx-auto w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                If the email is registered in our system, a password reset link has been sent to it. Please check your inbox.
+              </p>
+              <button
+                onClick={() => {
+                  setIsForgotMode(false);
+                  setForgotSuccess(false);
+                  setForgotEmail('');
+                  setError('');
+                }}
+                className="text-[11px] font-bold text-primary-900 hover:underline"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          ) : (
+            <form className="space-y-4" onSubmit={handleForgotSubmit}>
+              <div>
+                <label htmlFor="forgot-email" className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wide">Work Email</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+                  </div>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    required
+                    className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 text-[13px] transition-all bg-slate-50 font-medium"
+                    placeholder="agent@company.com"
+                  />
                 </div>
-                <input
-                  id="email-address"
-                  name="email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                  className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 text-[13px] transition-all bg-slate-50 font-medium"
-                  placeholder="agent@company.com"
-                />
+              </div>
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="group relative w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent text-[13px] font-bold rounded-lg text-white bg-primary-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900 shadow-md shadow-primary-900/20 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Sending Link...
+                    </>
+                  ) : (
+                    <>
+                      Send Reset Link
+                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotMode(false);
+                    setError('');
+                  }}
+                  className="text-[11px] font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            </form>
+          )
+        ) : (
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="email-address" className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wide">Work Email</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    id="email-address"
+                    name="email"
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    autoComplete="email"
+                    required
+                    className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 text-[13px] transition-all bg-slate-50 font-medium"
+                    placeholder="agent@company.com"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="password" className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wide">Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 text-[13px] transition-all bg-slate-50 font-medium"
+                    placeholder="••••••••"
+                  />
+                </div>
               </div>
             </div>
-            <div>
-              <label htmlFor="password" className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wide">Password</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-4 w-4 text-slate-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                  className="appearance-none rounded-lg relative block w-full pl-9 px-3 py-2.5 border border-slate-200 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 text-[13px] transition-all bg-slate-50 font-medium"
-                  placeholder="••••••••"
-                />
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[11px]">
+              <div className="flex items-center">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-600 hover:text-slate-900 select-none font-medium">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={e => setRememberMe(e.target.checked)}
+                    className="rounded border-slate-300 text-primary-900 focus:ring-primary-900 h-3.5 w-3.5 transition-colors"
+                  />
+                  <span>Remember me</span>
+                </label>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotMode(true);
+                    setError('');
+                  }}
+                  className="font-bold text-primary-900 hover:text-primary-700 transition-colors"
+                >
+                  Forgot password?
+                </button>
               </div>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[11px]">
-            <div className="flex items-center">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600 hover:text-slate-900 select-none font-medium">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="rounded border-slate-300 text-primary-900 focus:ring-primary-900 h-3.5 w-3.5 transition-colors"
-                />
-                <span>Remember me</span>
-              </label>
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent text-[13px] font-bold rounded-lg text-white bg-primary-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900 shadow-md shadow-primary-900/20 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Authenticating...
+                  </>
+                ) : (
+                  <>
+                    Access System
+                    <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
             </div>
-
-            <div>
-              <a href="#" className="font-bold text-primary-900 hover:text-primary-700 transition-colors">
-                Forgot password?
-              </a>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent text-[13px] font-bold rounded-lg text-white bg-primary-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-900 shadow-md shadow-primary-900/20 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Authenticating...
-                </>
-              ) : (
-                <>
-                  Access System
-                  <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+          </form>
+        )
         <div className="mt-6 pt-5 border-t border-slate-100 flex justify-center">
           <TechbarredLogo />
         </div>

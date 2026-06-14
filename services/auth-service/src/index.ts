@@ -346,7 +346,19 @@ app.post('/upload', upload.single('file'), async (req: any, res: Response) => {
       'Content-Type': file.mimetype,
     });
 
-    const externalUrl = process.env.MINIO_EXTERNAL_URL || 'http://localhost:9010';
+    let externalUrl = process.env.MINIO_EXTERNAL_URL;
+    if (!externalUrl) {
+      const host = req.headers.host || '';
+      const origin = req.headers.origin || '';
+      const referer = req.headers.referer || '';
+      const forwardedHost = req.headers['x-forwarded-host'] || '';
+      
+      const isProd = [host, origin, referer, forwardedHost].some(h => 
+        typeof h === 'string' && h.toLowerCase().includes('techbarred.com')
+      );
+      
+      externalUrl = isProd ? 'https://bucket.techbarred.com' : 'http://localhost:9010';
+    }
     const fileUrl = `${externalUrl}/${BUCKET_NAME}/${fileName}`;
 
     res.status(200).json({ url: fileUrl });

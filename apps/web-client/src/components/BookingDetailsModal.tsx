@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../api/axios";
 import type { BookingDetail } from "../types/booking";
 import { useAuthStore } from "../store/authStore";
+import { useCurrency } from "../utils/currency";
 import { EmptyState } from './shared/EmptyState';
 
 import { AccordionSection } from "./AccordionSection";
@@ -62,6 +63,7 @@ export function BookingDetailsModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const { symbol } = useCurrency();
   const { user } = useAuthStore();
 
   const hasPermission = (permission: string) => {
@@ -1163,12 +1165,12 @@ export function BookingDetailsModal({
                                           </span>
                                           <span className="text-slate-600 text-sm font-semibold font-mono">
                                             {isAdd ? (
-                                              `£${newP.toFixed(2)}`
+                                              `${symbol}${newP.toFixed(2)}`
                                             ) : (
                                               <>
-                                                £{oldP.toFixed(2)} → £{newP.toFixed(2)} 
+                                                {symbol}{oldP.toFixed(2)} → {symbol}{newP.toFixed(2)} 
                                                 <span className={`ml-1 font-bold ${isDecrease ? 'text-rose-600' : 'text-amber-600'}`}>
-                                                  ({isDecrease ? '-' : '+'}£{Math.abs(diff).toFixed(2)})
+                                                  ({isDecrease ? '-' : '+'}{symbol}{Math.abs(diff).toFixed(2)})
                                                 </span>
                                               </>
                                             )}

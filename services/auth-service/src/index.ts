@@ -297,7 +297,8 @@ const createTenantSchema = z.object({
   subscriptionStatus: z.string().optional().default('trial'),
   trialDurationDays: z.number().optional().default(14),
   adminEmail: z.string().email(),
-  adminPassword: z.string().min(6)
+  adminPassword: z.string().min(6),
+  currency: z.string().optional().default('GBP')
 });
 
 const updateTenantSchema = z.object({
@@ -312,7 +313,8 @@ const updateTenantSchema = z.object({
   phone: z.string().optional().nullable(),
   subscriptionPlan: z.string().optional(),
   subscriptionStatus: z.string().optional(),
-  trialEndsAt: z.string().optional().nullable()
+  trialEndsAt: z.string().optional().nullable(),
+  currency: z.string().optional()
 });
 
 // Middleware to authorize Platform Super Admins downstream
@@ -562,7 +564,7 @@ app.post('/login', async (req: any, res: Response) => {
     res.status(200).json({ 
       message: 'Login successful',
       token, 
-      user: { id: user.id, email: user.email, name: user.name, tenantId: user.tenantId, role: userRole, permissions, agentId: user.agentId } 
+      user: { id: user.id, email: user.email, name: user.name, tenantId: user.tenantId, role: userRole, permissions, agentId: user.agentId, currency: user.tenant.currency } 
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -769,7 +771,8 @@ app.post('/tenants', requirePlatformAdmin, async (req: any, res: Response) => {
           phone: parsedData.phone || null,
           subscriptionPlan: parsedData.subscriptionPlan || 'trial',
           subscriptionStatus: parsedData.subscriptionPlan === 'trial' ? 'trial' : 'active',
-          trialEndsAt
+          trialEndsAt,
+          currency: parsedData.currency || 'GBP'
         }
       });
 

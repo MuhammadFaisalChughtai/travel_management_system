@@ -9,6 +9,7 @@ import { api } from '../api/axios';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
+import { useCurrency } from '../utils/currency';
 
 interface Agent {
   id: number;
@@ -54,15 +55,6 @@ interface Payroll {
   };
 }
 
-function fmt(n: number | string) {
-  return `£${Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-function fmtPeriod(from: string, to: string) {
-  const f = new Date(from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const t = new Date(to).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  return `${f} – ${t}`;
-}
-
 const STATUS_STYLES: Record<string, string> = {
   Draft: 'bg-slate-100 text-slate-600 border-slate-200',
   Sent: 'bg-blue-50 text-blue-700 border-blue-100',
@@ -78,6 +70,7 @@ const STATUS_ICONS: Record<string, any> = {
 function GeneratePayrollModal({
   agents, onClose, onCreated
 }: { agents: Agent[]; onClose: () => void; onCreated: () => void }) {
+  const { symbol } = useCurrency();
   const [agentId, setAgentId] = useState('');
   const [periodFrom, setPeriodFrom] = useState(() => {
     const d = new Date(); d.setDate(1);
@@ -138,7 +131,7 @@ function GeneratePayrollModal({
               <option value="">-- Select Agent --</option>
               {agents.map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.name} {a.basicSalary ? `(£${Number(a.basicSalary).toFixed(2)}/mo)` : '(no salary set)'}
+                  {a.name} {a.basicSalary ? `(${symbol}${Number(a.basicSalary).toFixed(2)}/mo)` : '(no salary set)'}
                 </option>
               ))}
             </select>
@@ -185,6 +178,7 @@ function GeneratePayrollModal({
 function SetSalaryModal({
   agent, onClose, onSaved
 }: { agent: Agent; onClose: () => void; onSaved: () => void }) {
+  const { symbol } = useCurrency();
   const [salary, setSalary] = useState(agent.basicSalary !== null ? String(agent.basicSalary) : '');
   const [loading, setLoading] = useState(false);
 
@@ -229,9 +223,9 @@ function SetSalaryModal({
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Monthly Basic Salary (£)</label>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">{`Monthly Basic Salary (${symbol})`}</label>
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[15px]">£</span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[15px]">{symbol}</span>
               <input type="number" min="0" step="0.01" value={salary} onChange={e => setSalary(e.target.value)}
                 placeholder="e.g. 2000.00"
                 className="w-full border border-slate-200 rounded-xl pl-8 pr-4 py-2.5 text-slate-800 text-[14px] font-bold outline-none focus:border-primary-500 placeholder:text-slate-300 placeholder:font-normal" />
@@ -257,6 +251,7 @@ function SetSalaryModal({
 
 // ─── Main PayrollPage ─────────────────────────────────────────────────────────
 export function PayrollPage() {
+  const { symbol, format } = useCurrency();
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,8 +285,6 @@ export function PayrollPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // handleSendSlip replaced by SendPayrollSlipModal
-
   const handleMarkPaid = async (payrollId: number) => {
     setMarkingPaidId(payrollId);
     try {
@@ -305,7 +298,6 @@ export function PayrollPage() {
     }
   };
 
-  // Summary
   const totalPayroll = payrolls.reduce((s, p) => s + Number(p.totalPaid), 0);
   const totalMargin = payrolls.reduce((s, p) => s + Number(p.totalMarginEarned), 0);
   const totalSalary = payrolls.reduce((s, p) => s + Number(p.basicSalary), 0);
@@ -313,7 +305,6 @@ export function PayrollPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
@@ -332,12 +323,11 @@ export function PayrollPage() {
         </button>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Payroll', value: fmt(totalPayroll), icon: Banknote, color: 'primary', sub: 'All records' },
-          { label: 'Total Salary', value: fmt(totalSalary), icon: Wallet, color: 'amber', sub: 'Basic salary sum' },
-          { label: 'Total Commission', value: fmt(totalMargin), icon: TrendingUp, color: 'emerald', sub: 'Margin earned' },
+          { label: 'Total Payroll', value: format(totalPayroll), icon: Banknote, color: 'primary', sub: 'All records' },
+          { label: 'Total Salary', value: format(totalSalary), icon: Wallet, color: 'amber', sub: 'Basic salary sum' },
+          { label: 'Total Commission', value: format(totalMargin), icon: TrendingUp, color: 'emerald', sub: 'Margin earned' },
           { label: 'Paid Out', value: `${paidCount} / ${payrolls.length}`, icon: CheckCircle2, color: 'indigo', sub: 'Payrolls paid' },
         ].map(card => (
           <div key={card.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
@@ -351,7 +341,6 @@ export function PayrollPage() {
         ))}
       </div>
 
-      {/* Agent Salary Overview */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-[14px] flex items-center gap-2">
@@ -376,7 +365,7 @@ export function PayrollPage() {
               <div className="flex items-center gap-3">
                 {agent.basicSalary !== null ? (
                   <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-[12px] font-bold">
-                    {fmt(agent.basicSalary)}/mo
+                    {format(agent.basicSalary)}/mo
                   </span>
                 ) : (
                   <span className="px-3 py-1 bg-slate-50 text-slate-400 border border-slate-100 rounded-lg text-[12px]">
@@ -396,7 +385,6 @@ export function PayrollPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
@@ -422,7 +410,6 @@ export function PayrollPage() {
         <span className="text-[12px] text-slate-400 ml-auto">{payrolls.length} record{payrolls.length !== 1 ? 's' : ''}</span>
       </div>
 
-      {/* Payroll Records */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
           <h2 className="font-bold text-slate-800 text-[14px] flex items-center gap-2">
@@ -475,12 +462,12 @@ export function PayrollPage() {
                         </div>
                       </td>
                       <td className="py-3 px-5 text-slate-600 font-medium whitespace-nowrap">
-                        {fmtPeriod(p.periodFrom, p.periodTo)}
+                        {new Date(p.periodFrom).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – {new Date(p.periodTo).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
-                      <td className="py-3 px-5 text-right font-bold text-slate-700">{fmt(p.basicSalary)}</td>
-                      <td className="py-3 px-5 text-right font-bold text-emerald-600">+{fmt(p.totalMarginEarned)}</td>
+                      <td className="py-3 px-5 text-right font-bold text-slate-700">{format(p.basicSalary)}</td>
+                      <td className="py-3 px-5 text-right font-bold text-emerald-600">+{format(p.totalMarginEarned)}</td>
                       <td className="py-3 px-5 text-right">
-                        <span className="text-[14px] font-extrabold text-primary-700">{fmt(p.totalPaid)}</span>
+                        <span className="text-[14px] font-extrabold text-primary-700">{format(p.totalPaid)}</span>
                       </td>
                       <td className="py-3 px-5">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold ${STATUS_STYLES[p.status]}`}>
@@ -496,7 +483,6 @@ export function PayrollPage() {
                       <td className="py-3 px-5 text-slate-500 max-w-[120px] truncate text-[11px]">{p.notes || '—'}</td>
                       <td className="py-3 px-5">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* Send Slip */}
                           {p.status !== 'Paid' && (
                             <button
                               onClick={() => setSendSlipPayroll(p)}
@@ -507,7 +493,6 @@ export function PayrollPage() {
                               {p.status === 'Sent' ? 'Resend' : 'Send Slip'}
                             </button>
                           )}
-                          {/* View Slip */}
                           <button
                             onClick={() => setViewSlipPayroll(p)}
                             title="View / Print Salary Slip"
@@ -516,7 +501,6 @@ export function PayrollPage() {
                             <FileText className="w-3.5 h-3.5" />
                             View Slip
                           </button>
-                          {/* Mark Paid */}
                           {p.status !== 'Paid' && (
                             <button
                               onClick={() => handleMarkPaid(p.id)}
@@ -551,7 +535,6 @@ export function PayrollPage() {
         )}
       </div>
 
-      {/* Modals */}
       <AnimatePresence>
         {showGenerate && (
           <GeneratePayrollModal agents={agents} onClose={() => setShowGenerate(false)} onCreated={fetchData} />
@@ -585,6 +568,7 @@ interface SendPayrollSlipModalProps {
 }
 
 function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModalProps) {
+  const { symbol } = useCurrency();
   const [email, setEmail] = useState(payroll.agent.personalEmail || payroll.agent.email || '');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -593,7 +577,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
   const [checkingSmtp, setCheckingSmtp] = useState(true);
   const [tenant, setTenant] = useState<any>(null);
 
-  // Customization state
   const [totalWorkdays, setTotalWorkdays] = useState(() => 
     payroll.totalWorkdays !== null && payroll.totalWorkdays !== undefined ? Number(payroll.totalWorkdays) : 22
   );
@@ -617,7 +600,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
     payroll.publicHolidaysRate !== null && payroll.publicHolidaysRate !== undefined ? Number(payroll.publicHolidaysRate) : 0
   );
 
-  // Allowances & Deductions
   const [allowances, setAllowances] = useState<{ description: string; amount: number }[]>(() => {
     if (payroll.allowances !== null && payroll.allowances !== undefined) {
       return typeof payroll.allowances === 'string' ? JSON.parse(payroll.allowances) : payroll.allowances;
@@ -631,7 +613,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
     return [];
   });
 
-  // Add allowance/deduction form states
   const [newAllowDesc, setNewAllowDesc] = useState('');
   const [newAllowAmt, setNewAllowAmt] = useState('');
   const [newDedDesc, setNewDedDesc] = useState('');
@@ -642,12 +623,10 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
   const basicSalaryVal = Number(payroll.basicSalary);
   const marginEarnedVal = Number(payroll.totalMarginEarned);
 
-  // Fetch initial parameters
   useEffect(() => {
     let active = true;
     const isSaved = payroll.totalWorkdays !== null && payroll.totalWorkdays !== undefined;
     
-    // Check SMTP Settings
     api.get('/auth/tenants/profile')
       .then(res => {
         if (!active) return;
@@ -663,7 +642,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
         if (active) setCheckingSmtp(false);
       });
 
-    // Fetch actual attendance
     api.get(`/agents/${payroll.agentId}/attendance`, {
       params: { from: payroll.periodFrom.slice(0, 10), to: payroll.periodTo.slice(0, 10) }
     })
@@ -678,7 +656,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
         if (!isSaved) {
           setDaysPresent(computedPresent);
 
-          // Compute calendar weekdays
           let weekdaysCount = 0;
           const curDate = new Date(payroll.periodFrom);
           const endDate = new Date(payroll.periodTo);
@@ -693,12 +670,10 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
           const computedAbsents = Math.max(0, defaultTotalWorkdays - computedPresent);
           setAbsents(computedAbsents);
 
-          // Compute rates
           const computedDailyRate = defaultTotalWorkdays > 0 ? (basicSalaryVal / defaultTotalWorkdays) : 0;
           setPaidHolidaysRate(Number(computedDailyRate.toFixed(2)));
           setPublicHolidaysRate(Number((computedDailyRate * 1.5).toFixed(2)));
 
-          // Default allowances
           const gdsAllowance = payroll.agent?.gdsSystem ? 120.00 : 0.00;
           const travelAllowance = 80.00;
           const initialAllowances = [
@@ -719,12 +694,10 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
     return () => { active = false; };
   }, [payroll, basicSalaryVal]);
 
-  // Sync absents when present or workdays change, unless overridden
   const handleWorkdaysChange = (val: number) => {
     const sanitizedVal = Math.max(1, val);
     setTotalWorkdays(sanitizedVal);
     setAbsents(Math.max(0, sanitizedVal - daysPresent));
-    // update rates
     const computedDailyRate = sanitizedVal > 0 ? (basicSalaryVal / sanitizedVal) : 0;
     setPaidHolidaysRate(Number(computedDailyRate.toFixed(2)));
     setPublicHolidaysRate(Number((computedDailyRate * 1.5).toFixed(2)));
@@ -758,7 +731,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
     setDeductions(deductions.filter((_, i) => i !== index));
   };
 
-  // Calculations
   const totalAllowances = allowances.reduce((sum, a) => sum + Number(a.amount || 0), 0);
   const dailyRate = totalWorkdays > 0 ? (basicSalaryVal / totalWorkdays) : 0;
   const absentDeduction = dailyRate * absents;
@@ -848,7 +820,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
         transition={{ type: 'spring', damping: 25, stiffness: 240 }}
         className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden max-h-[92vh] flex flex-col print:shadow-none print:rounded-none print:max-h-none print:bg-white"
       >
-        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 text-white relative overflow-hidden shrink-0 flex items-center justify-between print:hidden">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
           <div className="relative z-10 flex items-center gap-3">
@@ -876,9 +847,7 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
           </div>
         ) : (
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row print:block">
-            {/* Left Column: Form Settings (Control Panel) */}
             <div className="w-full lg:w-[45%] p-6 overflow-y-auto space-y-5 border-r border-slate-100 print:hidden shrink-0">
-              {/* Recipient details */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
                 <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Recipient Settings</h4>
                 <div>
@@ -896,10 +865,8 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                 </div>
               </div>
 
-              {/* Calendar Configs */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
                 <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Calendar Parameters</h4>
-                
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Workdays (Presets)</label>
                   <div className="flex gap-2 mb-2">
@@ -947,10 +914,8 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                 </div>
               </div>
 
-              {/* Holiday Configurations */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
                 <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Holidays Settings</h4>
-                
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Paid Holiday Days</label>
@@ -963,7 +928,7 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Paid Holiday Rate (£/day)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{`Paid Holiday Rate (${symbol}/day)`}</label>
                     <input
                       type="number"
                       min="0"
@@ -973,7 +938,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                     />
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Public Holiday Days</label>
@@ -986,7 +950,7 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Public Holiday Rate (£/day)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{`Public Holiday Rate (${symbol}/day)`}</label>
                     <input
                       type="number"
                       min="0"
@@ -998,20 +962,18 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                 </div>
               </div>
 
-              {/* Dynamic Amenities/Allowances */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
                 <div className="flex justify-between items-center">
                   <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Amenities (Allowances)</h4>
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">+£{totalAllowances.toFixed(2)}</span>
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{`+${symbol}${totalAllowances.toFixed(2)}`}</span>
                 </div>
-                
                 {allowances.length > 0 && (
                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                     {allowances.map((item, index) => (
                       <div key={index} className="flex justify-between items-center bg-white border border-slate-200 rounded-lg p-2 text-xs">
                         <span className="font-semibold text-slate-700 truncate max-w-[70%]">{item.description}</span>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-800">£{item.amount.toFixed(2)}</span>
+                          <span className="font-bold text-slate-800">{symbol}{item.amount.toFixed(2)}</span>
                           <button
                             type="button"
                             onClick={() => removeAllowance(index)}
@@ -1024,7 +986,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                     ))}
                   </div>
                 )}
-
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1051,19 +1012,17 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                 </div>
               </div>
 
-              {/* Dynamic Custom Deductions */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
                 <div className="flex justify-between items-center">
                   <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Custom Deductions</h4>
                 </div>
-                
                 {deductions.length > 0 && (
                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                     {deductions.map((item, index) => (
                       <div key={index} className="flex justify-between items-center bg-white border border-slate-200 rounded-lg p-2 text-xs">
                         <span className="font-semibold text-slate-700 truncate max-w-[70%]">{item.description}</span>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-red-600">-£{item.amount.toFixed(2)}</span>
+                          <span className="font-bold text-red-600">-{symbol}{item.amount.toFixed(2)}</span>
                           <button
                             type="button"
                             onClick={() => removeDeduction(index)}
@@ -1076,7 +1035,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                     ))}
                   </div>
                 )}
-
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1103,7 +1061,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                 </div>
               </div>
 
-              {/* Notes & Remarks */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Notes & Remarks</label>
                 <textarea
@@ -1115,10 +1072,8 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
               </div>
             </div>
 
-            {/* Right Column: Interactive Live Slip Preview */}
             <div className="flex-1 bg-slate-50 overflow-y-auto p-6 flex flex-col justify-between print:bg-white print:p-0">
               <div id="printable-custom-slip" className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-slate-800 print:border-none print:shadow-none print:rounded-none">
-                {/* Header */}
                 <div className="flex justify-between items-start border-b border-slate-200 pb-5 mb-5">
                   <div>
                     {logoUrl && <img src={logoUrl} alt="Logo" className="h-10 mb-2 object-contain" />}
@@ -1133,7 +1088,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                   </div>
                 </div>
 
-                {/* Employee / Meta grid */}
                 <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4 mb-4 text-[11px]">
                   <div className="space-y-1.5">
                     <div>
@@ -1157,7 +1111,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                   </div>
                 </div>
 
-                {/* Attendance Card */}
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-5 print:bg-slate-50">
                   <h5 className="text-[9px] uppercase font-black text-slate-400 tracking-wider mb-2">Attendance Summary</h5>
                   <div className="grid grid-cols-3 gap-3 text-center">
@@ -1176,7 +1129,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                   </div>
                 </div>
 
-                {/* Financial items table */}
                 <table className="w-full text-left border-collapse text-[11px] mb-5">
                   <thead>
                     <tr className="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 font-bold border-t border-b border-slate-200">
@@ -1188,66 +1140,65 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                   <tbody className="divide-y divide-slate-100">
                     <tr>
                       <td className="py-2 px-3 font-semibold text-slate-800">Basic Contract Salary</td>
-                      <td className="py-2 px-3 text-right font-bold text-slate-800">£{basicSalaryVal.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right font-bold text-slate-800">{symbol}{basicSalaryVal.toFixed(2)}</td>
                       <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
                     </tr>
                     <tr>
                       <td className="py-2 px-3 font-semibold text-slate-800">Booking Commission / Margin Share</td>
-                      <td className="py-2 px-3 text-right font-bold text-emerald-600">+£{marginEarnedVal.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right font-bold text-emerald-600">+{symbol}{marginEarnedVal.toFixed(2)}</td>
                       <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
                     </tr>
                     {allowances.map((item, i) => (
                       <tr key={i}>
                         <td className="py-2 px-3 font-semibold text-slate-800">{item.description}</td>
-                        <td className="py-2 px-3 text-right font-bold text-slate-800">+£{Number(item.amount).toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-800">+{symbol}{Number(item.amount).toFixed(2)}</td>
                         <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
                       </tr>
                     ))}
                     {paidHolidaysCount > 0 && (
                       <tr>
-                        <td className="py-2 px-3 font-semibold text-slate-800">Paid Holidays ({paidHolidaysCount} days @ £{paidHolidaysRate.toFixed(2)}/day)</td>
-                        <td className="py-2 px-3 text-right font-bold text-slate-800">+£{(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
+                        <td className="py-2 px-3 font-semibold text-slate-800">Paid Holidays ({paidHolidaysCount} days @ {symbol}{paidHolidaysRate.toFixed(2)}/day)</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-800">+{symbol}{(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
                         <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
                       </tr>
                     )}
                     {publicHolidaysCount > 0 && (
                       <tr>
-                        <td className="py-2 px-3 font-semibold text-slate-800">Public Holidays ({publicHolidaysCount} days @ £{publicHolidaysRate.toFixed(2)}/day)</td>
-                        <td className="py-2 px-3 text-right font-bold text-slate-800">+£{(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
+                        <td className="py-2 px-3 font-semibold text-slate-800">Public Holidays ({publicHolidaysCount} days @ {symbol}{publicHolidaysRate.toFixed(2)}/day)</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-800">+{symbol}{(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
                         <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
                       </tr>
                     )}
                     {absents > 0 && dailyRate > 0 && (
                       <tr>
-                        <td className="py-2 px-3 font-semibold text-slate-800">Absenteeism Penalty ({absents} days absent @ £{dailyRate.toFixed(2)}/day)</td>
+                        <td className="py-2 px-3 font-semibold text-slate-800">Absenteeism Penalty ({absents} days absent @ {symbol}{dailyRate.toFixed(2)}/day)</td>
                         <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
-                        <td className="py-2 px-3 text-right font-bold text-red-600">-£{absentDeduction.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-red-600">-{symbol}{absentDeduction.toFixed(2)}</td>
                       </tr>
                     )}
                     {deductions.map((item, i) => (
                       <tr key={i}>
                         <td className="py-2 px-3 font-semibold text-slate-800">{item.description}</td>
                         <td className="py-2 px-3 text-right text-slate-350">&mdash;</td>
-                        <td className="py-2 px-3 text-right font-bold text-red-600">-£{Number(item.amount).toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-red-600">-{symbol}{Number(item.amount).toFixed(2)}</td>
                       </tr>
                     ))}
 
                     <tr className="bg-slate-50 font-bold border-t border-slate-200">
                       <td className="py-2 px-3 text-slate-700">Subtotals</td>
-                      <td className="py-2 px-3 text-right text-slate-850">£{grossEarnings.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-red-650">£{totalDeductions.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-slate-850">{symbol}{grossEarnings.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-red-650">{symbol}{totalDeductions.toFixed(2)}</td>
                     </tr>
 
                     <tr className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white font-bold">
                       <td className="py-3 px-4 rounded-l-xl text-[12px] border-none">Total Net Payable (Net Salary)</td>
                       <td colSpan={2} className="py-3 px-4 text-right text-[14px] text-sky-400 font-black rounded-r-xl border-none">
-                        £{finalNetPay.toFixed(2)}
+                        {symbol}{finalNetPay.toFixed(2)}
                       </td>
                     </tr>
                   </tbody>
                 </table>
 
-                {/* Notes */}
                 {notes && (
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 text-[10px] text-amber-900 leading-relaxed">
                     <strong>Notes & Remarks:</strong>
@@ -1256,7 +1207,6 @@ function SendPayrollSlipModal({ payroll, onClose, onSent }: SendPayrollSlipModal
                 )}
               </div>
 
-              {/* SMTP Warning & Action Buttons */}
               <div className="mt-4 space-y-3 print:hidden shrink-0">
                 {checkingSmtp ? (
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 justify-center">
@@ -1324,6 +1274,7 @@ interface ViewSalarySlipModalProps {
 }
 
 function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
+  const { symbol } = useCurrency();
   const [attendance, setAttendance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<any>(null);
@@ -1346,7 +1297,6 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
     return () => { active = false; };
   }, [payroll]);
 
-  // Compute workdays
   let weekdaysCount = 0;
   const curDate = new Date(payroll.periodFrom);
   const endDate = new Date(payroll.periodTo);
@@ -1379,7 +1329,6 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
   const basicSalaryVal = Number(payroll.basicSalary);
   const marginEarnedVal = Number(payroll.totalMarginEarned);
 
-  // Allowances
   const defaultGdsAllowance = payroll.agent?.gdsSystem ? 120.00 : 0.00;
   const defaultTravelAllowance = 80.00;
   const defaultAllowances = [
@@ -1396,7 +1345,6 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
   const totalAllowances = allowances.reduce((sum, a) => sum + Number(a.amount || 0), 0);
   const grossEarnings = basicSalaryVal + marginEarnedVal + totalAllowances + holidayPay;
 
-  // Deductions
   const dailyRate = totalWorkdays > 0 ? (basicSalaryVal / totalWorkdays) : 0;
   const absentDeduction = dailyRate * absents;
 
@@ -1459,7 +1407,6 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
         transition={{ type: 'spring', damping: 25, stiffness: 240 }}
         className="relative z-10 bg-slate-50 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden print:bg-white print:shadow-none print:w-full print:max-w-none print:rounded-none max-h-[90vh] flex flex-col"
       >
-        {/* Modal Header */}
         <div className="bg-gradient-to-r from-slate-800 to-indigo-950 px-6 py-4 text-white flex items-center justify-between print:hidden">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-400" />
@@ -1482,13 +1429,11 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
           </div>
         </div>
 
-        {/* Scrollable Content */}
         <div className="overflow-y-auto p-6 flex-1 print:overflow-visible print:p-0">
           {loading ? (
             <div className="py-12"><LoadingState message="Compiling salary slip details..." /></div>
           ) : (
             <div id="printable-slip" className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm print:border-none print:shadow-none print:rounded-none text-slate-800">
-              {/* Slip Header */}
               <div className="flex justify-between items-start border-b border-slate-200 pb-5 mb-5">
                 <div>
                   {logoUrl && <img src={logoUrl} alt="Logo" className="h-10 mb-2 object-contain" />}
@@ -1503,7 +1448,6 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
                 </div>
               </div>
 
-              {/* Info Grid */}
               <div className="grid grid-cols-2 gap-6 border-b border-slate-100 pb-5 mb-5 text-[12px]">
                 <div className="space-y-2">
                   <div>
@@ -1527,7 +1471,6 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
                 </div>
               </div>
 
-              {/* Attendance Card */}
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-6">
                 <h3 className="text-[10px] uppercase font-extrabold text-slate-500 tracking-wider mb-3 border-b border-slate-200 pb-1.5">
                   Attendance & Calendar Summary
@@ -1548,7 +1491,6 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
                 </div>
               </div>
 
-              {/* Financial Breakdown Table */}
               <table className="w-full text-left border-collapse text-[12px] mb-6">
                 <thead>
                   <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400 font-bold border-t border-b border-slate-200">
@@ -1558,65 +1500,61 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {/* Earnings */}
                   <tr>
                     <td className="py-3 px-3 font-semibold text-slate-800">Basic Contract Salary</td>
-                    <td className="py-3 px-3 text-right font-bold text-slate-800">£{basicSalaryVal.toFixed(2)}</td>
+                    <td className="py-3 px-3 text-right font-bold text-slate-800">{symbol}{basicSalaryVal.toFixed(2)}</td>
                     <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
                   </tr>
                   <tr>
                     <td className="py-3 px-3 font-semibold text-slate-800">Booking Commission / Margin Share</td>
-                    <td className="py-3 px-3 text-right font-bold text-emerald-600">+£{marginEarnedVal.toFixed(2)}</td>
+                    <td className="py-3 px-3 text-right font-bold text-emerald-600">+{symbol}{marginEarnedVal.toFixed(2)}</td>
                     <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
                   </tr>
                   {allowances.map((allow, idx) => (
                     <tr key={`allow-${idx}`}>
                       <td className="py-3 px-3 font-semibold text-slate-800">{allow.description}</td>
-                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{Number(allow.amount).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-800">+{symbol}{Number(allow.amount).toFixed(2)}</td>
                       <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
                     </tr>
                   ))}
                   {paidHolidaysCount > 0 && (
                     <tr>
-                      <td className="py-3 px-3 font-semibold text-slate-800">Paid Holidays ({paidHolidaysCount} days @ £{paidHolidaysRate.toFixed(2)}/day)</td>
-                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
+                      <td className="py-3 px-3 font-semibold text-slate-800">Paid Holidays ({paidHolidaysCount} days @ {symbol}{paidHolidaysRate.toFixed(2)}/day)</td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-800">+{symbol}{(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
                       <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
                     </tr>
                   )}
                   {publicHolidaysCount > 0 && (
                     <tr>
-                      <td className="py-3 px-3 font-semibold text-slate-800">Public Holidays ({publicHolidaysCount} days @ £{publicHolidaysRate.toFixed(2)}/day)</td>
-                      <td className="py-3 px-3 text-right font-bold text-slate-800">+£{(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
+                      <td className="py-3 px-3 font-semibold text-slate-800">Public Holidays ({publicHolidaysCount} days @ {symbol}{publicHolidaysRate.toFixed(2)}/day)</td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-800">+{symbol}{(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
                       <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
                     </tr>
                   )}
 
-                  {/* Deductions */}
                   {absentDeduction > 0 && (
                     <tr>
                       <td className="py-3 px-3 font-semibold text-slate-800">
-                        Absenteeism Penalty ({absents} day{absents !== 1 ? 's' : ''} @ £{dailyRate.toFixed(2)}/day)
+                        Absenteeism Penalty ({absents} day{absents !== 1 ? 's' : ''} @ {symbol}{dailyRate.toFixed(2)}/day)
                       </td>
                       <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
-                      <td className="py-3 px-3 text-right font-bold text-red-600">-£{absentDeduction.toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-red-600">-{symbol}{absentDeduction.toFixed(2)}</td>
                     </tr>
                   )}
                   {customDeductions.map((ded, idx) => (
                     <tr key={`ded-${idx}`}>
                       <td className="py-3 px-3 font-semibold text-slate-800">{ded.description}</td>
                       <td className="py-3 px-3 text-right text-slate-300">&mdash;</td>
-                      <td className="py-3 px-3 text-right font-bold text-red-600">-£{Number(ded.amount).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-red-600">-{symbol}{Number(ded.amount).toFixed(2)}</td>
                     </tr>
                   ))}
 
-                  {/* Totals */}
                   <tr className="bg-slate-50 font-bold border-t border-slate-200">
                     <td className="py-2.5 px-3 text-slate-700">Subtotals</td>
-                    <td className="py-2.5 px-3 text-right text-slate-800">£{grossEarnings.toFixed(2)}</td>
-                    <td className="py-2.5 px-3 text-right text-red-600">£{totalDeductions.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right text-slate-800">{symbol}{grossEarnings.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right text-red-600">{symbol}{totalDeductions.toFixed(2)}</td>
                   </tr>
 
-                  {/* Net Pay Callout */}
                   <tr className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white font-bold">
                     <td className="py-3.5 px-4 rounded-l-xl text-[13px] border-none">Total Net Payable (Net Salary)</td>
                     <td colSpan={2} className="py-3.5 px-4 text-right text-[15px] text-sky-400 font-black rounded-r-xl border-none">

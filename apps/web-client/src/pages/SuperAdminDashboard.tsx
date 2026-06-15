@@ -378,6 +378,7 @@ export function SuperAdminDashboard() {
   const [newCompanyLocation, setNewCompanyLocation] = useState('');
   const [newCompanyEmail, setNewCompanyEmail] = useState('');
   const [newCompanyPhone, setNewCompanyPhone] = useState('');
+  const [newCompanyCurrency, setNewCompanyCurrency] = useState('GBP');
   const [newCompanyPlan, setNewCompanyPlan] = useState('trial');
   const [newCompanyTrialDays, setNewCompanyTrialDays] = useState(14);
   const [newAdminEmail, setNewAdminEmail] = useState('');
@@ -398,6 +399,7 @@ export function SuperAdminDashboard() {
   const [editLocation, setEditLocation] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editCurrency, setEditCurrency] = useState('GBP');
   const [editPlan, setEditPlan] = useState('trial');
   const [editStatus, setEditStatus] = useState('active');
   const [editTrialEndsAt, setEditTrialEndsAt] = useState('');
@@ -875,6 +877,7 @@ export function SuperAdminDashboard() {
         location: newCompanyLocation || undefined,
         email: newCompanyEmail || undefined,
         phone: newCompanyPhone || undefined,
+        currency: newCompanyCurrency,
         subscriptionPlan: newCompanyPlan,
         trialDurationDays: newCompanyPlan === 'trial' ? newCompanyTrialDays : undefined,
         adminEmail: newAdminEmail,
@@ -892,6 +895,7 @@ export function SuperAdminDashboard() {
       setNewCompanyLocation('');
       setNewCompanyEmail('');
       setNewCompanyPhone('');
+      setNewCompanyCurrency('GBP');
       setNewCompanyPlan('trial');
       setNewCompanyTrialDays(14);
       setNewAdminEmail('');
@@ -961,6 +965,7 @@ export function SuperAdminDashboard() {
     setEditLocation(tenant.location || '');
     setEditEmail(tenant.email || '');
     setEditPhone(tenant.phone || '');
+    setEditCurrency((tenant as any).currency || 'GBP');
     setEditPlan(tenant.subscriptionPlan);
     setEditStatus(tenant.status);
     
@@ -1008,6 +1013,7 @@ export function SuperAdminDashboard() {
         location: editLocation || null,
         email: editEmail || null,
         phone: editPhone || null,
+        currency: editCurrency,
         subscriptionPlan: editPlan,
         subscriptionStatus: editPlan === 'trial' ? 'trial' : 'active',
         trialEndsAt: editPlan === 'trial' && editTrialEndsAt ? new Date(editTrialEndsAt).toISOString() : null
@@ -2363,6 +2369,23 @@ export function SuperAdminDashboard() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Default Currency *</label>
+                          <select 
+                            value={newCompanyCurrency}
+                            onChange={e => setNewCompanyCurrency(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs transition-all font-semibold bg-white text-slate-800"
+                          >
+                            <option value="GBP">GBP (£)</option>
+                            <option value="EUR">EUR (€)</option>
+                            <option value="PKR">PKR (Rs)</option>
+                            <option value="USD">USD ($)</option>
+                            <option value="AED">AED (AED)</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -2659,6 +2682,23 @@ export function SuperAdminDashboard() {
                             onChange={e => setEditLocation(e.target.value)}
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs transition-all font-semibold"
                           />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Default Currency *</label>
+                          <select 
+                            value={editCurrency}
+                            onChange={e => setEditCurrency(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-xs transition-all font-semibold bg-white text-slate-800"
+                          >
+                            <option value="GBP">GBP (£)</option>
+                            <option value="EUR">EUR (€)</option>
+                            <option value="PKR">PKR (Rs)</option>
+                            <option value="USD">USD ($)</option>
+                            <option value="AED">AED (AED)</option>
+                          </select>
                         </div>
                       </div>
                     </div>

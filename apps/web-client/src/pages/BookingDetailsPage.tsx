@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { api } from '../api/axios';
 import { useAuthStore } from '../store/authStore';
+import { useCurrency } from '../utils/currency';
 
 // Interfaces matching the updated Prisma schema
 interface Passenger {
@@ -96,6 +97,7 @@ export function BookingDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { symbol, format } = useCurrency();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -406,15 +408,15 @@ export function BookingDetailsPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <div className="text-center p-2 border-r border-slate-200 last:border-0">
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Price</p>
-              <p className="text-lg font-bold text-slate-900 mt-1">£{Number(booking.totalPrice).toFixed(2)}</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">{format(booking.totalPrice)}</p>
             </div>
             <div className="text-center p-2 border-r border-slate-200 last:border-0">
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Paid Amount</p>
-              <p className="text-lg font-bold text-emerald-600 mt-1">£{Number(booking.paidAmount).toFixed(2)}</p>
+              <p className="text-lg font-bold text-emerald-600 mt-1">{format(booking.paidAmount)}</p>
             </div>
             <div className="text-center p-2 border-r border-slate-200 last:border-0">
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Remaining</p>
-              <p className="text-lg font-bold text-red-500 mt-1">£{Number(booking.remainingAmount).toFixed(2)}</p>
+              <p className="text-lg font-bold text-red-500 mt-1">{format(booking.remainingAmount)}</p>
             </div>
             <div className="text-center p-2">
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Status</p>
@@ -545,7 +547,7 @@ export function BookingDetailsPage() {
                             <div className="text-[10px] text-slate-400">to {a.checkOutDate ? new Date(a.checkOutDate).toLocaleDateString() : 'N/A'}</div>
                           </td>
                           <td className="px-6 py-3.5">
-                            <span className="font-bold text-slate-800">£{Number(a.price).toFixed(2)}</span>
+                            <span className="font-bold text-slate-800">{format(a.price)}</span>
                             <span className="text-slate-400 text-[10px] ml-1">x {a.qty}</span>
                           </td>
                           <td className="px-6 py-3.5 font-mono text-slate-500">{a.hotelConfirmationNumber || 'Pending'}</td>
@@ -601,10 +603,10 @@ export function BookingDetailsPage() {
                             <div>PNR: {v.flightPnr || 'N/A'}</div>
                             <div className="text-[10px] text-slate-400 mt-0.5">Res: {v.reservationNumber || 'N/A'}</div>
                           </td>
-                          <td className="px-6 py-3.5 font-bold text-slate-800">£{Number(v.amount).toFixed(2)}</td>
+                          <td className="px-6 py-3.5 font-bold text-slate-800">{format(v.amount)}</td>
                           <td className="px-6 py-3.5">
-                            <div className="text-emerald-600">Paid: £{Number(v.totalPaid).toFixed(2)}</div>
-                            <div className="text-red-500 text-[10px] mt-0.5">Due: £{Number(v.remainingDue).toFixed(2)}</div>
+                            <div className="text-emerald-600">Paid: {format(v.totalPaid)}</div>
+                            <div className="text-red-500 text-[10px] mt-0.5">Due: {format(v.remainingDue)}</div>
                           </td>
                           <td className="px-6 py-3.5">
                             <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
@@ -656,15 +658,15 @@ export function BookingDetailsPage() {
                 </div>
                 <div className="flex justify-between items-center border-t border-slate-100 pt-3">
                   <span>Card Charges</span>
-                  <span className="text-slate-800">£{Number(booking.cardPaymentCharges).toFixed(2)}</span>
+                  <span className="text-slate-800">{format(booking.cardPaymentCharges)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span>Cancellation Fees</span>
-                  <span className="text-slate-800">£{Number(booking.cancellationCharges).toFixed(2)}</span>
+                  <span className="text-slate-800">{format(booking.cancellationCharges)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span>Refund Amount</span>
-                  <span className="text-slate-800 text-red-500">- £{Number(booking.refundAmount).toFixed(2)}</span>
+                  <span className="text-slate-800 text-red-500">- {format(booking.refundAmount)}</span>
                 </div>
               </div>
             </div>
@@ -695,7 +697,7 @@ export function BookingDetailsPage() {
                     <div key={p.id} className="p-4 hover:bg-slate-50/30 transition-colors flex justify-between items-start gap-3">
                       <div className="flex-grow min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-slate-900">£{Number(p.amount).toFixed(2)}</span>
+                          <span className="font-bold text-slate-900">{format(p.amount)}</span>
                           {/* Status Badge */}
                           <span className={`inline-block px-1.5 py-0.2 rounded text-[8px] font-extrabold tracking-wide uppercase ${
                             p.status === 'pending'
@@ -779,7 +781,7 @@ export function BookingDetailsPage() {
             
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 mb-1">Base Price (£)</label>
+                <label className="block text-slate-400 mb-1">{`Base Price (${symbol})`}</label>
                 <input 
                   type="number" 
                   value={calcBase}
@@ -789,7 +791,7 @@ export function BookingDetailsPage() {
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Taxes / Fees (£)</label>
+                <label className="block text-slate-400 mb-1">{`Taxes / Fees (${symbol})`}</label>
                 <input 
                   type="number" 
                   value={calcTax}
@@ -799,7 +801,7 @@ export function BookingDetailsPage() {
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Agent Markup (£)</label>
+                <label className="block text-slate-400 mb-1">{`Agent Markup (${symbol})`}</label>
                 <input 
                   type="number" 
                   value={calcMarkup}
@@ -819,7 +821,7 @@ export function BookingDetailsPage() {
               {calcResult !== null && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center mt-3">
                   <p className="text-slate-400 text-[10px] uppercase font-semibold">Calculated Total</p>
-                  <p className="text-xl font-bold text-amber-500 mt-1">£{calcResult.toFixed(2)}</p>
+                  <p className="text-xl font-bold text-amber-500 mt-1">{symbol}{calcResult.toFixed(2)}</p>
                 </div>
               )}
             </div>
@@ -1010,7 +1012,7 @@ export function BookingDetailsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Payment Amount (£)</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">{`Payment Amount (${symbol})`}</label>
                     <input 
                       type="number" 
                       step="0.01"
@@ -1172,7 +1174,7 @@ export function BookingDetailsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Total Cost Amount (£)</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">{`Total Cost Amount (${symbol})`}</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -1218,7 +1220,7 @@ export function BookingDetailsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Paid Amount to Vendor (£)</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">{`Paid Amount to Vendor (${symbol})`}</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -1363,7 +1365,7 @@ export function BookingDetailsPage() {
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Price per Room (£)</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">{`Price per Room (${symbol})`}</label>
                       <input 
                         type="number" 
                         step="0.01"

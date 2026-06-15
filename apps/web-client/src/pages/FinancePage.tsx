@@ -4,6 +4,7 @@ import { CreditCard, Search, Plus, Edit3, Trash2, X, Check, AlertCircle, Wallet,
 import { api } from '../api/axios';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../store/authStore';
+import { useCurrency } from '../utils/currency';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { Pagination } from '../components/shared/Pagination';
@@ -12,6 +13,7 @@ import { formatPendingNotes } from '../components/Layout';
 
 
 export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefresh: () => void }) {
+  const { symbol, format } = useCurrency();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'ledger' | 'vendor-wallet' | 'agent-wallet' | 'approval-requests' | 'company-expenses'>('ledger');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -557,8 +559,8 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                               </div>
                             </td>
                             <td className="py-3 px-5 align-top text-slate-600 font-semibold text-[12px]">{formattedDate}</td>
-                            <td className="py-3 px-5 align-top text-right font-black text-rose-600 text-[12px]">{debit > 0 ? `£${debit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                            <td className="py-3 px-5 align-top text-right font-black text-emerald-600 text-[12px]">{credit > 0 ? `£${credit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="py-3 px-5 align-top text-right font-black text-rose-600 text-[12px]">{debit > 0 ? format(debit) : '-'}</td>
+                            <td className="py-3 px-5 align-top text-right font-black text-emerald-600 text-[12px]">{credit > 0 ? format(credit) : '-'}</td>
                             <td className="py-3 px-5 align-top whitespace-pre-wrap leading-relaxed text-[11px] text-slate-500 font-medium">
                               <div className="flex flex-col gap-1">
                                 <div>
@@ -606,15 +608,15 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                           <tr className="bg-slate-100/50 border-t-2 border-slate-200">
                             <td className="py-4 px-5"></td>
                             <td className="py-4 px-5 font-black text-slate-700 text-right uppercase tracking-wider text-[11px]" colSpan={2}>Period Total</td>
-                            <td className="py-4 px-5 text-right font-black text-rose-600 text-[13px]">{totalDebit > 0 ? `£${totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                            <td className="py-4 px-5 text-right font-black text-emerald-600 text-[13px]">{totalCredit > 0 ? `£${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="py-4 px-5 text-right font-black text-rose-600 text-[13px]">{totalDebit > 0 ? format(totalDebit) : '-'}</td>
+                            <td className="py-4 px-5 text-right font-black text-emerald-600 text-[13px]">{totalCredit > 0 ? format(totalCredit) : '-'}</td>
                             <td className="py-4 px-5"></td>
                           </tr>
                           <tr className="bg-white border-b-4 border-emerald-500 rounded-b-3xl">
                             <td className="py-4 px-5"></td>
                             <td className="py-4 px-5 font-black text-slate-900 text-right uppercase tracking-wider text-[12px]" colSpan={2}>Closing Ledger Balance</td>
-                            <td className="py-4 px-5 text-right font-black text-rose-600 text-[13px]">{closingDebit > 0 ? `£${closingDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                            <td className="py-4 px-5 text-right font-black text-emerald-600 text-[13px]">{closingCredit > 0 ? `£${closingCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                            <td className="py-4 px-5 text-right font-black text-rose-600 text-[13px]">{closingDebit > 0 ? format(closingDebit) : '-'}</td>
+                            <td className="py-4 px-5 text-right font-black text-emerald-600 text-[13px]">{closingCredit > 0 ? format(closingCredit) : '-'}</td>
                             <td className="py-4 px-5"></td>
                           </tr>
                         </>
@@ -665,10 +667,10 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                         {w.vendorName}
                       </td>
                       <td className="py-4 px-6 text-right font-semibold text-slate-600">
-                        £{w.ledgerBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {format(w.ledgerBalance)}
                       </td>
                       <td className="py-4 px-6 text-right font-black text-emerald-600">
-                        {w.walletBalance > 0 ? `£${w.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                        {w.walletBalance > 0 ? format(w.walletBalance) : '-'}
                       </td>
                       <td className="py-4 px-6 text-right font-bold">
                         {w.walletBalance > 0 ? (
@@ -734,7 +736,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                           {a.name}
                         </td>
                         <td className={`py-4 px-6 text-right font-black ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          £{balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          {format(balance)}
                         </td>
                         <td className="py-4 px-6 text-right font-bold">
                           {balance > 0 ? (
@@ -801,7 +803,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                         return (
                           <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
                             <td className="py-4 px-6 font-bold text-slate-900 text-[12px]">{p.bookingRef || 'N/A'}</td>
-                            <td className="py-4 px-6 font-black text-slate-900 text-[12px]">£{Number(p.amount).toFixed(2)}</td>
+                            <td className="py-4 px-6 font-black text-slate-900 text-[12px]">{format(p.amount)}</td>
                             <td className="py-4 px-6 text-slate-800 font-semibold">{p.paymentMethod} • {p.paymentType}</td>
                             <td className="py-4 px-6">
                               <span className="font-bold text-slate-800">{p.loggedByName || 'Agent'}</span>
@@ -897,7 +899,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                     {expenses.map((exp) => (
                       <tr key={exp.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-4 px-6 font-bold text-slate-900 text-[12px]">{exp.name}</td>
-                        <td className="py-4 px-6 font-black text-rose-600 text-[12px] text-right">£{Number(exp.amount).toFixed(2)}</td>
+                        <td className="py-4 px-6 font-black text-rose-600 text-[12px] text-right">{format(exp.amount)}</td>
                         <td className="py-4 px-6">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
                             exp.type === 'recurring' 
@@ -992,7 +994,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Payment Amount</span>
-                    <span className="text-slate-900 font-bold text-base">£{Number(activeApproval.payment?.amount).toFixed(2)}</span>
+                    <span className="text-slate-900 font-bold text-base">{format(activeApproval.payment?.amount)}</span>
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Payment Method / Type</span>
@@ -1110,7 +1112,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Amount (£) *</label>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">{`Amount (${symbol}) *`}</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1301,10 +1303,10 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                         ? 'text-emerald-600'
                         : 'text-rose-600'
                     }`}>
-                      £{selectedVendor 
-                        ? selectedVendor.walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                        : parseFloat(selectedAgent?.wallet?.currentBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })
-                      }
+                      {selectedVendor 
+                         ? format(selectedVendor.walletBalance)
+                         : format(parseFloat(selectedAgent?.wallet?.currentBalance || 0))
+                       }
                     </span>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
@@ -1392,7 +1394,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                                 <span className={`font-black text-[13px] ${
                                   isPayment ? 'text-emerald-600' : 'text-slate-700'
                                 }`}>
-                                  {isPayment ? '+' : '-'}£{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  {isPayment ? '+' : '-'}{format(amount)}
                                 </span>
                               </div>
                               <p className="text-slate-500 text-xs leading-relaxed font-medium">
@@ -1435,7 +1437,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
                                 <span className={`font-black text-[13px] ${
                                   isCredit ? 'text-emerald-600' : 'text-rose-600'
                                 }`}>
-                                  {isCredit ? '+' : ''}£{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  {isCredit ? '+' : ''}{format(amount)}
                                 </span>
                               </div>
                               <p className="text-slate-500 text-xs leading-relaxed font-medium">
@@ -1471,6 +1473,7 @@ export function FinancePage({ bookings, onRefresh }: { bookings: any[]; onRefres
 
 function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initialData }: { onClose: () => void; onSaved: () => void; onSwitchToVendor?: () => void; bookings: any[]; initialData?: any }) {
   const { user } = useAuthStore();
+  const { format, symbol } = useCurrency();
   const [isVendor, setIsVendor] = useState(initialData ? initialData.isVendor : false);
   const [bookingId, setBookingId] = useState(initialData?.bookingId || (bookings.length > 0 ? bookings[0].id : ''));
   const [amount, setAmount] = useState(String(initialData?.amount || ''));
@@ -1608,7 +1611,7 @@ function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initia
             <select required={!isVendor} value={bookingId} onChange={e => setBookingId(e.target.value === 'auto' ? 'auto' : Number(e.target.value))} disabled={!!initialData} className="w-full bg-white border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none transition-all disabled:bg-slate-50 disabled:text-slate-500">
               {isVendor && !initialData && <option value="auto">Global / Auto-Allocate (FIFO)</option>}
               {bookings.map(b => (
-                <option key={b.id} value={b.id}>{b.bookingReference} — {b.agentName || 'No Agent'} (Total: £{Number(b.totalPrice).toFixed(2)})</option>
+                <option key={b.id} value={b.id}>{b.bookingReference} — {b.agentName || 'No Agent'} (Total: {format(b.totalPrice)})</option>
               ))}
             </select>
           </div>
@@ -1622,7 +1625,7 @@ function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initia
 
           <div className="grid grid-cols-2 gap-5">
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Amount (£)</label>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">{`Amount (${symbol})`}</label>
               <input type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-white border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none transition-all" placeholder="0.00" />
             </div>
             <div>
@@ -1654,7 +1657,7 @@ function PaymentFormModal({ onClose, onSaved, onSwitchToVendor, bookings, initia
               
               {paymentMethod === 'Credit Card' && (
                 <div className="col-span-2">
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Credit Card Charges (£)</label>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">{`Credit Card Charges (${symbol})`}</label>
                   <input type="number" step="0.01" value={cardCharges} onChange={e => setCardCharges(e.target.value)} className="w-full bg-white border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none transition-all" placeholder="0.00" />
                 </div>
               )}

@@ -7927,7 +7927,7 @@ app.post(
       const gdprLink = `${parsedOrigin}/passenger-info/${encodeURIComponent(token)}`;
 
       // Build branded email HTML
-      const subject = `Action Required: Complete your travel details (UK GDPR) - Ref: ${booking.bookingReference}`;
+      const subject = `Action Required: Complete your travel details (GDPR) - Ref: ${booking.bookingReference}`;
       const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -7980,7 +7980,7 @@ app.post(
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:28px;">
                 <tr>
                   <td style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 20px;">
-                    <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:#1e3a8a;letter-spacing:0.5px;text-transform:uppercase;">🔒 UK GDPR Compliance Notice</p>
+                    <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:#1e3a8a;letter-spacing:0.5px;text-transform:uppercase;">🔒 GDPR Compliance Notice</p>
                     <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">
                       Your personal information is encrypted in transit, stored securely, and processed solely for
                       the purpose of fulfilling your travel booking with suppliers (airlines, hotels, and other
@@ -8039,8 +8039,8 @@ app.post(
                 This email was sent by <strong style="color:#cbd5e1;">${companyName}</strong> on behalf of your booking.
                 If you did not request this or believe it was sent in error, please disregard it or
                 contact us at ${companyEmail ? `<a href="mailto:${companyEmail}" style="color:#60a5fa;">${companyEmail}</a>` : "our support team"}.
-                <br/>This communication is compliant with the <strong style="color:#cbd5e1;">UK GDPR (2018)</strong> and
-                the <strong style="color:#cbd5e1;">Data Protection Act 2018</strong>.
+                <br/>This communication is compliant with the <strong style="color:#cbd5e1;">GDPR</strong> and
+                the <strong style="color:#cbd5e1;">applicable Data Protection regulations</strong>.
               </p>
             </td>
           </tr>

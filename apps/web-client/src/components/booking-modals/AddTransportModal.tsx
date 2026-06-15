@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import type { TransportService, FlightService } from '../../types/booking';
 import { VendorSelect } from '../shared/VendorSelect';
 import { api as axios } from '../../api/axios';
+import { useCurrency } from '../../utils/currency';
 
 interface AddTransportModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface AddTransportModalProps {
 }
 
 export function AddTransportModal({ isOpen, onClose, onSubmit, flights, accommodations, initialData }: AddTransportModalProps) {
+  const { currency: tenantCurrency } = useCurrency();
   const [form, setForm] = useState<Partial<TransportService>>({
     vendorName: '',
     vehicleType: '',
@@ -25,7 +27,7 @@ export function AddTransportModal({ isOpen, onClose, onSubmit, flights, accommod
     arrivalTime: '',
     flightNo: '',
     price: '',
-    currency: 'GBP'
+    currency: tenantCurrency || 'GBP'
   });
 
 
@@ -43,11 +45,7 @@ export function AddTransportModal({ isOpen, onClose, onSubmit, flights, accommod
         });
         setForm(mappedData);
       } else {
-        // We'd reset the form here normally, but let's just let useState handle the initial if it's not editing.
-        // Or better yet, we can clear the form when opening without initialData.
-        // To be safe, we just set initialData if it exists.
-        // Actually, we must clear it if adding a new one after editing!
-        // But since the parent destroys the component when closing, it mounts fresh each time!
+        setForm(prev => ({ ...prev, currency: tenantCurrency || 'GBP' }));
       }
     }
   }, [isOpen, initialData]);

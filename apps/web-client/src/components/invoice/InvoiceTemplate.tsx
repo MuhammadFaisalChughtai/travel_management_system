@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import type { BookingDetail } from '../../types/booking';
 import { api } from '../../api/axios';
+import { useCurrency } from '../../utils/currency';
 
 interface InvoiceTemplateProps {
   booking: BookingDetail;
 }
 
 export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
+  const { symbol } = useCurrency();
   const [agentEmail, setAgentEmail] = useState('office@terrifictravel.co.uk');
   const [agentPhone, setAgentPhone] = useState('01215291630');
 
@@ -147,7 +149,7 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
                       <div className="font-semibold text-slate-800">{f.departedFrom} &rarr; {f.arrivedAt}</div>
                       <div className="text-[9px] text-slate-500">{f.departTime} - {f.arrivalTime}</div>
                     </td>
-                    <td className="py-3 align-top text-right font-bold text-slate-800">£{parseFloat(f.price).toFixed(2)}</td>
+                     <td className="py-3 align-top text-right font-bold text-slate-800">{symbol}{parseFloat(f.price).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -180,7 +182,7 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
                       <div><span className="font-semibold text-slate-400">OUT:</span> {a.checkOutDate}</div>
                     </td>
                     <td className="py-3 align-top text-center text-slate-600">{a.qty}</td>
-                    <td className="py-3 align-top text-right font-bold text-slate-800">£{parseFloat(a.price).toFixed(2)}</td>
+                     <td className="py-3 align-top text-right font-bold text-slate-800">{symbol}{parseFloat(a.price).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -210,7 +212,7 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
                       <div className="font-semibold text-slate-800">{t.departureDestination} &rarr; {t.arrivalDestination}</div>
                       <div className="text-[9px] text-slate-500">Pick-up: {t.departureTime}</div>
                     </td>
-                    <td className="py-3 align-top text-right font-bold text-slate-800">£{parseFloat(t.price).toFixed(2)}</td>
+                     <td className="py-3 align-top text-right font-bold text-slate-800">{symbol}{parseFloat(t.price).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -235,7 +237,7 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
                   <tr key={v.id} className="border-b border-slate-100">
                     <td className="py-3 align-top font-bold text-slate-800">{v.visaType}</td>
                     <td className="py-3 align-top text-slate-600 uppercase">{v.passportNumber}</td>
-                    <td className="py-3 align-top text-right font-bold text-slate-800">£{parseFloat(v.price).toFixed(2)}</td>
+                     <td className="py-3 align-top text-right font-bold text-slate-800">{symbol}{parseFloat(v.price).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -248,22 +250,22 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
           <div className="w-72 bg-slate-50 rounded-xl p-5 border border-slate-100">
             <div className="flex justify-between mb-3 text-[12px] text-slate-600">
               <span>Gross Total</span>
-              <span className="font-semibold">£{calculateTotal().toFixed(2)}</span>
+              <span className="font-semibold">{symbol}{calculateTotal().toFixed(2)}</span>
             </div>
             {booking.discounts && booking.discounts.length > 0 && (
               <div className="flex justify-between mb-3 text-[12px] text-emerald-600">
                 <span>Discounts Applied</span>
-                <span className="font-semibold">-£{booking.discounts.reduce((sum, d) => sum + (parseFloat(d.amount)||0), 0).toFixed(2)}</span>
+                <span className="font-semibold">-{symbol}{booking.discounts.reduce((sum, d) => sum + (parseFloat(d.amount)||0), 0).toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between mb-3 text-[12px] text-slate-600 pb-3 border-b border-slate-200">
               <span>Amount Paid</span>
-              <span className="font-semibold">£{calculatePaid().toFixed(2)}</span>
+              <span className="font-semibold">{symbol}{calculatePaid().toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-[16px] text-slate-800 font-black">
               <span>Amount Due</span>
               <span className={calculateRemaining() > 0 ? "text-rose-600" : "text-emerald-600"}>
-                {calculateRemaining() < 0 ? `-£${Math.abs(calculateRemaining()).toFixed(2)} (Overpaid)` : `£${calculateRemaining().toFixed(2)}`}
+                {calculateRemaining() < 0 ? `-${symbol}${Math.abs(calculateRemaining()).toFixed(2)} (Overpaid)` : `${symbol}${calculateRemaining().toFixed(2)}`}
               </span>
             </div>
             {calculateRemaining() <= 0 && (
@@ -285,13 +287,13 @@ export function InvoiceTemplate({ booking }: InvoiceTemplateProps) {
             <li>Failure to dispute this invoice within 48 hours is considered acceptance.</li>
             <li>This invoice is a package confirmation, not an E-Ticket.</li>
             <li>70% of total price is required within 72 hours of confirmation.</li>
-            <li>Rates in GBP include applicable hotel taxes. Resort fees or incidentals are the customer's responsibility.</li>
+            <li>Rates include applicable hotel taxes. Resort fees or incidentals are the customer's responsibility.</li>
           </ul>
 
           <p className="font-bold text-slate-700 mt-3 mb-1 uppercase tracking-widest text-[8px]">Visa & Travel Requirements</p>
           <ul className="list-disc pl-3 mb-4 space-y-1">
-            <li>Passports and UK visas must be valid for 6-8 months before departure.</li>
-            <li>Original Biometric Residence Permit (BRP) is required for Non-British nationals.</li>
+            <li>Passports and required visas must be valid for 6-8 months before departure.</li>
+            <li>Original residence permits or visas are required for foreign nationals.</li>
             <li>Visa issuance is subject to the Saudi Ministry. We are not liable for rejections.</li>
             <li>Double-check E-Ticket numbers on airline's official website immediately.</li>
           </ul>

@@ -10,6 +10,7 @@ interface User {
   isPlatformAdmin?: boolean;
   permissions?: string[];
   agentId?: number;
+  currency?: string;
 }
 
 interface AuthState {

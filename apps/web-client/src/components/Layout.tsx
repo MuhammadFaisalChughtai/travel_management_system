@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Navigation2, User, LogOut, Bell, Check, X, Eye, Loader2, History, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
+import { useCurrency } from '../utils/currency';
 import { TechbarredLogo } from './TechbarredLogo';
 import { useEffect, useState, useRef } from 'react';
 import { api } from '../api/axios';
@@ -10,11 +11,24 @@ import toast from 'react-hot-toast';
 export function formatPendingNotes(notes: string | null | undefined): string {
   if (!notes) return 'No description provided.';
   
+  const currency = useAuthStore.getState().user?.currency || 'GBP';
+  const getSymbol = (c: string) => {
+    switch (c.toUpperCase()) {
+      case 'GBP': return '£';
+      case 'EUR': return '€';
+      case 'PKR': return 'Rs';
+      case 'USD': return '$';
+      case 'AED': return 'AED ';
+      default: return `${c} `;
+    }
+  };
+  const symbol = getSymbol(currency);
+  
   if (notes.startsWith('[PENDING_VENDOR_PAYMENT] ')) {
     try {
       const jsonStr = notes.replace('[PENDING_VENDOR_PAYMENT] ', '');
       const data = JSON.parse(jsonStr);
-      let desc = `Vendor Payment of £${Number(data.amount).toFixed(2)} to ${data.vendorName || 'Unknown Vendor'}.`;
+      let desc = `Vendor Payment of ${symbol}${Number(data.amount).toFixed(2)} to ${data.vendorName || 'Unknown Vendor'}.`;
       if (data.flightPnr) desc += ` PNR: ${data.flightPnr}.`;
       if (data.notes) desc += ` (Notes: ${data.notes})`;
       return desc;
@@ -27,7 +41,7 @@ export function formatPendingNotes(notes: string | null | undefined): string {
     try {
       const jsonStr = notes.replace('[PENDING_DISCOUNT] ', '');
       const data = JSON.parse(jsonStr);
-      let desc = `Discount of £${Number(data.amount).toFixed(2)} on ${data.vendorCategory || 'Service'} service (${data.serviceName || 'Unknown'}).`;
+      let desc = `Discount of ${symbol}${Number(data.amount).toFixed(2)} on ${data.vendorCategory || 'Service'} service (${data.serviceName || 'Unknown'}).`;
       if (data.notes) desc += ` (Notes: ${data.notes})`;
       return desc;
     } catch (e) {
@@ -39,7 +53,7 @@ export function formatPendingNotes(notes: string | null | undefined): string {
     try {
       const jsonStr = notes.replace('[PENDING_REFUND] ', '');
       const data = JSON.parse(jsonStr);
-      let desc = `${data.direction || 'Refund'} of £${Number(data.amount).toFixed(2)} on ${data.vendorCategory || 'Service'} service (${data.serviceName || 'Unknown'}).`;
+      let desc = `${data.direction || 'Refund'} of ${symbol}${Number(data.amount).toFixed(2)} on ${data.vendorCategory || 'Service'} service (${data.serviceName || 'Unknown'}).`;
       if (data.notes) desc += ` (Notes: ${data.notes})`;
       return desc;
     } catch (e) {
@@ -51,7 +65,7 @@ export function formatPendingNotes(notes: string | null | undefined): string {
     try {
       const jsonStr = notes.replace('[PENDING_BULK_VENDOR_PAYMENT] ', '');
       const data = JSON.parse(jsonStr);
-      let desc = `Bulk Vendor Payment of £${Number(data.amount).toFixed(2)} to ${data.vendorName || 'Unknown Vendor'}.`;
+      let desc = `Bulk Vendor Payment of ${symbol}${Number(data.amount).toFixed(2)} to ${data.vendorName || 'Unknown Vendor'}.`;
       if (data.notes) desc += ` (Notes: ${data.notes})`;
       return desc;
     } catch (e) {
@@ -63,6 +77,7 @@ export function formatPendingNotes(notes: string | null | undefined): string {
 }
 
 export function Layout() {
+  const { symbol } = useCurrency();
   const location = useLocation();
   const navigate = useNavigate();
   const isDashboard = location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/super-admin');
@@ -447,7 +462,7 @@ export function Layout() {
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Payment Amount</span>
-                    <span className="text-slate-900 font-bold text-base">£{Number(activeApproval.payment?.amount).toFixed(2)}</span>
+                    <span className="text-slate-900 font-bold text-base">{symbol}{Number(activeApproval.payment?.amount).toFixed(2)}</span>
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Payment Method / Type</span>

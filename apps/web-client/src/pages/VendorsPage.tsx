@@ -8,6 +8,7 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { Pagination } from '../components/shared/Pagination';
 import toast from 'react-hot-toast';
+import { useCurrency } from '../utils/currency';
 
 interface Vendor {
   id: number;
@@ -20,6 +21,7 @@ interface Vendor {
 }
 
 export function VendorsPage() {
+  const { symbol } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   
@@ -202,7 +204,7 @@ export function VendorsPage() {
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                   : 'bg-slate-50 text-slate-600 border border-slate-200'
                             }`}>
-                              £{Number(vendor.creditBalance).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                              {symbol}{Number(vendor.creditBalance).toLocaleString(undefined, {minimumFractionDigits: 2})}
                             </span>
                           </td>
                           <td className="py-3 px-6 text-center">

@@ -8,6 +8,7 @@ import { VendorSelect } from '../components/shared/VendorSelect';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { Pagination } from '../components/shared/Pagination';
+import { useCurrency } from '../utils/currency';
 
 interface CatalogItem {
   id: number;
@@ -21,6 +22,7 @@ interface CatalogItem {
 
 export function ServiceCatalogPage() {
   const { user } = useAuthStore();
+  const { currency: tenantCurrency } = useCurrency();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export function ServiceCatalogPage() {
     serviceType: 'VISA',
     name: '',
     unitPrice: 0,
-    currency: 'GBP',
+    currency: tenantCurrency || 'GBP',
     metadata: { 
       vendorName: '', 
       vehicles: [
@@ -111,7 +113,7 @@ export function ServiceCatalogPage() {
       serviceType: 'VISA',
       name: '',
       unitPrice: 0,
-      currency: 'GBP',
+      currency: tenantCurrency || 'GBP',
       metadata: { 
       vendorName: '', 
       vehicles: [

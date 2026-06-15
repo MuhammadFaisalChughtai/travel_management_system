@@ -40,6 +40,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { api } from '../api/axios';
+import { useCurrency } from '../utils/currency';
 import { TechbarredLogo } from '../components/TechbarredLogo';
 import { VendorsPage } from './VendorsPage';
 import { TeamManagement } from './TeamManagement';
@@ -133,6 +134,7 @@ const SIDEBAR_ITEMS = [
 export function Dashboard() {
   const { user, logout, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
+  const { symbol, format } = useCurrency();
 
   // Sync user permissions
   useEffect(() => {
@@ -243,6 +245,7 @@ export function Dashboard() {
     email: 'operations@travelbooker.co.uk',
     phone: '+44 20 7946 0958',
     plan: 'Premium Subscription (Active)',
+    currency: 'GBP',
     smtpHost: '',
     smtpPort: '',
     smtpSecure: false,
@@ -265,6 +268,7 @@ export function Dashboard() {
           email: t.email || 'operations@travelbooker.co.uk',
           phone: t.phone || '+44 20 7946 0958',
           plan: `${t.subscriptionPlan ? t.subscriptionPlan.charAt(0).toUpperCase() + t.subscriptionPlan.slice(1) : 'Premium'} Subscription (${t.subscriptionStatus ? t.subscriptionStatus.charAt(0).toUpperCase() + t.subscriptionStatus.slice(1) : 'Active'})`,
+          currency: t.currency || 'GBP',
           smtpHost: t.smtpHost || '',
           smtpPort: t.smtpPort !== null && t.smtpPort !== undefined ? String(t.smtpPort) : '',
           smtpSecure: !!t.smtpSecure,
@@ -949,7 +953,7 @@ export function Dashboard() {
                           </div>
                         </div>
                         <p className="text-xl font-black text-slate-900 mt-3">
-                          £{stats.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {format(stats.totalRevenue)}
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
@@ -973,7 +977,7 @@ export function Dashboard() {
                           </div>
                         </div>
                         <p className="text-xl font-black text-slate-900 mt-3">
-                          £{stats.aov.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {format(stats.aov)}
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
@@ -1046,7 +1050,7 @@ export function Dashboard() {
                           </div>
                         </div>
                         <p className="text-xl font-black text-slate-900 mt-3">
-                          £{stats.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {format(stats.totalRevenue)}
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <span className="flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg text-[10px] font-bold">
@@ -1070,7 +1074,7 @@ export function Dashboard() {
                           </div>
                         </div>
                         <p className="text-xl font-black text-slate-900 mt-3">
-                          £{netBookingProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {format(netBookingProfit)}
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <span className="text-slate-400 text-[10px] font-medium">cumulative booking net margins</span>
@@ -1091,7 +1095,7 @@ export function Dashboard() {
                           </div>
                         </div>
                         <p className="text-xl font-black text-rose-600 mt-3">
-                          £{totalCompanyExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {format(totalCompanyExpenses)}
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <span className="text-slate-400 text-[10px] font-medium">one-time and recurring costs</span>
@@ -1112,7 +1116,7 @@ export function Dashboard() {
                           </div>
                         </div>
                         <p className={`text-xl font-black mt-3 ${netCompanyProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          £{netCompanyProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {format(netCompanyProfit)}
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <span className="text-slate-400 text-[10px] font-medium">actual net corporate income</span>
@@ -1179,8 +1183,8 @@ export function Dashboard() {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="label" tickLine={false} axisLine={false} stroke="#94a3b8" tickMargin={10} />
-                        <YAxis tickLine={false} axisLine={false} stroke="#94a3b8" tickFormatter={value => `£${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} tickMargin={10} />
-                        <Tooltip formatter={(value: any) => [`£${Number(value).toLocaleString()}`, '']} />
+                        <YAxis tickLine={false} axisLine={false} stroke="#94a3b8" tickFormatter={value => `${symbol}${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} tickMargin={10} />
+                        <Tooltip formatter={(value: any) => [`${symbol}${Number(value).toLocaleString()}`, '']} />
                         <Legend iconType="circle" />
                         <Area name="Invoiced Revenue" type="monotone" dataKey="Revenue" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
                         <Area name="Projected Target" type="monotone" dataKey="Target" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" fillOpacity={1} fill="url(#colorTarget)" />
@@ -1212,12 +1216,12 @@ export function Dashboard() {
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(value: any) => [`${value}%`, 'Share']} />
+                          <Tooltip formatter={(value: any) => [`${symbol}${Number(value).toLocaleString()}`, 'Share']} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute text-center">
                         <span className="block text-[8px] uppercase font-bold text-slate-400">Total</span>
-                        <span className="text-base font-black text-slate-800">{user?.role === 'AGENT' ? bookings.length : bookings.length + 158}</span>
+                        <span className="text-base font-black text-slate-800">{symbol}{Math.round(agentsAnalytics.performanceList.reduce((sum, i) => sum + i.revenue, 0) / 1000)}k</span>
                       </div>
                     </div>
 
@@ -1284,7 +1288,7 @@ export function Dashboard() {
                           <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} stroke="#10b981" />
                           <Tooltip />
                           <Bar yAxisId="left" dataKey="Vol" name="Invoices" fill="#818cf8" radius={[3, 3, 0, 0]} maxBarSize={16} />
-                          <Line yAxisId="right" type="monotone" dataKey="Aov" name="Basket (£)" stroke="#10b981" strokeWidth={1.5} dot={{ r: 2 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="Aov" name={`Basket (${symbol})`} stroke="#10b981" strokeWidth={1.5} dot={{ r: 2 }} />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </div>
@@ -1317,7 +1321,7 @@ export function Dashboard() {
                     </p>
                     <div className="flex items-center gap-1.5 mt-2 text-[10px]">
                       <span className="text-emerald-600 font-bold">
-                        £{(agentsAnalytics.performanceList[0]?.revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        {symbol}{(agentsAnalytics.performanceList[0]?.revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </span>
                       <span className="text-slate-400 font-medium">total sales</span>
                     </div>
@@ -1361,7 +1365,7 @@ export function Dashboard() {
                       </div>
                     </div>
                     <p className="text-lg font-black text-slate-900 mt-3">
-                      £{Math.round(agentsAnalytics.performanceList.reduce((sum, item) => sum + item.revenue, 0) / Math.max(1, agentsAnalytics.performanceList.reduce((sum, item) => sum + item.bookings, 0))).toLocaleString()}
+                      {symbol}{Math.round(agentsAnalytics.performanceList.reduce((sum, item) => sum + item.revenue, 0) / Math.max(1, agentsAnalytics.performanceList.reduce((sum, item) => sum + item.bookings, 0))).toLocaleString()}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2 text-[10px] text-emerald-600 font-bold">
                       <TrendingUp className="h-3 w-3" /> +2.8% AOV growth
@@ -1409,8 +1413,8 @@ export function Dashboard() {
                         <ComposedChart data={agentsAnalytics.monthlyTrends}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                           <XAxis dataKey="label" stroke="#94a3b8" tickLine={false} axisLine={false} />
-                          <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={value => `£${(value / 1000).toFixed(0)}k`} />
-                          <Tooltip formatter={(value) => `£${Number(value).toLocaleString()}`} />
+                          <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={value => `${symbol}${(value / 1000).toFixed(0)}k`} />
+                          <Tooltip formatter={(value) => `${symbol}${Number(value).toLocaleString()}`} />
                           <Legend iconType="circle" />
                           <Line type="monotone" dataKey="Sarah Jenkins" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
                           <Line type="monotone" dataKey="Michael Chang" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} />
@@ -1443,13 +1447,13 @@ export function Dashboard() {
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(value) => `£${Number(value).toLocaleString()}`} />
+                          <Tooltip formatter={(value) => `${symbol}${Number(value).toLocaleString()}`} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute text-center">
                         <span className="block text-[8px] uppercase font-bold text-slate-400">Total</span>
                         <span className="text-sm font-black text-slate-800">
-                          £{Math.round(agentsAnalytics.performanceList.reduce((sum, i) => sum + i.revenue, 0) / 1000)}k
+                          {symbol}{Math.round(agentsAnalytics.performanceList.reduce((sum, i) => sum + i.revenue, 0) / 1000)}k
                         </span>
                       </div>
                     </div>
@@ -1481,17 +1485,12 @@ export function Dashboard() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                       <tr className="bg-slate-50/50 text-slate-400 font-bold uppercase border-b border-slate-100">
-                        <th className="py-3 px-5">Invoice Reference</th>
-                        <th className="py-3 px-5">Departure Date</th>
-                        <th className="py-3 px-5">Assigned Agent</th>
-                        <th className="py-3 px-5 text-right">Invoice Price</th>
-                        <th className="py-3 px-5 text-right">Remaining</th>
-                        <th className="py-3 px-5 text-right">Total Sent</th>
-                        <th className="py-3 px-5 text-right">Agent Margin</th>
-                        <th className="py-3 px-5 text-right">Total Profit</th>
-                        <th className="py-3 px-5 text-center">Lock Status</th>
-                        <th className="py-3 px-5 text-center">Payment Badge</th>
-                        <th className="py-3 px-5 text-center">Actions</th>
+                        <th className="py-3 px-5">Rank</th>
+                        <th className="py-3 px-5">Agent</th>
+                        <th className="py-3 px-5 text-center">Bookings</th>
+                        <th className="py-3 px-5 text-right">AOV</th>
+                        <th className="py-3 px-5 text-right">Revenue</th>
+                        <th className="py-3 px-5 text-right">Contribution</th>
                       </tr>
                     </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -1508,8 +1507,8 @@ export function Dashboard() {
                               </div>
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-600">{agent.bookings}</td>
-                            <td className="py-2.5 px-3 text-right font-semibold text-slate-700">£{Math.round(agent.aov).toLocaleString()}</td>
-                            <td className="py-2.5 px-3 text-right font-black text-slate-900">£{Math.round(agent.revenue).toLocaleString()}</td>
+                            <td className="py-2.5 px-3 text-right font-semibold text-slate-700">{symbol}{Math.round(agent.aov).toLocaleString()}</td>
+                            <td className="py-2.5 px-3 text-right font-black text-slate-900">{symbol}{Math.round(agent.revenue).toLocaleString()}</td>
                             <td className="py-2.5 px-3 text-right">
                               <span className="inline-flex items-center gap-0.5 text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-bold text-[9px]">
                                 +{12 - index * 1.5}%
@@ -1579,7 +1578,7 @@ export function Dashboard() {
                       </div>
                       <div className="text-right flex items-center gap-3">
                         <div className="text-xs">
-                          <p className="font-black text-slate-800">£{Number(trip.totalPrice).toFixed(2)}</p>
+                          <p className="font-black text-slate-800">{format(trip.totalPrice)}</p>
                           <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-wider block mt-0.5">
                             {trip.status}
                           </span>
@@ -1778,14 +1777,14 @@ export function Dashboard() {
                           <td className="py-3.5 px-5 font-black text-slate-900">{b.bookingReference}</td>
                           <td className="py-3.5 px-5 font-mono text-slate-500">{b.departureDate ? new Date(b.departureDate).toLocaleDateString() : 'N/A'}</td>
                           <td className="py-3.5 px-5 font-bold text-slate-700">{b.agentName || 'System'}</td>
-                          <td className="py-3.5 px-5 text-right font-black text-slate-900">£{Number(b.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-5 text-right font-black text-slate-900">{format(b.totalPrice)}</td>
                           <td className={`py-3.5 px-5 text-right font-bold ${remainingAmount === 0 ? 'text-emerald-500' : remainingAmount < 0 ? 'text-rose-500' : 'text-amber-500'}`}>
-                            £{Math.abs(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {format(Math.abs(remainingAmount))}
                             {remainingAmount < 0 && <span className="block text-[8px] uppercase tracking-wide text-rose-500 mt-0.5">Overpaid</span>}
                           </td>
-                          <td className="py-3.5 px-5 text-right font-bold text-rose-500">£{totalSent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3.5 px-5 text-right font-bold text-blue-500">£{agentMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3.5 px-5 text-right font-black text-emerald-600">£{netProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-5 text-right font-bold text-rose-500">{format(totalSent)}</td>
+                          <td className="py-3.5 px-5 text-right font-bold text-blue-500">{format(agentMargin)}</td>
+                          <td className="py-3.5 px-5 text-right font-black text-emerald-600">{format(netProfit)}</td>
                           <td className="py-3.5 px-5 text-center" onClick={e => e.stopPropagation()}>
                             <button 
                               onClick={(e) => toggleLock(e, b.id, b.isLocked)}
@@ -1964,6 +1963,16 @@ export function Dashboard() {
                         value={companyInfo.location}
                         onChange={e => setCompanyInfo({ ...companyInfo, location: e.target.value })}
                         className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[9px]">Company Currency (Read-Only)</label>
+                      <input 
+                        type="text"
+                        value={companyInfo.currency || 'GBP'}
+                        disabled
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-400 font-semibold cursor-not-allowed outline-none font-mono"
                       />
                     </div>
                   </div>

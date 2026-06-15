@@ -12,6 +12,7 @@ import { AccordionSection } from '../components/AccordionSection';
 import { Pagination } from '../components/shared/Pagination';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
+import { useCurrency } from '../utils/currency';
 
 interface MarginSegment {
   id?: number;
@@ -98,6 +99,7 @@ function AgentDetailsModal({ agent: initialAgent, isOpen, onClose, onRefresh }: 
   onClose: () => void;
   onRefresh: () => void;
 }) {
+  const { symbol, format } = useCurrency();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -360,9 +362,9 @@ function AgentDetailsModal({ agent: initialAgent, isOpen, onClose, onRefresh }: 
 
                 <div className="rounded-2xl overflow-hidden border border-slate-200 mb-6 shadow-sm bg-white/50">
                   <div className="grid grid-cols-12 bg-slate-50/80 px-5 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
-                    <div className="col-span-4">Monthly Net Sales (£)</div>
-                    <div className="col-span-3 text-right">Min Amount (£)</div>
-                    <div className="col-span-3 text-right">Max Amount (£)</div>
+                    <div className="col-span-4">{`Monthly Net Sales (${symbol})`}</div>
+                    <div className="col-span-3 text-right">{`Min Amount (${symbol})`}</div>
+                    <div className="col-span-3 text-right">{`Max Amount (${symbol})`}</div>
                     <div className="col-span-1 text-right">Rate %</div>
                     <div className="col-span-1"></div>
                   </div>
@@ -374,7 +376,7 @@ function AgentDetailsModal({ agent: initialAgent, isOpen, onClose, onRefresh }: 
                             value={seg.label}
                             onChange={e => updateSegment(i, 'label', e.target.value)}
                             className="w-full bg-transparent border-b border-transparent focus:border-primary-500 text-slate-800 text-[13px] font-semibold outline-none py-1 transition-colors"
-                            placeholder="Label (e.g. £1,000 – £2,000)"
+                            placeholder={`Label (e.g. ${symbol}1,000 – ${symbol}2,000)`}
                           />
                         </div>
                         <div className="col-span-3">
@@ -451,7 +453,7 @@ function AgentDetailsModal({ agent: initialAgent, isOpen, onClose, onRefresh }: 
                   <div className="flex flex-col items-end mr-4">
                     <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">Current Balance</span>
                     <span className={`text-base leading-none font-black ${agent.wallet && Number(agent.wallet.currentBalance) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      £{agent.wallet ? Number(agent.wallet.currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+                      {agent.wallet ? format(agent.wallet.currentBalance) : format(0)}
                     </span>
                   </div>
                 </div>
@@ -493,7 +495,7 @@ function AgentDetailsModal({ agent: initialAgent, isOpen, onClose, onRefresh }: 
                               {tx.notes && <div className="text-[10px] text-slate-400 mt-0.5">{tx.notes}</div>}
                             </td>
                             <td className={`px-6 py-2.5 text-right font-bold ${Number(tx.amount) > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {Number(tx.amount) > 0 ? '+' : ''}£{Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              {Number(tx.amount) > 0 ? '+' : ''}{format(tx.amount)}
                             </td>
                           </tr>
                         ))}
@@ -672,6 +674,7 @@ function DeleteConfirmationModal({ onClose, onConfirm, loading }: { onClose: () 
 }
 
 export function AgentsPage() {
+  const { symbol, format } = useCurrency();
   const [agents, setAgents] = useState<Agent[]>([]); // All agents for stats
   const [tableAgents, setTableAgents] = useState<Agent[]>([]); // Paginated agents for table
   const [totalTableItems, setTotalTableItems] = useState(0);

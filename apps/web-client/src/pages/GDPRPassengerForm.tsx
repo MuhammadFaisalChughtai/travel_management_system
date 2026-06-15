@@ -216,7 +216,7 @@ export default function GDPRPassengerForm() {
           </p>
           <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 flex items-center gap-3 justify-center text-[11px] text-slate-400">
             <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>UK GDPR Compliant Database Encryption Enabled</span>
+            <span>GDPR Compliant Database Encryption Enabled</span>
           </div>
         </div>
       </div>
@@ -570,7 +570,7 @@ export default function GDPRPassengerForm() {
               <Check className="w-3.5 h-3.5 text-white absolute left-0.5 pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
             </div>
             <label htmlFor="global-gdpr" className="text-xs text-slate-350 leading-relaxed font-medium select-none cursor-pointer">
-              I explicitly consent to the secure storage and processing of my passport details and all personal traveler information for the sole purpose of booking and delivering travel services, in strict compliance with the <strong className="text-indigo-400">UK GDPR</strong> and Data Protection Act 2018. My details will not be used for marketing purposes.
+              I explicitly consent to the secure storage and processing of my passport details and all personal traveler information for the sole purpose of booking and delivering travel services, in strict compliance with the <strong className="text-indigo-400">GDPR</strong> and applicable Data Protection regulations. My details will not be used for marketing purposes.
             </label>
           </div>
 

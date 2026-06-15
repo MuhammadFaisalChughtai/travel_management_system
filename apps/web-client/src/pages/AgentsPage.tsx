@@ -674,7 +674,6 @@ function DeleteConfirmationModal({ onClose, onConfirm, loading }: { onClose: () 
 }
 
 export function AgentsPage() {
-  const { symbol, format } = useCurrency();
   const [agents, setAgents] = useState<Agent[]>([]); // All agents for stats
   const [tableAgents, setTableAgents] = useState<Agent[]>([]); // Paginated agents for table
   const [totalTableItems, setTotalTableItems] = useState(0);

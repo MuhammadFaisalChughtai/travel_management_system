@@ -251,7 +251,7 @@ function SetSalaryModal({
 
 // ─── Main PayrollPage ─────────────────────────────────────────────────────────
 export function PayrollPage() {
-  const { symbol, format } = useCurrency();
+  const { format } = useCurrency();
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);

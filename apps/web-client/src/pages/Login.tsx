@@ -275,7 +275,7 @@ export function Login() {
               </button>
             </div>
           </form>
-        )
+        )}
         <div className="mt-6 pt-5 border-t border-slate-100 flex justify-center">
           <TechbarredLogo />
         </div>

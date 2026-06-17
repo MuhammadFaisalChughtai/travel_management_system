@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, PlusCircle } from "lucide-react";
 import { VendorSelect } from "../shared/VendorSelect";
+import { useCurrency } from "../../utils/currency";
 
 interface AddAdditionalServiceModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export function AddAdditionalServiceModal({
   onSubmit,
   initialData,
 }: AddAdditionalServiceModalProps) {
+  const { symbol } = useCurrency();
   const [fType, setFType] = useState("Extra Baggage");
   const [fCustomType, setFCustomType] = useState("");
   const [charges, setCharges] = useState("");
@@ -165,7 +167,7 @@ export function AddAdditionalServiceModal({
 
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">
-                Service Charges (£)
+                Service Charges ({symbol})
               </label>
               <input
                 type="number"

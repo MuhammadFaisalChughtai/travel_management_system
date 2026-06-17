@@ -1,6 +1,6 @@
 import { useEffect, useState, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users, Lock, Compass, Briefcase, FolderOpen, Landmark, Settings2, Clock, Banknote, FileText } from 'lucide-react';
+import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users, Lock, Compass, Briefcase, FolderOpen, Landmark, Settings2, Clock, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/axios';
 import { EmptyState } from '../components/shared/EmptyState';
@@ -39,7 +39,6 @@ const MODULE_ORDER = [
   'Client Records',
   'Financials (Refunds/Profit)',
   'Service Catalog',
-  'Document Studio',
   'Team Management',
   'System Settings'
 ];
@@ -116,27 +115,25 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
   const getModuleIcon = (moduleName: string) => {
     switch (moduleName) {
       case 'Bookings & Itineraries':
-        return <Compass className="w-4 h-4 text-sky-500" />;
+        return <Compass className="w-3.5 h-3.5 text-sky-500" />;
       case 'Client Records':
-        return <Users className="w-4 h-4 text-teal-500" />;
+        return <Users className="w-3.5 h-3.5 text-teal-500" />;
       case 'Vendor Records':
-        return <Briefcase className="w-4 h-4 text-amber-500" />;
+        return <Briefcase className="w-3.5 h-3.5 text-amber-500" />;
       case 'Agency Dashboard':
-        return <FolderOpen className="w-4 h-4 text-indigo-500" />;
+        return <FolderOpen className="w-3.5 h-3.5 text-indigo-500" />;
       case 'Team Management':
-        return <ShieldAlert className="w-4 h-4 text-rose-500" />;
+        return <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />;
       case 'Financials (Refunds/Profit)':
-        return <Landmark className="w-4 h-4 text-emerald-500" />;
+        return <Landmark className="w-3.5 h-3.5 text-emerald-500" />;
       case 'System Settings':
-        return <Settings2 className="w-4 h-4 text-slate-500" />;
+        return <Settings2 className="w-3.5 h-3.5 text-slate-500" />;
       case 'Attendance':
-        return <Clock className="w-4 h-4 text-blue-500" />;
+        return <Clock className="w-3.5 h-3.5 text-blue-500" />;
       case 'Payroll':
-        return <Banknote className="w-4 h-4 text-amber-600" />;
-      case 'Document Studio':
-        return <FileText className="w-4 h-4 text-violet-500" />;
+        return <Banknote className="w-3.5 h-3.5 text-amber-600" />;
       default:
-        return <Shield className="w-4 h-4 text-slate-400" />;
+        return <Shield className="w-3.5 h-3.5 text-slate-400" />;
     }
   };
 
@@ -172,23 +169,23 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
           ) : (
             <table className="min-w-[1050px] w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200 select-none">
-                  <th className="p-3 pl-4 font-semibold w-[35%] text-slate-600">Module / Subsection Permission</th>
-                  <th className="p-3 border-l border-slate-200 text-center w-[21%] text-slate-600 font-bold">
+                <tr className="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-500 font-extrabold border-b border-slate-200 select-none">
+                  <th className="py-1.5 px-3 pl-4 font-bold w-[35%] text-slate-600">Module / Subsection Permission</th>
+                  <th className="py-1.5 border-l border-slate-200/60 text-center w-[21%] text-slate-600 font-bold">
                     <div className="flex items-center justify-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-slate-400" />
+                      <Users className="w-3 h-3 text-slate-400" />
                       <span>Agent</span>
                     </div>
                   </th>
-                  <th className="p-3 border-l border-slate-200 text-center w-[21%] text-slate-600 font-bold">
+                  <th className="py-1.5 border-l border-slate-200/60 text-center w-[21%] text-slate-600 font-bold">
                     <div className="flex items-center justify-center gap-1">
-                      <Shield className="w-3.5 h-3.5 text-primary-500" />
+                      <Shield className="w-3 h-3 text-primary-500" />
                       <span>Company Admin</span>
                     </div>
                   </th>
-                  <th className="p-3 border-l border-slate-200 text-center text-indigo-700 bg-indigo-50/40 font-extrabold w-[23%]">
+                  <th className="py-1.5 border-l border-slate-200/60 text-center text-indigo-700 bg-indigo-50/40 font-extrabold w-[23%]">
                     <div className="flex items-center justify-center gap-1">
-                      <Lock className="w-3 h-3 text-indigo-500" />
+                      <Lock className="w-2.5 h-2.5 text-indigo-500" />
                       <span>Main Company Admin (Locked)</span>
                     </div>
                   </th>
@@ -197,10 +194,10 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
               <tbody className="divide-y divide-slate-200">
                 {matrix.map((row, i) => (
                   <Fragment key={i}>
-                    <tr className="bg-slate-100/70 border-b border-slate-200">
-                      <td colSpan={4} className="p-2.5 pl-4 text-[10.5px] font-extrabold text-indigo-900 uppercase tracking-wider select-none">
-                        <div className="flex items-center gap-2">
-                          <div className="p-1 rounded bg-white border border-slate-200 flex items-center justify-center shadow-inner">
+                    <tr className="bg-slate-100/80 border-b border-slate-200/60">
+                      <td colSpan={4} className="py-1 px-3 pl-4 text-[9.5px] font-black text-indigo-950 uppercase tracking-wider select-none">
+                        <div className="flex items-center gap-1.5">
+                          <div className="p-0.5 rounded bg-white border border-slate-200 flex items-center justify-center shadow-inner">
                             {getModuleIcon(row.module)}
                           </div>
                           <span>{row.module}</span>
@@ -212,39 +209,39 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                       const isCompanyAdminChecked = rolePermissions.COMPANY_ADMIN?.includes(perm.name) || false;
                       const isMainAdminChecked = rolePermissions.MAIN_COMPANY_ADMIN?.includes(perm.name) || false;
                       return (
-                        <tr key={perm.name} className="hover:bg-slate-50/50 transition-colors border-b border-slate-200">
-                          <td className="p-2.5 pl-8 text-[11px] font-bold text-slate-700 w-[35%] select-none flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>
+                        <tr key={perm.name} className="hover:bg-slate-50/55 transition-colors border-b border-slate-200/60">
+                          <td className="py-1 pl-6 text-[10.5px] font-bold text-slate-700 w-[35%] select-none flex items-center gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-indigo-400 shrink-0"></span>
                             <span>{perm.label}</span>
                           </td>
                           
                           {/* AGENT */}
-                          <td className="p-2.5 border-l border-slate-200 text-center w-[21%]">
+                          <td className="py-0.5 border-l border-slate-200/60 text-center w-[21%]">
                             <input
                               type="checkbox"
                               checked={isAgentChecked}
                               onChange={(e) => handleCheckboxChange('AGENT', perm.name, e.target.checked)}
-                              className="rounded w-4 h-4 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                              className="rounded w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
                             />
                           </td>
                           
                           {/* COMPANY ADMIN */}
-                          <td className="p-2.5 border-l border-slate-200 text-center w-[21%]">
+                          <td className="py-0.5 border-l border-slate-200/60 text-center w-[21%]">
                             <input
                               type="checkbox"
                               checked={isCompanyAdminChecked}
                               onChange={(e) => handleCheckboxChange('COMPANY_ADMIN', perm.name, e.target.checked)}
-                              className="rounded w-4 h-4 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
+                              className="rounded w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
                             />
                           </td>
                           
                           {/* MAIN COMPANY ADMIN (LOCKED) */}
-                          <td className="p-2.5 border-l border-slate-200 bg-indigo-50/5 text-center w-[23%]">
+                          <td className="py-0.5 border-l border-slate-200/60 bg-indigo-50/5 text-center w-[23%]">
                             <input
                               type="checkbox"
                               checked={isMainAdminChecked}
                               disabled
-                              className="rounded w-4 h-4 border-slate-200 text-indigo-400 bg-slate-100 cursor-not-allowed focus:ring-0"
+                              className="rounded w-3.5 h-3.5 border-slate-200 text-indigo-400 bg-slate-100 cursor-not-allowed focus:ring-0"
                             />
                           </td>
                         </tr>

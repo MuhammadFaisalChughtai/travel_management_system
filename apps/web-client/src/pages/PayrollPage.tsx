@@ -1558,7 +1558,7 @@ function ViewSalarySlipModal({ payroll, onClose }: ViewSalarySlipModalProps) {
                   <tr className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white font-bold">
                     <td className="py-3.5 px-4 rounded-l-xl text-[13px] border-none">Total Net Payable (Net Salary)</td>
                     <td colSpan={2} className="py-3.5 px-4 text-right text-[15px] text-sky-400 font-black rounded-r-xl border-none">
-                      £{finalNetPay.toFixed(2)}
+                      {symbol}{finalNetPay.toFixed(2)}
                     </td>
                   </tr>
                 </tbody>

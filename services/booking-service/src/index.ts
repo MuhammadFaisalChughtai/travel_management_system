@@ -55,118 +55,144 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(express.json());
 
-function getBookingPermissionForPath(path: string, method: string): string | null {
-  const cleanPath = path.split('?')[0];
+function getBookingPermissionForPath(
+  path: string,
+  method: string,
+): string | null {
+  const cleanPath = path.split("?")[0];
 
-  if (cleanPath.startsWith('/catalog')) {
-    if (method === 'GET') return 'READ_SERVICE';
-    if (method === 'POST') return 'CREATE_SERVICE';
-    if (method === 'PUT' || method === 'PATCH') return 'UPDATE_SERVICE';
-    if (method === 'DELETE') return 'DELETE_SERVICE';
+  if (cleanPath.startsWith("/catalog")) {
+    if (method === "GET") return "READ_SERVICE";
+    if (method === "POST") return "CREATE_SERVICE";
+    if (method === "PUT" || method === "PATCH") return "UPDATE_SERVICE";
+    if (method === "DELETE") return "DELETE_SERVICE";
   }
 
-  if (cleanPath.startsWith('/finance/expenses')) {
-    if (method === 'GET') return 'READ_TRANSACTION';
-    if (method === 'POST') return 'CREATE_TRANSACTION';
-    if (method === 'PUT' || method === 'PATCH') return 'UPDATE_TRANSACTION';
-    if (method === 'DELETE') return 'DELETE_TRANSACTION';
+  if (cleanPath.startsWith("/finance/expenses")) {
+    if (method === "GET") return "READ_TRANSACTION";
+    if (method === "POST") return "CREATE_TRANSACTION";
+    if (method === "PUT" || method === "PATCH") return "UPDATE_TRANSACTION";
+    if (method === "DELETE") return "DELETE_TRANSACTION";
   }
 
-  if (cleanPath.startsWith('/finance/templates')) {
-    if (method === 'GET') return 'READ_TEMPLATE';
-    if (method === 'POST') return 'CREATE_TEMPLATE';
-    if (method === 'PUT' || method === 'PATCH') return 'UPDATE_TEMPLATE';
+  if (cleanPath.startsWith("/finance/templates")) {
+    if (method === "GET") return "READ_TEMPLATE";
+    if (method === "POST") return "CREATE_TEMPLATE";
+    if (method === "PUT" || method === "PATCH") return "UPDATE_TEMPLATE";
   }
 
-  if (cleanPath.startsWith('/finance/vendors/wallets')) {
-    return 'READ_VENDOR';
+  if (cleanPath.startsWith("/finance/vendors/wallets")) {
+    return "READ_VENDOR";
   }
 
-  if (cleanPath.startsWith('/finance')) {
-    if (method === 'GET') return 'READ_TRANSACTION';
-    return 'UPDATE_TRANSACTION';
+  if (cleanPath.startsWith("/finance")) {
+    if (method === "GET") return "READ_TRANSACTION";
+    return "UPDATE_TRANSACTION";
   }
 
-  if (cleanPath.startsWith('/ledger')) {
-    if (method === 'GET') return 'READ_TRANSACTION';
-    return 'CREATE_TRANSACTION';
+  if (cleanPath.startsWith("/ledger")) {
+    if (method === "GET") return "READ_TRANSACTION";
+    return "CREATE_TRANSACTION";
   }
 
-  if (cleanPath === '/search' || cleanPath === '/my-bookings') {
-    return 'READ_BOOKING';
+  if (cleanPath === "/search" || cleanPath === "/my-bookings") {
+    return "READ_BOOKING";
   }
 
   // Check sub-resources under /:id or general booking resources
   const isNumberPath = /^\/\d+/.test(cleanPath);
   if (isNumberPath) {
-    if (cleanPath.includes('/payments') || cleanPath.includes('/refunds') || cleanPath.includes('/discounts') || cleanPath.includes('/vendor-payments')) {
-      if (method === 'GET') return 'READ_BOOKING';
-      if (method === 'POST') return 'CREATE_TRANSACTION';
-      return 'UPDATE_TRANSACTION';
+    if (
+      cleanPath.includes("/payments") ||
+      cleanPath.includes("/refunds") ||
+      cleanPath.includes("/discounts") ||
+      cleanPath.includes("/vendor-payments")
+    ) {
+      if (method === "GET") return "READ_BOOKING";
+      if (method === "POST") return "CREATE_TRANSACTION";
+      return "UPDATE_TRANSACTION";
     }
     // Accommodations, flights, transports, visas, additional-services, or the booking itself
-    if (method === 'GET') return 'READ_BOOKING';
-    if (method === 'POST') return 'CREATE_BOOKING';
-    if (method === 'PATCH' || method === 'PUT') return 'UPDATE_BOOKING';
-    if (method === 'DELETE') return 'DELETE_BOOKING';
+    if (method === "GET") return "READ_BOOKING";
+    if (method === "POST") return "CREATE_BOOKING";
+    if (method === "PATCH" || method === "PUT") return "UPDATE_BOOKING";
+    if (method === "DELETE") return "DELETE_BOOKING";
   }
 
-  if (cleanPath.startsWith('/bookings') || cleanPath === '/') {
-    if (method === 'GET') return 'READ_BOOKING';
-    if (method === 'POST') return 'CREATE_BOOKING';
-    if (method === 'PATCH' || method === 'PUT') return 'UPDATE_BOOKING';
-    if (method === 'DELETE') return 'DELETE_BOOKING';
+  if (cleanPath.startsWith("/bookings") || cleanPath === "/") {
+    if (method === "GET") return "READ_BOOKING";
+    if (method === "POST") return "CREATE_BOOKING";
+    if (method === "PATCH" || method === "PUT") return "UPDATE_BOOKING";
+    if (method === "DELETE") return "DELETE_BOOKING";
   }
 
   return null;
 }
 
 app.use(async (req: Request, res: Response, next: NextFunction) => {
-  const userRole = req.headers['x-user-role'] as string;
-  const userId = req.headers['x-user-id'] as string;
-  const tenantId = req.headers['x-tenant-id'] as string;
+  const userRole = req.headers["x-user-role"] as string;
+  const userId = req.headers["x-user-id"] as string;
+  const tenantId = req.headers["x-tenant-id"] as string;
 
-  if (userRole === 'AGENT') {
+  if (userRole === "AGENT") {
     const path = req.path;
     // Bypass health check and public endpoints
-    if (path === '/health' || path.startsWith('/public')) {
+    if (path === "/health" || path.startsWith("/public")) {
       return next();
     }
 
     if (!userId || !tenantId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Missing user or tenant context' });
+      return res
+        .status(403)
+        .json({
+          error: "Forbidden",
+          message: "Permission Denied: Missing user or tenant context",
+        });
     }
 
     try {
-      const requiredPermission = getBookingPermissionForPath(req.path, req.method);
-      const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
-      const checkUrl = `${authUrl}/agents/verify-request${requiredPermission ? `?permission=${requiredPermission}` : ''}`;
+      const requiredPermission = getBookingPermissionForPath(
+        req.path,
+        req.method,
+      );
+      const authUrl =
+        process.env.AUTH_SERVICE_URL || "http://auth-service:4001";
+      const checkUrl = `${authUrl}/agents/verify-request${requiredPermission ? `?permission=${requiredPermission}` : ""}`;
 
       const response = await fetch(checkUrl, {
         headers: {
-          'X-User-Id': userId,
-          'X-User-Role': userRole,
-          'X-Tenant-Id': tenantId
-        }
+          "X-User-Id": userId,
+          "X-User-Role": userRole,
+          "X-Tenant-Id": tenantId,
+        },
       });
 
       if (!response.ok) {
-        return res.status(403).json({ error: 'Forbidden', message: 'Permission Denied: Verification service error' });
+        return res
+          .status(403)
+          .json({
+            error: "Forbidden",
+            message: "Permission Denied: Verification service error",
+          });
       }
 
       const data = await response.json();
       if (!data.allowed) {
-        return res.status(403).json({ error: 'Forbidden', message: data.message || 'Permission Denied' });
+        return res
+          .status(403)
+          .json({
+            error: "Forbidden",
+            message: data.message || "Permission Denied",
+          });
       }
     } catch (error) {
-      console.error('Booking agent verification error:', error);
-      return res.status(500).json({ error: 'Internal Server Error' });
+      console.error("Booking agent verification error:", error);
+      return res.status(500).json({ error: "Internal Server Error" });
     }
   }
 
   next();
 });
-
 
 // Extend Express Request type
 interface CustomRequest extends Request {
@@ -220,6 +246,47 @@ const getUserName = async (
     console.error("Error fetching user name from auth-service:", err);
   }
   return "Agent";
+};
+
+const getTenantCurrency = async (
+  tenantId: string | number | undefined,
+): Promise<string> => {
+  if (!tenantId) return "GBP";
+  try {
+    const authUrl = process.env.AUTH_SERVICE_URL || "http://auth-service:4001";
+    const res = await fetch(`${authUrl}/tenants/profile`, {
+      headers: { "x-tenant-id": String(tenantId) },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.tenant?.currency || "GBP";
+    }
+  } catch (err) {
+    console.error("Error fetching tenant currency from auth-service:", err);
+  }
+  return "GBP";
+};
+
+const getTenantCurrencySymbol = async (
+  tenantId: string | number | undefined,
+): Promise<string> => {
+  const currency = await getTenantCurrency(tenantId);
+  switch (currency.toUpperCase()) {
+    case "GBP":
+      return "£";
+    case "EUR":
+      return "€";
+    case "PKR":
+      return "Rs";
+    case "USD":
+      return "$";
+    case "AED":
+      return "AED ";
+    case "MYR":
+      return "RM";
+    default:
+      return `${currency} `;
+  }
 };
 
 const resolveVendorName = async (
@@ -508,13 +575,11 @@ app.get(
       res.status(200).json({ bookings });
     } catch (error: any) {
       console.error("Search bookings error:", error);
-      res
-        .status(500)
-        .json({
-          error: "Internal Server Error",
-          message: error.message,
-          stack: error.stack,
-        });
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: error.message,
+        stack: error.stack,
+      });
     }
   },
 );
@@ -826,12 +891,10 @@ app.get(
 
       // Enforce Tenant isolation (unless platform admin)
       if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: "Access denied to this booking workspace",
-          });
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Access denied to this booking workspace",
+        });
       }
 
       if (booking.isLocked && req.userRole === Role.AGENT) {
@@ -840,52 +903,89 @@ app.get(
           .json({ error: "Forbidden", message: "This booking is locked." });
       }
 
+      // Fetch allocations for this booking
+      const allocations = await prisma.bookingAllocation.findMany({
+        where: { bookingId },
+        include: { transaction: true }
+      });
+
       const vendorPayments = booking.payments.filter(
         (p) => p.paymentType === "Sent to Vendor",
       );
+
+      const getAllocatedSum = (type: string, id: number) => {
+        return allocations
+          .filter((a) => a.serviceType === type && a.serviceId === id)
+          .reduce((sum, a) => sum + parseFloat(a.allocatedAmount.toString()), 0);
+      };
+
       booking.flightServices.forEach((s) => {
+        const cost = parseFloat((s.price || 0).toString());
+        const allocated = getAllocatedSum("FLIGHT", s.id);
         // @ts-ignore
         const matchString = `- ${s.flightNo || "No Flight No"} (${s.pnr})`;
-        if (
-          !s.isPaidToVendor &&
-          vendorPayments.some((p) => p.notes?.includes(matchString))
-        )
+        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+          ? cost
+          : 0;
+        if (allocated + legacyPaid >= cost) {
           s.isPaidToVendor = true;
-      });
-      booking.accommodations.forEach((s) => {
-        const matchString = `Hotel: ${s.hotelName}`;
-        if (
-          !s.isPaidToVendor &&
-          vendorPayments.some((p) => p.notes?.includes(matchString))
-        )
-          s.isPaidToVendor = true;
-      });
-      booking.transportServices.forEach((s) => {
-        const matchString = `Transport: ${s.vehicleType}`;
-        if (
-          !s.isPaidToVendor &&
-          vendorPayments.some((p) => p.notes?.includes(matchString))
-        )
-          s.isPaidToVendor = true;
-      });
-      booking.visaServices.forEach((s) => {
-        const matchString = `Visa: ${s.vendorName || "Unknown"} (${s.visaType})`;
-        if (
-          !s.isPaidToVendor &&
-          vendorPayments.some((p) => p.notes?.includes(matchString))
-        )
-          s.isPaidToVendor = true;
-      });
-      booking.additionalServices.forEach((s) => {
-        const matchString = `Service: ${s.serviceName}`;
-        if (
-          !s.isPaidToVendor &&
-          vendorPayments.some((p) => p.notes?.includes(matchString))
-        )
-          s.isPaidToVendor = true;
+        }
       });
 
-      res.status(200).json({ booking });
+      booking.accommodations.forEach((s) => {
+        const cost = parseFloat((s.price || 0).toString());
+        const allocated = getAllocatedSum("HOTEL", s.id);
+        const matchString = `Hotel: ${s.hotelName}`;
+        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+          ? cost
+          : 0;
+        if (allocated + legacyPaid >= cost) {
+          s.isPaidToVendor = true;
+        }
+      });
+
+      booking.transportServices.forEach((s) => {
+        const cost = parseFloat((s.price || 0).toString());
+        const allocated = getAllocatedSum("TRANSPORT", s.id);
+        const matchString = `Transport: ${s.vehicleType}`;
+        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+          ? cost
+          : 0;
+        if (allocated + legacyPaid >= cost) {
+          s.isPaidToVendor = true;
+        }
+      });
+
+      booking.visaServices.forEach((s) => {
+        const cost = parseFloat((s.price || 0).toString());
+        const allocated = getAllocatedSum("VISA", s.id);
+        const matchString = `Visa: ${s.vendorName || "Unknown"} (${s.visaType})`;
+        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+          ? cost
+          : 0;
+        if (allocated + legacyPaid >= cost) {
+          s.isPaidToVendor = true;
+        }
+      });
+
+      booking.additionalServices.forEach((s) => {
+        const cost = parseFloat((s.charges || 0).toString());
+        const allocated = getAllocatedSum("ADDITIONAL", s.id);
+        const matchString = `Service: ${s.serviceName}`;
+        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+          ? cost
+          : 0;
+        if (allocated + legacyPaid >= cost) {
+          s.isPaidToVendor = true;
+        }
+      });
+
+      res.status(200).json({
+        booking: {
+          ...booking,
+          allocations
+        }
+      });
     } catch (error) {
       console.error("Fetch Booking Detail Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -930,12 +1030,10 @@ app.patch(
       }
 
       if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: "Access denied to this booking workspace",
-          });
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Access denied to this booking workspace",
+        });
       }
 
       if (booking.isLocked && req.userRole === Role.AGENT) {
@@ -945,12 +1043,10 @@ app.patch(
       }
 
       if (booking.isLocked && req.userRole === Role.AGENT) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: "This booking is locked and cannot be edited by agents.",
-          });
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "This booking is locked and cannot be edited by agents.",
+        });
       }
 
       const updatedBooking = await prisma.booking.update({
@@ -992,12 +1088,10 @@ app.patch(
         },
       });
 
-      res
-        .status(200)
-        .json({
-          message: "Booking updated successfully",
-          booking: updatedBooking,
-        });
+      res.status(200).json({
+        message: "Booking updated successfully",
+        booking: updatedBooking,
+      });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res
@@ -1092,12 +1186,10 @@ app.post(
           .json({ error: "Validation failed", message: messages });
       }
       console.error("Add Passenger Error:", error);
-      res
-        .status(500)
-        .json({
-          error: "Internal Server Error",
-          message: error?.message || "Unknown error",
-        });
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: error?.message || "Unknown error",
+      });
     }
   },
 );
@@ -1146,12 +1238,10 @@ app.post(
 
       // Ensure they have the correct role for clawbacks
       if (req.userRole !== "MAIN_COMPANY_ADMIN" && !req.isPlatformAdmin) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: "Only MAIN_COMPANY_ADMIN can clawback margin",
-          });
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Only MAIN_COMPANY_ADMIN can clawback margin",
+        });
       }
 
       if (!booking.agentName) {
@@ -1341,12 +1431,10 @@ app.post(
       }
 
       if (req.userRole === Role.AGENT) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: "Agents are not allowed to finalize margin.",
-          });
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Agents are not allowed to finalize margin.",
+        });
       }
 
       if (
@@ -1354,12 +1442,10 @@ app.post(
         booking.agentName === "System / Auto" ||
         booking.agentName === "Direct Client"
       ) {
-        return res
-          .status(400)
-          .json({
-            error: "Bad Request",
-            message: "Booking has no assigned agent.",
-          });
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Booking has no assigned agent.",
+        });
       }
 
       const legacyVendorPayments =
@@ -1406,13 +1492,11 @@ app.post(
         flightCost + accCost + transCost + visaCost + addCost;
 
       if (totalVendorSent < totalVendorCost) {
-        return res
-          .status(400)
-          .json({
-            error: "Bad Request",
-            message:
-              "Cannot finalize margin: Vendor payments are less than the total booking cost.",
-          });
+        return res.status(400).json({
+          error: "Bad Request",
+          message:
+            "Cannot finalize margin: Vendor payments are less than the total booking cost.",
+        });
       }
 
       // Update marginStatus
@@ -1567,6 +1651,7 @@ app.post(
             if (absorbedAmount > 0) {
               // Automatically log a BookingPayment of type Margin Paid to Agent (Debt Offset)
               // so that the booking's remaining margin goes down correctly without double-debiting the wallet!
+              const curSym = await getTenantCurrencySymbol(tenantIdNumeric);
               await prisma.bookingPayment.create({
                 data: {
                   tenantId: tenantIdNumeric,
@@ -1575,7 +1660,7 @@ app.post(
                   paymentMethod: "Debt Offset",
                   paymentType: "Margin Paid to Agent",
                   paidOn: new Date(),
-                  notes: `System automatically offset £${absorbedAmount.toFixed(2)} against past agent debt upon finalization.`,
+                  notes: `System automatically offset ${curSym}${absorbedAmount.toFixed(2)} against past agent debt upon finalization.`,
                 },
               });
 
@@ -1647,20 +1732,19 @@ app.post(
         booking.marginStatus !== "Finalized" &&
         booking.marginStatus !== "Paid"
       ) {
-        return res
-          .status(400)
-          .json({
-            error: "Bad Request",
-            message:
-              "Cannot pay margin to agent until the booking margin has been finalized.",
-          });
+        return res.status(400).json({
+          error: "Bad Request",
+          message:
+            "Cannot pay margin to agent until the booking margin has been finalized.",
+        });
       }
 
+      const curSym = await getTenantCurrencySymbol(tenantIdNumeric);
       let finalNotes = parsedData.notes || "";
       if (parsedData.cardCharges && parsedData.cardCharges > 0) {
         finalNotes = finalNotes
-          ? `${finalNotes}\n(Includes Credit Card Charge: £${parsedData.cardCharges.toFixed(2)})`
-          : `(Includes Credit Card Charge: £${parsedData.cardCharges.toFixed(2)})`;
+          ? `${finalNotes}\n(Includes Credit Card Charge: ${curSym}${parsedData.cardCharges.toFixed(2)})`
+          : `(Includes Credit Card Charge: ${curSym}${parsedData.cardCharges.toFixed(2)})`;
       }
 
       const payment = await prisma.bookingPayment.create({
@@ -1690,19 +1774,17 @@ app.post(
           data: {
             tenantId: booking.tenantId,
             title: "Transaction Approval Request",
-            message: `${parsedData.loggedByName || agentUserName || "Agent"} logged a payment of £${parsedData.amount.toFixed(2)} via ${parsedData.paymentMethod} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+            message: `${parsedData.loggedByName || agentUserName || "Agent"} logged a payment of ${curSym}${parsedData.amount.toFixed(2)} via ${parsedData.paymentMethod} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
             type: "PAYMENT_APPROVAL",
             referenceId: String(payment.id),
             isRead: false,
           },
         });
 
-        return res
-          .status(201)
-          .json({
-            message: "Transaction submitted for admin approval successfully",
-            payment,
-          });
+        return res.status(201).json({
+          message: "Transaction submitted for admin approval successfully",
+          payment,
+        });
       }
 
       // --- LEDGER INTEGRATION (DOUBLE ENTRY) (Only for Admins/Auto-Approved) ---
@@ -1895,12 +1977,10 @@ app.post(
           .json({ error: "Validation failed", message: messages });
       }
       console.error("Add Payment Error:", error);
-      res
-        .status(500)
-        .json({
-          error: "Internal Server Error",
-          message: error?.message || "Unknown error",
-        });
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: error?.message || "Unknown error",
+      });
     }
   },
 );
@@ -1977,24 +2057,23 @@ app.post(
           },
         });
 
+        const curSym = await getTenantCurrencySymbol(booking.tenantId);
         // Create Admin Notification
         await prisma.notification.create({
           data: {
             tenantId: booking.tenantId,
             title: "Vendor Payment Approval Request",
-            message: `${parsedData.loggedByName || agentUserName || "Agent"} logged a vendor payment of £${parsedData.amount.toFixed(2)} to ${parsedData.vendorName} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+            message: `${parsedData.loggedByName || agentUserName || "Agent"} logged a vendor payment of ${curSym}${parsedData.amount.toFixed(2)} to ${parsedData.vendorName} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
             type: "PAYMENT_APPROVAL",
             referenceId: String(payment.id),
             isRead: false,
           },
         });
 
-        return res
-          .status(201)
-          .json({
-            message: "Vendor payment submitted for admin approval successfully",
-            payment,
-          });
+        return res.status(201).json({
+          message: "Vendor payment submitted for admin approval successfully",
+          payment,
+        });
       }
 
       const remainingDue =
@@ -2224,13 +2303,11 @@ app.post(
       }
       // -------------------------
 
-      res
-        .status(201)
-        .json({
-          message: "Vendor payment registered successfully",
-          vendorPayment,
-          allocationsCount: allocations.length,
-        });
+      res.status(201).json({
+        message: "Vendor payment registered successfully",
+        vendorPayment,
+        allocationsCount: allocations.length,
+      });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         const messages = error.errors
@@ -2241,12 +2318,10 @@ app.post(
           .json({ error: "Validation failed", message: messages });
       }
       console.error("Add Vendor Payment Error:", error);
-      res
-        .status(500)
-        .json({
-          error: "Internal Server Error",
-          message: error?.message || "Unknown error",
-        });
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: error?.message || "Unknown error",
+      });
     }
   },
 );
@@ -2365,12 +2440,10 @@ app.post(
         });
       }
 
-      res
-        .status(201)
-        .json({
-          message: "Accommodation service registered successfully",
-          accommodation,
-        });
+      res.status(201).json({
+        message: "Accommodation service registered successfully",
+        accommodation,
+      });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         const messages = error.errors
@@ -2381,12 +2454,10 @@ app.post(
           .json({ error: "Validation failed", message: messages });
       }
       console.error("Add Accommodation Error:", error);
-      res
-        .status(500)
-        .json({
-          error: "Internal Server Error",
-          message: error?.message || "Unknown error",
-        });
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: error?.message || "Unknown error",
+      });
     }
   },
 );
@@ -2625,12 +2696,10 @@ app.post(
       const { vendorCategory, serviceName, amount, notes, date } = req.body;
 
       if (!vendorCategory || !amount || !date) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message: "vendorCategory, amount, and date are required",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message: "vendorCategory, amount, and date are required",
+        });
       }
 
       const booking = await prisma.booking.findUnique({
@@ -2680,24 +2749,23 @@ app.post(
           },
         });
 
+        const curSym = await getTenantCurrencySymbol(booking.tenantId);
         // Create Admin Notification
         await prisma.notification.create({
           data: {
             tenantId: booking.tenantId,
             title: "Discount Approval Request",
-            message: `${agentUserName || "Agent"} logged a discount of £${parseFloat(amount).toFixed(2)} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+            message: `${agentUserName || "Agent"} logged a discount of ${curSym}${parseFloat(amount).toFixed(2)} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
             type: "PAYMENT_APPROVAL",
             referenceId: String(payment.id),
             isRead: false,
           },
         });
 
-        return res
-          .status(201)
-          .json({
-            message: "Discount submitted for admin approval successfully",
-            payment,
-          });
+        return res.status(201).json({
+          message: "Discount submitted for admin approval successfully",
+          payment,
+        });
       }
 
       const discount = await (prisma as any).bookingDiscount.create({
@@ -2777,12 +2845,10 @@ app.post(
         req.body;
 
       if (!direction || !vendorCategory || !amount || !date) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message: "direction, vendorCategory, amount, and date are required",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message: "direction, vendorCategory, amount, and date are required",
+        });
       }
 
       const booking = await prisma.booking.findUnique({
@@ -2833,24 +2899,23 @@ app.post(
           },
         });
 
+        const curSym = await getTenantCurrencySymbol(booking.tenantId);
         // Create Admin Notification
         await prisma.notification.create({
           data: {
             tenantId: booking.tenantId,
             title: "Refund Approval Request",
-            message: `${agentUserName || "Agent"} logged a refund (${direction}) of £${parseFloat(amount).toFixed(2)} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
+            message: `${agentUserName || "Agent"} logged a refund (${direction}) of ${curSym}${parseFloat(amount).toFixed(2)} for booking reference ${booking.bookingReference}. Please review and approve/reject.`,
             type: "PAYMENT_APPROVAL",
             referenceId: String(payment.id),
             isRead: false,
           },
         });
 
-        return res
-          .status(201)
-          .json({
-            message: "Refund submitted for admin approval successfully",
-            payment,
-          });
+        return res.status(201).json({
+          message: "Refund submitted for admin approval successfully",
+          payment,
+        });
       }
 
       const refund = await (prisma as any).bookingRefund.create({
@@ -2993,12 +3058,10 @@ app.post(
       const { serviceName, charges, notes, vendorName } = req.body;
 
       if (!serviceName) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message: "serviceName is required",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message: "serviceName is required",
+        });
       }
 
       const booking = await prisma.booking.findUnique({
@@ -3054,12 +3117,10 @@ app.post(
         },
       });
 
-      res
-        .status(201)
-        .json({
-          message: "Additional Service logged successfully",
-          additionalService,
-        });
+      res.status(201).json({
+        message: "Additional Service logged successfully",
+        additionalService,
+      });
     } catch (error) {
       console.error("Add Additional Service Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -3082,12 +3143,10 @@ app.patch(
         where: { id: serviceId },
       });
       if (!existing) {
-        return res
-          .status(404)
-          .json({
-            error: "Not Found",
-            message: "Accommodation service not found",
-          });
+        return res.status(404).json({
+          error: "Not Found",
+          message: "Accommodation service not found",
+        });
       }
 
       const updateData: any = {};
@@ -3449,12 +3508,10 @@ app.patch(
         where: { id: serviceId },
       });
       if (!existing) {
-        return res
-          .status(404)
-          .json({
-            error: "Not Found",
-            message: "Additional service not found",
-          });
+        return res.status(404).json({
+          error: "Not Found",
+          message: "Additional service not found",
+        });
       }
 
       const updateData: any = {};
@@ -3570,12 +3627,10 @@ app.patch(
       });
       res.json({ vendorPayment: updated });
     } catch (err: any) {
-      res
-        .status(500)
-        .json({
-          error: "Failed to update vendor payment",
-          message: err.message,
-        });
+      res.status(500).json({
+        error: "Failed to update vendor payment",
+        message: err.message,
+      });
     }
   },
 );
@@ -3614,13 +3669,11 @@ app.delete(
           userRole !== Role.COMPANY_ADMIN &&
           userRole !== Role.ADMIN
         ) {
-          return res
-            .status(403)
-            .json({
-              error: "Forbidden",
-              message:
-                "Access Denied: You do not have permission to delete financial records.",
-            });
+          return res.status(403).json({
+            error: "Forbidden",
+            message:
+              "Access Denied: You do not have permission to delete financial records.",
+          });
         }
       }
 
@@ -4021,12 +4074,10 @@ app.post(
         }
 
         if (!bookingIdToUse) {
-          return res
-            .status(400)
-            .json({
-              error: "Bad Request",
-              message: "No bookings found to link vendor payment request.",
-            });
+          return res.status(400).json({
+            error: "Bad Request",
+            message: "No bookings found to link vendor payment request.",
+          });
         }
 
         const agentUserName = await getUserName(req.userId, req.tenantId);
@@ -4034,12 +4085,10 @@ app.post(
           where: { id: bookingIdToUse },
         });
         if (!booking) {
-          return res
-            .status(400)
-            .json({
-              error: "Bad Request",
-              message: "Linked booking not found.",
-            });
+          return res.status(400).json({
+            error: "Bad Request",
+            message: "Linked booking not found.",
+          });
         }
 
         // Create a pending BookingPayment to represent this bulk vendor payment
@@ -4060,25 +4109,24 @@ app.post(
           },
         });
 
+        const curSym = await getTenantCurrencySymbol(booking.tenantId);
         // Create Admin Notification
         await prisma.notification.create({
           data: {
             tenantId: booking.tenantId,
             title: "Bulk Vendor Payment Approval Request",
-            message: `${agentUserName || "Agent"} logged a bulk vendor payment of £${cashAmount.toFixed(2)} to ${vendorName}. Please review and approve/reject.`,
+            message: `${agentUserName || "Agent"} logged a bulk vendor payment of ${curSym}${cashAmount.toFixed(2)} to ${vendorName}. Please review and approve/reject.`,
             type: "PAYMENT_APPROVAL",
             referenceId: String(payment.id),
             isRead: false,
           },
         });
 
-        return res
-          .status(201)
-          .json({
-            message:
-              "Bulk vendor payment submitted for admin approval successfully",
-            payment,
-          });
+        return res.status(201).json({
+          message:
+            "Bulk vendor payment submitted for admin approval successfully",
+          payment,
+        });
       }
 
       // Find or create Vendor LedgerAccount
@@ -4367,9 +4415,10 @@ app.post(
 
       // 2. Allocated Cash Transaction
       if (allocatedCash > 0) {
+        const curSym = await getTenantCurrencySymbol(tenantId);
         const notesSuffix =
           creditUsedAmount > 0
-            ? ` (£${creditUsedAmount.toFixed(2)} applied from Vendor Wallet)`
+            ? ` (${curSym}${creditUsedAmount.toFixed(2)} applied from Vendor Wallet)`
             : "";
         const cashTx = await prisma.ledgerTransaction.create({
           data: {
@@ -4539,14 +4588,18 @@ app.post(
         notes,
         periodFrom,
         periodTo,
-        payrollId
+        payrollId,
       } = req.body;
 
       const basicSalaryVal = parseFloat(basicSalary) || 0;
       const allowancesVal = parseFloat(allowances) || 0;
       const deductionsVal = parseFloat(deductions) || 0;
-      const finalNetPay = Math.max(0, basicSalaryVal + allowancesVal - deductionsVal);
+      const finalNetPay = Math.max(
+        0,
+        basicSalaryVal + allowancesVal - deductionsVal,
+      );
 
+      const curSym = await getTenantCurrencySymbol(tenantId);
       // Create ledger transaction
       const tx = await prisma.ledgerTransaction.create({
         data: {
@@ -4554,8 +4607,8 @@ app.post(
           transactionDate: new Date(),
           type: "PAYROLL",
           referenceNumber: payrollId ? `Payroll #${payrollId}` : null,
-          description: `Payroll for ${agentName} (${periodFrom} - ${periodTo}). Base: £${basicSalaryVal.toFixed(2)}, Allowances: £${allowancesVal.toFixed(2)}, Deductions: £${deductionsVal.toFixed(2)}. Net Pay: £${finalNetPay.toFixed(2)}. (Excluding agent margin)${notes ? ` Notes: ${notes}` : ""}`,
-        }
+          description: `Payroll for ${agentName} (${periodFrom} - ${periodTo}). Base: ${curSym}${basicSalaryVal.toFixed(2)}, Allowances: ${curSym}${allowancesVal.toFixed(2)}, Deductions: ${curSym}${deductionsVal.toFixed(2)}. Net Pay: ${curSym}${finalNetPay.toFixed(2)}. (Excluding agent margin)${notes ? ` Notes: ${notes}` : ""}`,
+        },
       });
 
       // Find or create AGENT_RECEIVABLE ledger account
@@ -4564,7 +4617,7 @@ app.post(
           tenantId,
           accountType: "AGENT_RECEIVABLE",
           entityName: agentName,
-        }
+        },
       });
       if (!agentAccount) {
         agentAccount = await prisma.ledgerAccount.create({
@@ -4572,7 +4625,7 @@ app.post(
             tenantId,
             accountType: "AGENT_RECEIVABLE",
             entityName: agentName,
-          }
+          },
         });
       }
 
@@ -4582,7 +4635,7 @@ app.post(
           tenantId,
           accountType: "EXPENSE",
           entityName: `Agent Salary - ${agentName}`,
-        }
+        },
       });
       if (!salaryExpenseAccount) {
         salaryExpenseAccount = await prisma.ledgerAccount.create({
@@ -4590,7 +4643,7 @@ app.post(
             tenantId,
             accountType: "EXPENSE",
             entityName: `Agent Salary - ${agentName}`,
-          }
+          },
         });
       }
 
@@ -4608,7 +4661,7 @@ app.post(
           accountId: agentAccount.id,
           debitAmount: 0,
           creditAmount: finalNetPay,
-        }
+        },
       ];
 
       // If there are deductions, credit a separate deductions account
@@ -4619,7 +4672,7 @@ app.post(
             tenantId,
             accountType: "EXPENSE",
             entityName: `Agent Deductions - ${agentName}`,
-          }
+          },
         });
         if (!deductionsAccount) {
           deductionsAccount = await prisma.ledgerAccount.create({
@@ -4627,7 +4680,7 @@ app.post(
               tenantId,
               accountType: "EXPENSE",
               entityName: `Agent Deductions - ${agentName}`,
-            }
+            },
           });
         }
 
@@ -4641,40 +4694,42 @@ app.post(
 
       // Bulk create entries
       await prisma.ledgerEntry.createMany({
-        data: entries
+        data: entries,
       });
 
       // Update balances
       // Debit increments Expense balance
       await prisma.ledgerAccount.update({
         where: { id: salaryExpenseAccount.id },
-        data: { balance: { increment: basicSalaryVal + allowancesVal } }
+        data: { balance: { increment: basicSalaryVal + allowancesVal } },
       });
 
       // Credit decrements Agent Receivable balance
       await prisma.ledgerAccount.update({
         where: { id: agentAccount.id },
-        data: { balance: { decrement: finalNetPay } }
+        data: { balance: { decrement: finalNetPay } },
       });
 
       // Credit decrements Deductions balance (reducing expense)
       if (deductionsAccount && deductionsVal > 0) {
         await prisma.ledgerAccount.update({
           where: { id: deductionsAccount.id },
-          data: { balance: { decrement: deductionsVal } }
+          data: { balance: { decrement: deductionsVal } },
         });
       }
 
       res.status(200).json({
         message: "Payroll ledger entry created successfully",
         transactionId: tx.id,
-        netPay: finalNetPay
+        netPay: finalNetPay,
       });
     } catch (error: any) {
       console.error("Payroll Ledger Entry Error:", error);
-      res.status(500).json({ error: "Internal Server Error", message: error.message });
+      res
+        .status(500)
+        .json({ error: "Internal Server Error", message: error.message });
     }
-  }
+  },
 );
 
 app.get(
@@ -4763,26 +4818,32 @@ app.get(
 
       // Group ledger entries by accountId and sum their debit/credit up to endLimit
       const balanceSummaries = await prisma.ledgerEntry.groupBy({
-        by: ['accountId'],
+        by: ["accountId"],
         _sum: {
           debitAmount: true,
-          creditAmount: true
+          creditAmount: true,
         },
         where: {
           account: { tenantId },
           transaction: {
             transactionDate: {
-              lte: endLimit
-            }
-          }
-        }
+              lte: endLimit,
+            },
+          },
+        },
       });
 
       // Map the computed balances to the accounts
       for (const account of accounts) {
-        const summary = balanceSummaries.find(s => s.accountId === account.id);
-        const debitSum = summary?._sum?.debitAmount ? Number(summary._sum.debitAmount) : 0;
-        const creditSum = summary?._sum?.creditAmount ? Number(summary._sum.creditAmount) : 0;
+        const summary = balanceSummaries.find(
+          (s) => s.accountId === account.id,
+        );
+        const debitSum = summary?._sum?.debitAmount
+          ? Number(summary._sum.debitAmount)
+          : 0;
+        const creditSum = summary?._sum?.creditAmount
+          ? Number(summary._sum.creditAmount)
+          : 0;
         account.balance = (creditSum - debitSum) as any;
       }
 
@@ -5080,12 +5141,10 @@ app.post(
       const tenantId = parseInt(req.tenantId!);
       const { name, amount, type, date, notes } = req.body;
       if (!name || amount === undefined || !type || !date) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message: "name, amount, type, and date are required",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message: "name, amount, type, and date are required",
+        });
       }
       const expense = await prisma.expense.create({
         data: {
@@ -5357,12 +5416,10 @@ app.post(
       }
 
       if (payment.status !== "pending") {
-        return res
-          .status(400)
-          .json({
-            error: "Bad Request",
-            message: "Payment is not in pending status",
-          });
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Payment is not in pending status",
+        });
       }
 
       const booking = payment.booking;
@@ -6044,9 +6101,10 @@ app.post(
         }
 
         if (allocatedCash > 0) {
+          const curSym = await getTenantCurrencySymbol(tenantId);
           const notesSuffix =
             creditUsedAmount > 0
-              ? ` (£${creditUsedAmount.toFixed(2)} applied from Vendor Wallet)`
+              ? ` (${curSym}${creditUsedAmount.toFixed(2)} applied from Vendor Wallet)`
               : "";
           const cashTx = await prisma.ledgerTransaction.create({
             data: {
@@ -6376,12 +6434,10 @@ app.post(
         data: { isRead: true, title: "Transaction Approved ✓" },
       });
 
-      res
-        .status(200)
-        .json({
-          message: "Transaction approved successfully",
-          payment: updatedPayment,
-        });
+      res.status(200).json({
+        message: "Transaction approved successfully",
+        payment: updatedPayment,
+      });
     } catch (error) {
       console.error("Approve Payment Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -6415,12 +6471,10 @@ app.post(
       }
 
       if (payment.status !== "pending") {
-        return res
-          .status(400)
-          .json({
-            error: "Bad Request",
-            message: "Payment is not in pending status",
-          });
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Payment is not in pending status",
+        });
       }
 
       // Resolve who is rejecting this
@@ -6445,12 +6499,10 @@ app.post(
         data: { isRead: true, title: "Transaction Rejected ✗" },
       });
 
-      res
-        .status(200)
-        .json({
-          message: "Transaction rejected successfully",
-          payment: updatedPayment,
-        });
+      res.status(200).json({
+        message: "Transaction rejected successfully",
+        payment: updatedPayment,
+      });
     } catch (error) {
       console.error("Reject Payment Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -6581,11 +6633,38 @@ const MOCK_PREVIEW_DATA = {
   },
 };
 
+async function fetchTenantProfile(
+  tenantId: number,
+): Promise<{ name: string; logo: string | null } | null> {
+  const authUrl = process.env.AUTH_SERVICE_URL || "http://auth-service:4001";
+  try {
+    const res = await fetch(`${authUrl}/tenants/profile`, {
+      method: "GET",
+      headers: {
+        "x-tenant-id": String(tenantId),
+      },
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      if (data && data.tenant) {
+        return {
+          name: data.tenant.name || "",
+          logo: data.tenant.logo || null,
+        };
+      }
+    }
+  } catch (error) {
+    console.error("fetchTenantProfile error:", error);
+  }
+  return null;
+}
+
 const compileTemplateWithBookingData = (
   template: { type: string; structureHtml: string; structureCss: string },
   companyContext: any,
   booking: any,
   signature: string,
+  currencySymbol: string = "£",
 ) => {
   const totalGross = Number(booking.totalPrice || 0);
   const paymentsApproved =
@@ -6816,7 +6895,7 @@ const compileTemplateWithBookingData = (
     <tr style="border-bottom: 1px solid #f1f5f9;">
       <td style="padding: 6px 12px; color: #334155;">${new Date(p.paidOn).toLocaleDateString("en-GB")}</td>
       <td style="padding: 6px 12px; color: #334155;">${p.paymentMethod}</td>
-      <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(p.amount).toFixed(2)}</td>
+      <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">${currencySymbol}${Number(p.amount).toFixed(2)}</td>
       <td style="padding: 6px 12px; color: #10b981; font-weight: bold;">Approved</td>
     </tr>
   `,
@@ -6845,7 +6924,7 @@ const compileTemplateWithBookingData = (
     serviceRows.push(`
       <tr style="border-bottom: 1px solid #f1f5f9;">
         <td style="padding: 6px 12px; color: #334155;">Flight: ${f.departedFrom} to ${f.arrivedAt} (${f.flightNo || ""})</td>
-        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(f.price).toFixed(2)}</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">${currencySymbol}${Number(f.price).toFixed(2)}</td>
       </tr>
     `);
   });
@@ -6853,7 +6932,7 @@ const compileTemplateWithBookingData = (
     serviceRows.push(`
       <tr style="border-bottom: 1px solid #f1f5f9;">
         <td style="padding: 6px 12px; color: #334155;">Hotel: ${h.hotelName} (${h.roomType || ""})</td>
-        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(h.price).toFixed(2)}</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">${currencySymbol}${Number(h.price).toFixed(2)}</td>
       </tr>
     `);
   });
@@ -6861,7 +6940,7 @@ const compileTemplateWithBookingData = (
     serviceRows.push(`
       <tr style="border-bottom: 1px solid #f1f5f9;">
         <td style="padding: 6px 12px; color: #334155;">Transport: ${t.vehicleType} (${t.departureDestination || t.pickUpLocation} to ${t.arrivalDestination || t.dropOffLocation})</td>
-        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(t.price).toFixed(2)}</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">${currencySymbol}${Number(t.price).toFixed(2)}</td>
       </tr>
     `);
   });
@@ -6869,7 +6948,7 @@ const compileTemplateWithBookingData = (
     serviceRows.push(`
       <tr style="border-bottom: 1px solid #f1f5f9;">
         <td style="padding: 6px 12px; color: #334155;">Visa: ${v.visaType || "Standard"} - Passport ${v.passportNumber || ""}</td>
-        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(v.price).toFixed(2)}</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">${currencySymbol}${Number(v.price).toFixed(2)}</td>
       </tr>
     `);
   });
@@ -6877,7 +6956,7 @@ const compileTemplateWithBookingData = (
     serviceRows.push(`
       <tr style="border-bottom: 1px solid #f1f5f9;">
         <td style="padding: 6px 12px; color: #334155;">Extra: ${s.serviceName} (${s.notes || ""})</td>
-        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">£${Number(s.charges || s.price || 0).toFixed(2)}</td>
+        <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">${currencySymbol}${Number(s.charges || s.price || 0).toFixed(2)}</td>
       </tr>
     `);
   });
@@ -6885,7 +6964,7 @@ const compileTemplateWithBookingData = (
     serviceRows.push(`
       <tr style="border-bottom: 1px solid #f1f5f9;">
         <td style="padding: 6px 12px; color: #ef4444;">Discount: ${d.notes || d.description || "General Discount"}</td>
-        <td style="padding: 6px 12px; color: #ef4444; font-weight: 600; text-align: right;">-£${Number(d.amount).toFixed(2)}</td>
+        <td style="padding: 6px 12px; color: #ef4444; font-weight: 600; text-align: right;">-${currencySymbol}${Number(d.amount).toFixed(2)}</td>
       </tr>
     `);
   });
@@ -6921,6 +7000,7 @@ const compileTemplateWithBookingData = (
     "booking.reference": booking.bookingReference,
     "booking.date": new Date(booking.createdAt).toLocaleDateString("en-GB"),
     "booking.agent": booking.agentName || "Agent Assignment",
+    "booking.currencySymbol": currencySymbol,
     "booking.amountGross":
       template.type === "VOUCHER" ? "" : Number(totalGross).toFixed(2),
     "booking.amountSettled":
@@ -6939,7 +7019,21 @@ const compileTemplateWithBookingData = (
     "document.timestamp": new Date().toLocaleString("en-GB"),
   };
 
-  const compiledHtml = template.structureHtml.replace(
+  const htmlToCompile = template.structureHtml
+    .replace(
+      /£\{\{booking\.amountGross\}\}/g,
+      `${currencySymbol}{{booking.amountGross}}`,
+    )
+    .replace(
+      /£\{\{booking\.amountSettled\}\}/g,
+      `${currencySymbol}{{booking.amountSettled}}`,
+    )
+    .replace(
+      /£\{\{booking\.amountDue\}\}/g,
+      `${currencySymbol}{{booking.amountDue}}`,
+    );
+
+  const compiledHtml = htmlToCompile.replace(
     /\{\{([^{}]+)\}\}/g,
     (match, token) => {
       const key = token.trim();
@@ -7201,20 +7295,19 @@ function generateTemplateFromVisualConfig(config: VisualConfig, _type: string) {
   </div>`;
     } else if (sec.type === "balances") {
       html += `
-  <!-- Financial Summary Section -->
   <div style="display: flex; justify-content: flex-end; margin-bottom: 32px;">
     <div style="width: 260px; background: ${selectedTheme.bg}; border: 1px solid ${primaryColor}20; border-radius: 12px; padding: 16px;">
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b;">
         <span>Total Gross Value:</span>
-        <span style="font-weight: 700; color: #334155;">£{{booking.amountGross}}</span>
+        <span style="font-weight: 700; color: #334155;">{{booking.currencySymbol}}{{booking.amountGross}}</span>
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b; border-bottom: 1px solid ${primaryColor}15; padding-bottom: 8px;">
         <span>Confirmed Paid:</span>
-        <span style="font-weight: 700; color: #10b981;">£{{booking.amountSettled}}</span>
+        <span style="font-weight: 700; color: #10b981;">{{booking.currencySymbol}}{{booking.amountSettled}}</span>
       </div>
       <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; color: #0f172a; padding-top: 4px;">
         <span>Balance Due:</span>
-        <span style="color: ${primaryColor}; font-weight: 900;">£{{booking.amountDue}}</span>
+        <span style="color: ${primaryColor}; font-weight: 900;">{{booking.currencySymbol}}{{booking.amountDue}}</span>
       </div>
     </div>
   </div>`;
@@ -7399,12 +7492,10 @@ app.put(
       } = req.body;
 
       if (!companyName) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message: "companyName is required",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message: "companyName is required",
+        });
       }
 
       const context = await prisma.companyContext.upsert({
@@ -7430,12 +7521,10 @@ app.put(
         },
       });
 
-      res
-        .status(200)
-        .json({
-          message: "Company context updated successfully",
-          companyContext: context,
-        });
+      res.status(200).json({
+        message: "Company context updated successfully",
+        companyContext: context,
+      });
     } catch (error) {
       console.error("Update Company Context Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -7497,31 +7586,79 @@ app.get(
           .json({ error: "Not Found", message: "Template not found" });
       }
 
+      const curSym = await getTenantCurrencySymbol(tenantId);
+
+      const tenantProfile = await fetchTenantProfile(tenantId);
+      const companyContext = await prisma.companyContext.findUnique({
+        where: { tenantId },
+      });
+
+      const companyName =
+        tenantProfile?.name ||
+        companyContext?.companyName ||
+        MOCK_PREVIEW_DATA.company.name;
+      const logoPrimary =
+        tenantProfile?.logo || companyContext?.logoPrimary || null;
+      const logoSecondary = companyContext?.logoSecondary || "";
+      const address =
+        companyContext?.officeAddress || MOCK_PREVIEW_DATA.company.address;
+      const email =
+        companyContext?.emailSender || MOCK_PREVIEW_DATA.company.email;
+      const phone =
+        companyContext?.landlineFormat || MOCK_PREVIEW_DATA.company.phone;
+      const whatsapp =
+        companyContext?.whatsappWebhook || MOCK_PREVIEW_DATA.company.whatsapp;
+
       const tokens: Record<string, string> = {
-        "company.name": MOCK_PREVIEW_DATA.company.name,
-        "company.logoPrimary": `<img src="${MOCK_PREVIEW_DATA.company.logoPrimary}" style="max-height: 50px;" />`,
-        "company.logoSecondary": MOCK_PREVIEW_DATA.company.logoSecondary
-          ? `<img src="${MOCK_PREVIEW_DATA.company.logoSecondary}" style="max-height: 50px;" />`
+        "company.name": companyName,
+        "company.logoPrimary": logoPrimary
+          ? `<img src="${logoPrimary}" style="max-height: 50px; object-fit: contain;" />`
           : "",
-        "company.address": MOCK_PREVIEW_DATA.company.address,
-        "company.email": MOCK_PREVIEW_DATA.company.email,
-        "company.phone": MOCK_PREVIEW_DATA.company.phone,
-        "company.whatsapp": `<a href="${MOCK_PREVIEW_DATA.company.whatsapp}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>`,
+        "company.logoSecondary": logoSecondary
+          ? `<img src="${logoSecondary}" style="max-height: 50px; object-fit: contain;" />`
+          : "",
+        "company.address": address,
+        "company.email": email,
+        "company.phone": phone,
+        "company.whatsapp": whatsapp
+          ? `<a href="${whatsapp}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>`
+          : "",
         "booking.reference": MOCK_PREVIEW_DATA.booking.reference,
         "booking.date": MOCK_PREVIEW_DATA.booking.date,
         "booking.agent": MOCK_PREVIEW_DATA.booking.agent,
+        "booking.currencySymbol": curSym,
         "booking.amountGross": MOCK_PREVIEW_DATA.booking.amountGross,
         "booking.amountSettled": MOCK_PREVIEW_DATA.booking.amountSettled,
         "booking.amountDue": MOCK_PREVIEW_DATA.booking.amountDue,
         "tables.passengers": MOCK_PREVIEW_DATA.tables.passengers,
         "tables.flights": MOCK_PREVIEW_DATA.tables.flights,
-        "tables.payments": MOCK_PREVIEW_DATA.tables.payments,
-        "tables.services": MOCK_PREVIEW_DATA.tables.services,
+        "tables.payments": MOCK_PREVIEW_DATA.tables.payments.replace(
+          /£/g,
+          curSym,
+        ),
+        "tables.services": MOCK_PREVIEW_DATA.tables.services.replace(
+          /£/g,
+          curSym,
+        ),
         "document.signature": MOCK_PREVIEW_DATA.document.signature,
         "document.timestamp": MOCK_PREVIEW_DATA.document.timestamp,
       };
 
-      const compiledHtml = template.structureHtml.replace(
+      const htmlToCompile = template.structureHtml
+        .replace(
+          /£\{\{booking\.amountGross\}\}/g,
+          `${curSym}{{booking.amountGross}}`,
+        )
+        .replace(
+          /£\{\{booking\.amountSettled\}\}/g,
+          `${curSym}{{booking.amountSettled}}`,
+        )
+        .replace(
+          /£\{\{booking\.amountDue\}\}/g,
+          `${curSym}{{booking.amountDue}}`,
+        );
+
+      const compiledHtml = htmlToCompile.replace(
         /\{\{([^{}]+)\}\}/g,
         (match, token) => {
           const key = token.trim();
@@ -7561,12 +7698,10 @@ app.post(
       } = req.body;
 
       if (!name || !type || !structureHtml || !structureCss) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message: "name, type, html, and css are required",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message: "name, type, html, and css are required",
+        });
       }
 
       if (type === "VOUCHER") {
@@ -7725,12 +7860,10 @@ app.post(
       const { bookingId } = req.body;
 
       if (!bookingId) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message: "bookingId is required",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message: "bookingId is required",
+        });
       }
 
       const [template, booking, companyContext] = await Promise.all([
@@ -7768,15 +7901,24 @@ app.post(
           .json({ error: "Not Found", message: "Booking record not found" });
       }
 
-      const resolvedContext = companyContext || {
-        companyName: "Tooba Travels Ltd",
-        logoPrimary:
-          "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80",
-        logoSecondary: "",
-        officeAddress: "Registered Office: 123 Travel Tower, London, UK",
-        emailSender: "operations@toobatravels.co.uk",
-        landlineFormat: "+44 20 7946 0958",
-        whatsappWebhook: "https://api.whatsapp.com/send?phone=442079460958",
+      const tenantProfile = await fetchTenantProfile(tenantId);
+
+      const resolvedContext = {
+        companyName:
+          tenantProfile?.name ||
+          companyContext?.companyName ||
+          "Tooba Travels Ltd",
+        logoPrimary: tenantProfile?.logo || companyContext?.logoPrimary || null,
+        logoSecondary: companyContext?.logoSecondary || "",
+        officeAddress:
+          companyContext?.officeAddress ||
+          "Registered Office: 123 Travel Tower, London, UK",
+        emailSender:
+          companyContext?.emailSender || "operations@toobatravels.co.uk",
+        landlineFormat: companyContext?.landlineFormat || "+44 20 7946 0958",
+        whatsappWebhook:
+          companyContext?.whatsappWebhook ||
+          "https://api.whatsapp.com/send?phone=442079460958",
       };
 
       const secret = process.env.JWT_SECRET || "travel-secret";
@@ -7786,12 +7928,14 @@ app.post(
         .update(rawPayload)
         .digest("hex");
 
+      const curSym = await getTenantCurrencySymbol(tenantId);
       const { compiledHtml, totalGross, totalSettled, balanceDue } =
         compileTemplateWithBookingData(
           template,
           resolvedContext,
           booking,
           digitalSignature,
+          curSym,
         );
 
       const docLog = await prisma.documentLog.create({
@@ -7865,22 +8009,18 @@ app.post(
 
       const passenger = booking.customers.find((c) => c.id === passengerId);
       if (!passenger) {
-        return res
-          .status(404)
-          .json({
-            error: "Not Found",
-            message: "Passenger not found in booking",
-          });
+        return res.status(404).json({
+          error: "Not Found",
+          message: "Passenger not found in booking",
+        });
       }
 
       const emailToSend = req.body.email || passenger.email;
       if (!emailToSend) {
-        return res
-          .status(400)
-          .json({
-            error: "Bad Request",
-            message: "Passenger email address is required",
-          });
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Passenger email address is required",
+        });
       }
 
       // If a new email was provided, update it on the passenger model first
@@ -7911,8 +8051,12 @@ app.post(
         });
       } catch (_) {}
 
-      const companyName = companyCtx?.companyName || "Your Travel Agency";
-      const companyLogo = companyCtx?.logoPrimary || null;
+      const tenantProfile = await fetchTenantProfile(tenantIdNumeric);
+
+      const companyName =
+        tenantProfile?.name || companyCtx?.companyName || "Your Travel Agency";
+      const companyLogo =
+        tenantProfile?.logo || companyCtx?.logoPrimary || null;
       const companyEmail = companyCtx?.emailSender || null;
       const companyPhone = companyCtx?.landlineFormat || null;
       const companyAddr = companyCtx?.officeAddress || null;
@@ -8070,12 +8214,10 @@ app.post(
       if (!emailRes.ok) {
         const errText = await emailRes.text();
         console.error("Email send failed at auth-service:", errText);
-        return res
-          .status(502)
-          .json({
-            error: "Bad Gateway",
-            message: "Failed to dispatch email via SMTP service.",
-          });
+        return res.status(502).json({
+          error: "Bad Gateway",
+          message: "Failed to dispatch email via SMTP service.",
+        });
       }
 
       res
@@ -8099,22 +8241,18 @@ app.get(
       const decoded = decryptToken(token);
 
       if (!decoded || !decoded.bookingId || !decoded.passengerId) {
-        return res
-          .status(400)
-          .json({
-            error: "Invalid Request",
-            message: "This link is invalid or has expired.",
-          });
+        return res.status(400).json({
+          error: "Invalid Request",
+          message: "This link is invalid or has expired.",
+        });
       }
 
       if (decoded.expiry && Date.now() > decoded.expiry) {
-        return res
-          .status(410)
-          .json({
-            error: "Gone",
-            message:
-              "This secure link has expired. Please ask your travel advisor to resend it.",
-          });
+        return res.status(410).json({
+          error: "Gone",
+          message:
+            "This secure link has expired. Please ask your travel advisor to resend it.",
+        });
       }
 
       const booking = await prisma.booking.findUnique({
@@ -8141,6 +8279,8 @@ app.get(
       const companyContext = await prisma.companyContext.findUnique({
         where: { tenantId: decoded.tenantId },
       });
+
+      const tenantProfile = await fetchTenantProfile(decoded.tenantId);
 
       res.status(200).json({
         passenger: {
@@ -8173,7 +8313,10 @@ app.get(
         })),
         primaryPassengerId: passenger.id,
         bookingReference: booking.bookingReference,
-        companyName: companyContext?.companyName || "Your Travel Agency",
+        companyName:
+          tenantProfile?.name ||
+          companyContext?.companyName ||
+          "Your Travel Agency",
       });
     } catch (error: any) {
       console.error("Get Public Passenger Info Error:", error);
@@ -8191,12 +8334,10 @@ app.put(
       const decoded = decryptToken(token);
 
       if (!decoded || !decoded.bookingId || !decoded.passengerId) {
-        return res
-          .status(400)
-          .json({
-            error: "Invalid Request",
-            message: "This link is invalid or has expired.",
-          });
+        return res.status(400).json({
+          error: "Invalid Request",
+          message: "This link is invalid or has expired.",
+        });
       }
 
       if (decoded.expiry && Date.now() > decoded.expiry) {
@@ -8221,13 +8362,11 @@ app.put(
       } = req.body;
 
       if (!gdprConsent) {
-        return res
-          .status(400)
-          .json({
-            error: "Validation failed",
-            message:
-              "You must consent to the GDPR privacy terms to submit your information.",
-          });
+        return res.status(400).json({
+          error: "Validation failed",
+          message:
+            "You must consent to the GDPR privacy terms to submit your information.",
+        });
       }
 
       if (passengers && Array.isArray(passengers)) {
@@ -8236,19 +8375,20 @@ app.put(
           if (!p.firstName || !p.lastName) {
             return res.status(400).json({
               error: "Validation failed",
-              message: "First Name and Last Name are required for all passengers.",
+              message:
+                "First Name and Last Name are required for all passengers.",
             });
           }
 
           // Security: Ensure passenger belongs to correct booking
           const dbPassenger = await prisma.bookingCustomer.findFirst({
-            where: { id: Number(p.id), bookingId: Number(decoded.bookingId) }
+            where: { id: Number(p.id), bookingId: Number(decoded.bookingId) },
           });
 
           if (!dbPassenger) {
             return res.status(403).json({
               error: "Forbidden",
-              message: "Passenger does not belong to this booking."
+              message: "Passenger does not belong to this booking.",
             });
           }
 
@@ -8261,28 +8401,28 @@ app.put(
               email: p.email || null,
               phoneNumber: p.phoneNumber || null,
               passportNumber: p.passportNumber || null,
-              passportExpiryDate: p.passportExpiryDate ? new Date(p.passportExpiryDate) : null,
+              passportExpiryDate: p.passportExpiryDate
+                ? new Date(p.passportExpiryDate)
+                : null,
               dob: p.dob ? new Date(p.dob) : null,
               passportImage: p.passportImage || null,
               ageCategory: p.ageCategory || "Adult",
-            }
+            },
           });
           updatedList.push(updated);
         }
 
         return res.status(200).json({
           message: "All traveler information updated successfully!",
-          passengers: updatedList
+          passengers: updatedList,
         });
       } else {
         // Legacy single-passenger update
         if (!firstName || !lastName) {
-          return res
-            .status(400)
-            .json({
-              error: "Validation failed",
-              message: "First Name and Last Name are required.",
-            });
+          return res.status(400).json({
+            error: "Validation failed",
+            message: "First Name and Last Name are required.",
+          });
         }
 
         const updatedPassenger = await prisma.bookingCustomer.update({

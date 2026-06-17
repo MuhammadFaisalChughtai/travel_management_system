@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, RefreshCcw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useCurrency } from '../../utils/currency';
 import type { Refund, BookingDetail } from '../../types/booking';
 
 interface LogRefundModalProps {
@@ -12,6 +13,7 @@ interface LogRefundModalProps {
 }
 
 export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefundModalProps) {
+  const { symbol } = useCurrency();
   const [form, setForm] = useState<Partial<Refund> & { paymentMethod?: string; ccCharges?: string }>({
     direction: 'Refund to Client',
     vendorCategory: 'Flight',
@@ -117,7 +119,7 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
                     else if (form.vendorCategory === 'Accommodation') val = `Hotel: ${item.hotelName || item.vendorName || 'Unknown'} (${item.checkIn || item.date || 'No Date'})`;
                     else if (form.vendorCategory === 'Transportation') val = `Transport: ${item.vehicleType || item.vendorName || 'Unknown'} (${item.date || 'No Date'})`;
                     else if (form.vendorCategory === 'Visa') val = `Visa: ${item.vendorName || 'Unknown'} (${item.visaType || item.type || ''})`;
-                    else val = `Service: ${item.serviceName || item.vendorName || 'Unknown'} (£${item.charges || item.price || 0})`;
+                    else val = `Service: ${item.serviceName || item.vendorName || 'Unknown'} (${symbol}${item.charges || item.price || 0})`;
                     return <option key={item.id} value={val}>{val}</option>;
                   })}
                 </select>
@@ -125,7 +127,7 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
               {previousRefunds > 0 && form.serviceName && (
                 <div className="mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold rounded-lg flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                  <p><strong>Notice:</strong> You have already refunded £{previousRefunds.toFixed(2)} for this service. Are you sure you want to continue?</p>
+                  <p><strong>Notice:</strong> You have already refunded {symbol}{previousRefunds.toFixed(2)} for this service. Are you sure you want to continue?</p>
                 </div>
               )}
             </div>
@@ -133,7 +135,7 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Refund Amount</label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">{symbol}</span>
                 <input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
               </div>
             </div>
@@ -153,7 +155,7 @@ export function LogRefundModal({ booking, isOpen, onClose, onSubmit }: LogRefund
               <div className="md:col-span-2">
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Credit Card Charges</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">{symbol}</span>
                   <input type="number" value={(form as any).ccCharges} onChange={e => setForm({...form, ccCharges: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
                 </div>
               </div>

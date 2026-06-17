@@ -1,4 +1,5 @@
 import { Phone, Mail } from 'lucide-react';
+import { useCurrency } from '../utils/currency';
 
 export interface EntityCardProps {
   name: string;
@@ -17,10 +18,12 @@ export function EntityCard({
   phone,
   email,
   balance,
-  currencySymbol = '£',
+  currencySymbol,
   onClick,
   customFooter
 }: EntityCardProps) {
+  const { symbol } = useCurrency();
+  const activeSymbol = currencySymbol || symbol;
   const initial = name ? name.charAt(0).toUpperCase() : '?';
 
   return (
@@ -71,7 +74,7 @@ export function EntityCard({
               BALANCE
             </span>
             <span className="text-[#059669] font-bold text-[16px]">
-              {currencySymbol}{balance.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {activeSymbol}{balance.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
         </div>

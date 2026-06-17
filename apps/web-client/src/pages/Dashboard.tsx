@@ -2156,7 +2156,7 @@ export function Dashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Total Price (£)</label>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Total Price ({symbol})</label>
                   <input 
                     type="number" 
                     required 

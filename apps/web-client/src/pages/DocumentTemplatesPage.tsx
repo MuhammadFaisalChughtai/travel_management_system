@@ -58,15 +58,15 @@ const DEFAULT_HTML_TEMPLATE = `<div class="invoice-box" style="font-family: 'Int
     <div style="width: 250px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b;">
         <span>Total Gross Value:</span>
-        <span style="font-weight: 700; color: #334155;">£{{booking.amountGross}}</span>
+        <span style="font-weight: 700; color: #334155;">{{booking.currencySymbol}}{{booking.amountGross}}</span>
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
         <span>Confirmed Paid:</span>
-        <span style="font-weight: 700; color: #10b981;">£{{booking.amountSettled}}</span>
+        <span style="font-weight: 700; color: #10b981;">{{booking.currencySymbol}}{{booking.amountSettled}}</span>
       </div>
       <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; color: #0f172a; pt-1;">
         <span>Balance Due:</span>
-        <span style="color: #6366f1;">£{{booking.amountDue}}</span>
+        <span style="color: #6366f1;">{{booking.currencySymbol}}{{booking.amountDue}}</span>
       </div>
     </div>
   </div>
@@ -512,15 +512,15 @@ function generateTemplateFromVisualConfig(config: VisualConfig, _type: string) {
     <div style="width: 260px; background: ${selectedTheme.bg}; border: 1px solid ${primaryColor}20; border-radius: 12px; padding: 16px;">
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b;">
         <span>Total Gross Value:</span>
-        <span style="font-weight: 700; color: #334155;">£{{booking.amountGross}}</span>
+        <span style="font-weight: 700; color: #334155;">{{booking.currencySymbol}}{{booking.amountGross}}</span>
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #64748b; border-bottom: 1px solid ${primaryColor}15; padding-bottom: 8px;">
         <span>Confirmed Paid:</span>
-        <span style="font-weight: 700; color: #10b981;">£{{booking.amountSettled}}</span>
+        <span style="font-weight: 700; color: #10b981;">{{booking.currencySymbol}}{{booking.amountSettled}}</span>
       </div>
       <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; color: #0f172a; padding-top: 4px;">
         <span>Balance Due:</span>
-        <span style="color: ${primaryColor}; font-weight: 900;">£{{booking.amountDue}}</span>
+        <span style="color: ${primaryColor}; font-weight: 900;">{{booking.currencySymbol}}{{booking.amountDue}}</span>
       </div>
     </div>
   </div>`;

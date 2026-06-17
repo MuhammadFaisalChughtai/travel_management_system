@@ -3,6 +3,7 @@ import { X, Receipt, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import type { BookingDetail } from '../../types/booking';
+import { useCurrency } from '../../utils/currency';
 
 interface UpdateInvoicePriceModalProps {
   booking: BookingDetail | null;
@@ -15,6 +16,7 @@ export function UpdateInvoicePriceModal({ booking, isOpen, onClose, onSubmit }: 
   const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { symbol } = useCurrency();
 
   // Sync initial price from booking
   useEffect(() => {
@@ -96,18 +98,18 @@ export function UpdateInvoicePriceModal({ booking, isOpen, onClose, onSubmit }: 
               <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-700">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[10px] text-slate-400 font-normal uppercase">Total Received (Net)</span>
-                  <span className="text-slate-800 font-extrabold text-[13px]">£{netReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="text-slate-800 font-extrabold text-[13px]">{symbol}{netReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[10px] text-slate-400 font-normal uppercase">Overpayment Amount</span>
                   <span className={`font-extrabold text-[13px] ${overpayment > 0 ? 'text-amber-600 font-black' : 'text-slate-500'}`}>
-                    £{overpayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {symbol}{overpayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
               {overpayment > 0 && (
                 <p className="text-[10px] text-amber-700 leading-normal bg-amber-50 border border-amber-200/50 p-2.5 rounded-lg mt-1 font-medium">
-                  💡 Suggestion: Update the invoice price to <strong className="font-extrabold text-amber-900">£{netReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> to allocate the overpaid funds to revenue.
+                  💡 Suggestion: Update the invoice price to <strong className="font-extrabold text-amber-900">{symbol}{netReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> to allocate the overpaid funds to revenue.
                 </p>
               )}
             </div>
@@ -122,7 +124,7 @@ export function UpdateInvoicePriceModal({ booking, isOpen, onClose, onSubmit }: 
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">New Invoice Price</label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-[12px] font-bold text-slate-400">£</span>
+                <span className="absolute left-3 top-2 text-[12px] font-bold text-slate-400">{symbol}</span>
                 <input 
                   type="number" 
                   value={price} 

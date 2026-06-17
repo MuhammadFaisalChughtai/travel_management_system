@@ -1,6 +1,9 @@
 
 
+import { useCurrency } from '../../utils/currency';
+
 export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, companyInfo: any }) => {
+  const { symbol } = useCurrency();
   if (!booking) return null;
 
   return (
@@ -52,8 +55,8 @@ export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, compan
                   <div className="text-[10px] text-slate-500">PNR: {f.pnr} | Flight No: {f.flightNo}</div>
                 </td>
                 <td className="py-3 px-4 text-center">{f.qty}</td>
-                <td className="py-3 px-4 text-right">£{Number(f.unitPrice).toFixed(2)}</td>
-                <td className="py-3 px-4 text-right font-bold">£{Number(f.price).toFixed(2)}</td>
+                <td className="py-3 px-4 text-right">{symbol}{Number(f.unitPrice).toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-bold">{symbol}{Number(f.price).toFixed(2)}</td>
               </tr>
             ))}
             
@@ -65,7 +68,7 @@ export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, compan
                 </td>
                 <td className="py-3 px-4 text-center">{h.qty}</td>
                 <td className="py-3 px-4 text-right">-</td>
-                <td className="py-3 px-4 text-right font-bold">£{Number(h.price).toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-bold">{symbol}{Number(h.price).toFixed(2)}</td>
               </tr>
             ))}
 
@@ -77,7 +80,7 @@ export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, compan
                 </td>
                 <td className="py-3 px-4 text-center">{t.qty}</td>
                 <td className="py-3 px-4 text-right">-</td>
-                <td className="py-3 px-4 text-right font-bold">£{Number(t.price).toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-bold">{symbol}{Number(t.price).toFixed(2)}</td>
               </tr>
             ))}
 
@@ -89,7 +92,7 @@ export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, compan
                 </td>
                 <td className="py-3 px-4 text-center">1</td>
                 <td className="py-3 px-4 text-right">-</td>
-                <td className="py-3 px-4 text-right font-bold">£{Number(v.price).toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-bold">{symbol}{Number(v.price).toFixed(2)}</td>
               </tr>
             ))}
 
@@ -101,7 +104,7 @@ export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, compan
                 </td>
                 <td className="py-3 px-4 text-center">1</td>
                 <td className="py-3 px-4 text-right">-</td>
-                <td className="py-3 px-4 text-right font-bold">£{Number(s.price).toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-bold">{symbol}{Number(s.price).toFixed(2)}</td>
               </tr>
             ))}
 
@@ -112,7 +115,7 @@ export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, compan
                 </td>
                 <td className="py-3 px-4 text-center">1</td>
                 <td className="py-3 px-4 text-right">-</td>
-                <td className="py-3 px-4 text-right font-bold text-rose-600">-£{Number(d.amount).toFixed(2)}</td>
+                <td className="py-3 px-4 text-right font-bold text-rose-600">-{symbol}{Number(d.amount).toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
@@ -123,15 +126,15 @@ export const InvoiceTemplate = ({ booking, companyInfo }: { booking: any, compan
         <div className="w-64 space-y-3">
           <div className="flex justify-between text-slate-600 font-bold">
             <span>Total Amount:</span>
-            <span>£{Number(booking.totalPrice).toFixed(2)}</span>
+            <span>{symbol}{Number(booking.totalPrice).toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-slate-600 font-bold">
             <span>Amount Paid:</span>
-            <span>£{Number(booking.payments?.reduce((acc: number, p: any) => acc + Number(p.amount), 0) || 0).toFixed(2)}</span>
+            <span>{symbol}{Number(booking.payments?.reduce((acc: number, p: any) => acc + Number(p.amount), 0) || 0).toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-lg font-black text-slate-900 border-t border-slate-200 pt-2">
             <span>Balance Due:</span>
-            <span>£{Number(
+            <span>{symbol}{Number(
               booking.totalPrice 
               - (booking.payments?.reduce((acc: number, p: any) => acc + Number(p.amount), 0) || 0)
             ).toFixed(2)}</span>

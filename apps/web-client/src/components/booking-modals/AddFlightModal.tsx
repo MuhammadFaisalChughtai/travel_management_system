@@ -15,7 +15,7 @@ interface AddFlightModalProps {
 }
 
 export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFlightModalProps) {
-  const { currency: tenantCurrency } = useCurrency();
+  const { currency: tenantCurrency, symbol } = useCurrency();
   const [form, setForm] = useState<Partial<FlightService>>({
     vendorName: '',
     airline: '',
@@ -241,7 +241,7 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
                   <input type="date" value={form.issueDate || ''} onChange={e => setForm({...form, issueDate: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Price (£)</label>
+                  <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Price ({symbol})</label>
                   <input type="number" value={form.price || ''} onChange={e => setForm({...form, price: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
                 </div>
               </div>

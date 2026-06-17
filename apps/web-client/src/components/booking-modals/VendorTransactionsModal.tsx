@@ -2,6 +2,7 @@ import { X, ArrowUpRight, RefreshCcw } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import type { BookingDetail } from '../../types/booking';
+import { useCurrency } from '../../utils/currency';
 
 interface VendorTransactionsModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface VendorTransactionsModalProps {
 }
 
 export function VendorTransactionsModal({ isOpen, onClose, booking }: VendorTransactionsModalProps) {
+  const { symbol } = useCurrency();
   if (!isOpen) return null;
 
   const vendorPayments = booking.payments?.filter(p => p.paymentType === 'Sent to Vendor') || [];
@@ -68,7 +70,7 @@ export function VendorTransactionsModal({ isOpen, onClose, booking }: VendorTran
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-black text-[13px] text-red-600">-£{parseFloat(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                      <p className="font-black text-[13px] text-red-600">-{symbol}{parseFloat(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                     </div>
                   </div>
                 );
@@ -94,7 +96,7 @@ export function VendorTransactionsModal({ isOpen, onClose, booking }: VendorTran
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-black text-[13px] text-emerald-600">+£{parseFloat(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                      <p className="font-black text-[13px] text-emerald-600">+{symbol}{parseFloat(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                     </div>
                   </div>
                 );

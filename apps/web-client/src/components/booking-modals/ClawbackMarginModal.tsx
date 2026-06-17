@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, ArrowDownCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useCurrency } from '../../utils/currency';
 import type { BookingDetail } from '../../types/booking';
 
 interface ClawbackMarginModalProps {
@@ -12,6 +13,7 @@ interface ClawbackMarginModalProps {
 }
 
 export function ClawbackMarginModal({ booking, isOpen, onClose, onSubmit }: ClawbackMarginModalProps) {
+  const { symbol } = useCurrency();
   const [form, setForm] = useState({
     amount: '',
     reason: ''
@@ -44,7 +46,7 @@ export function ClawbackMarginModal({ booking, isOpen, onClose, onSubmit }: Claw
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Clawback Amount</label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">{symbol}</span>
                 <input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
               </div>
             </div>

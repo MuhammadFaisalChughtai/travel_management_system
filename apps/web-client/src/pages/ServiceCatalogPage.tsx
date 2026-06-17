@@ -22,7 +22,7 @@ interface CatalogItem {
 
 export function ServiceCatalogPage() {
   const { user } = useAuthStore();
-  const { currency: tenantCurrency } = useCurrency();
+  const { currency: tenantCurrency, symbol } = useCurrency();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -420,7 +420,7 @@ export function ServiceCatalogPage() {
                               const newRooms = [...(form.metadata?.hotelRooms || [])];
                               newRooms[idx].mealPrice = e.target.value;
                               setForm({...form, metadata: {...form.metadata, hotelRooms: newRooms}});
-                            }} className="w-full border border-emerald-200 bg-emerald-50 rounded-md px-1 py-1 text-[9px] outline-none focus:border-emerald-500 font-semibold text-emerald-700 placeholder:text-emerald-300" placeholder="Meal £" />
+                            }} className="w-full border border-emerald-200 bg-emerald-50 rounded-md px-1 py-1 text-[9px] outline-none focus:border-emerald-500 font-semibold text-emerald-700 placeholder:text-emerald-300" placeholder={`Meal ${symbol}`} />
                           )}
                         </div>
                         <div>

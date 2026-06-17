@@ -1,6 +1,7 @@
 import { Car, Edit, Trash2 } from 'lucide-react';
 import type { TransportService } from '../../types/booking';
 import { EmptyState } from '../shared/EmptyState';
+import { useCurrency } from '../../utils/currency';
 
 interface TransportServicesSectionProps {
   onAdd?: () => void;
@@ -11,6 +12,7 @@ interface TransportServicesSectionProps {
 }
 
 export function TransportServicesSection({ transports, onEdit, onDelete}: TransportServicesSectionProps) {
+  const { symbol } = useCurrency();
   return (
     <div className="flex flex-col gap-4">
       {transports.length === 0 ? (
@@ -58,7 +60,7 @@ export function TransportServicesSection({ transports, onEdit, onDelete}: Transp
                       {t.date ? new Date(t.date).toLocaleDateString() : '—'}
                     </td>
                     <td className="py-3 px-4 text-right font-black text-emerald-600">
-                      £{Number(t.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {symbol}{Number(t.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

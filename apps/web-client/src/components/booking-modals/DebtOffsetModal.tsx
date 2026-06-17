@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCurrency } from '../../utils/currency';
 
 interface DebtOffsetModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface DebtOffsetModalProps {
 }
 
 export function DebtOffsetModal({ isOpen, onClose, onSubmit, agentName, debtAmount, newPayoutAmount }: DebtOffsetModalProps) {
+  const { symbol } = useCurrency();
   const defaultOffset = Math.min(debtAmount, newPayoutAmount);
   const [offsetAmount, setOffsetAmount] = useState<string>(defaultOffset.toString());
 
@@ -34,16 +36,16 @@ export function DebtOffsetModal({ isOpen, onClose, onSubmit, agentName, debtAmou
 
           <div className="p-6 overflow-y-auto flex flex-col gap-4">
             <p className="text-sm font-semibold text-slate-700">
-              Agent <span className="font-bold text-slate-900">{agentName}</span> has an outstanding debt of <span className="font-bold text-red-600">£{debtAmount.toFixed(2)}</span> due to previous clawbacks.
+              Agent <span className="font-bold text-slate-900">{agentName}</span> has an outstanding debt of <span className="font-bold text-red-600">{symbol}{debtAmount.toFixed(2)}</span> due to previous clawbacks.
             </p>
             <p className="text-sm text-slate-600">
-              You are about to pay out <span className="font-bold text-emerald-600">£{newPayoutAmount.toFixed(2)}</span>. Do you want to settle the debt against this new margin?
+              You are about to pay out <span className="font-bold text-emerald-600">{symbol}{newPayoutAmount.toFixed(2)}</span>. Do you want to settle the debt against this new margin?
             </p>
 
             <div className="mt-4">
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Amount to Offset (Deduct from Payout)</label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-[12px] font-bold text-slate-400">£</span>
+                <span className="absolute left-3 top-2 text-[12px] font-bold text-slate-400">{symbol}</span>
                 <input 
                   type="number" 
                   value={offsetAmount} 
@@ -54,22 +56,22 @@ export function DebtOffsetModal({ isOpen, onClose, onSubmit, agentName, debtAmou
                 />
               </div>
               <p className="text-[10px] text-slate-500 mt-1">
-                Maximum offset allowed: £{newPayoutAmount.toFixed(2)}
+                Maximum offset allowed: {symbol}{newPayoutAmount.toFixed(2)}
               </p>
             </div>
             
             <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-slate-500">Gross Payout:</span>
-                <span className="font-bold">£{newPayoutAmount.toFixed(2)}</span>
+                <span className="font-bold">{symbol}{newPayoutAmount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs mb-1 text-red-600">
                 <span>Offset Deduction:</span>
-                <span className="font-bold">-£{parseFloat(offsetAmount || '0').toFixed(2)}</span>
+                <span className="font-bold">-{symbol}{parseFloat(offsetAmount || '0').toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs font-bold pt-2 border-t border-slate-200">
                 <span>Final Net Payout to Agent:</span>
-                <span className="text-emerald-600">£{Math.max(0, newPayoutAmount - parseFloat(offsetAmount || '0')).toFixed(2)}</span>
+                <span className="text-emerald-600">{symbol}{Math.max(0, newPayoutAmount - parseFloat(offsetAmount || '0')).toFixed(2)}</span>
               </div>
             </div>
           </div>

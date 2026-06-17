@@ -416,17 +416,90 @@ export function BookingDetailsModal({
         data.paymentType === "Sent to Vendor" &&
         data.serviceId &&
         data.serviceCategory &&
-        data.serviceCategory !== "Other"
+        data.serviceCategory !== "Other" &&
+        booking
       ) {
         let endpoint = '';
-        if (data.serviceCategory === 'Flight') endpoint = `/bookings/${bookingId}/flight-services/${data.serviceId}`;
-        else if (data.serviceCategory === 'Accommodation') endpoint = `/bookings/${bookingId}/accommodations/${data.serviceId}`;
-        else if (data.serviceCategory === 'Transportation') endpoint = `/bookings/${bookingId}/transport-services/${data.serviceId}`;
-        else if (data.serviceCategory === 'Visa') endpoint = `/bookings/${bookingId}/visa-services/${data.serviceId}`;
-        else endpoint = `/bookings/${bookingId}/additional-services/${data.serviceId}`;
+        let totalCost = 0;
+        let serviceName = '';
+        
+        const serviceTypeMap: Record<string, string> = {
+          'Flight': 'FLIGHT',
+          'Accommodation': 'HOTEL',
+          'Transportation': 'TRANSPORT',
+          'Visa': 'VISA',
+          'Additional Service': 'ADDITIONAL'
+        };
+        const type = serviceTypeMap[data.serviceCategory];
+        
+        let it: any = null;
+        if (data.serviceCategory === 'Flight') {
+          endpoint = `/bookings/${bookingId}/flight-services/${data.serviceId}`;
+          it = booking.flightServices?.find((s: any) => s.id == data.serviceId);
+          if (it) {
+            totalCost = parseFloat((it.price || 0).toString());
+            serviceName = `Flight: ${it.airline || it.vendorName || 'Unknown'} - ${it.flightNo || 'No Flight No'} (${it.pnr})`;
+          }
+        } else if (data.serviceCategory === 'Accommodation') {
+          endpoint = `/bookings/${bookingId}/accommodations/${data.serviceId}`;
+          it = booking.accommodations?.find((s: any) => s.id == data.serviceId);
+          if (it) {
+            totalCost = parseFloat((it.price || 0).toString());
+            serviceName = `Hotel: ${it.hotelName || it.vendorName || 'Unknown'}`;
+          }
+        } else if (data.serviceCategory === 'Transportation') {
+          endpoint = `/bookings/${bookingId}/transport-services/${data.serviceId}`;
+          it = booking.transportServices?.find((s: any) => s.id == data.serviceId);
+          if (it) {
+            totalCost = parseFloat((it.price || 0).toString());
+            serviceName = `Transport: ${it.vehicleType || it.vendorName || 'Unknown'}`;
+          }
+        } else if (data.serviceCategory === 'Visa') {
+          endpoint = `/bookings/${bookingId}/visa-services/${data.serviceId}`;
+          it = booking.visaServices?.find((s: any) => s.id == data.serviceId);
+          if (it) {
+            totalCost = parseFloat((it.price || 0).toString());
+            serviceName = `Visa: ${it.vendorName || 'Unknown'} (${it.visaType})`;
+          }
+        } else {
+          endpoint = `/bookings/${bookingId}/additional-services/${data.serviceId}`;
+          it = booking.additionalServices?.find((s: any) => s.id == data.serviceId);
+          if (it) {
+            totalCost = parseFloat((it.charges || 0).toString());
+            serviceName = `Service: ${it.serviceName || it.vendorName || 'Unknown'}`;
+          }
+        }
 
-        if (endpoint) {
-          await api.patch(endpoint, { isPaidToVendor: true });
+        if (endpoint && it) {
+          // @ts-ignore
+          const allocations = booking.allocations || [];
+          const allocPaid = type ? allocations
+            .filter((a: any) => a.serviceType === type && String(a.serviceId) === String(data.serviceId))
+            .reduce((sum: number, a: any) => sum + (parseFloat(a.allocatedAmount) || 0), 0) : 0;
+          
+          const parseFlightDetails = (name: string | null | undefined) => {
+            if (!name) return null;
+            const match = name.match(/Flight:\s*(.*?)\s*-\s*([A-Za-z0-9]+)\s*\((.*?)\)/i);
+            if (match) return { airline: match[1], flightNo: match[2], pnr: match[3] };
+            return null;
+          };
+
+          const legPaid = booking.payments?.filter(p => {
+            if (p.paymentType !== 'Sent to Vendor' || !p.notes) return false;
+            if (data.serviceCategory === 'Flight') {
+              const f2 = parseFlightDetails(serviceName);
+              if (f2) {
+                const f1 = parseFlightDetails(p.notes);
+                if (f1) return f1.flightNo === f2.flightNo && f1.pnr === f2.pnr;
+              }
+            }
+            return p.notes.includes(serviceName);
+          }).reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0) || 0;
+
+          const totalPaidAfter = allocPaid + legPaid + finalAmount;
+          const isFullyPaidNow = totalPaidAfter >= totalCost;
+
+          await api.patch(endpoint, { isPaidToVendor: isFullyPaidNow });
         }
       }
       if (

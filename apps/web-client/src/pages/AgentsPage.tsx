@@ -141,10 +141,10 @@ function AgentDetailsModal({ agent: initialAgent, isOpen, onClose, onRefresh }: 
               marginPercent: String(s.marginPercent),
               label: s.label || ''
             }))
-          : DEFAULT_SEGMENTS
+          : DEFAULT_SEGMENTS.map(s => ({ ...s, label: s.label.replace(/£/g, symbol) }))
       );
     }
-  }, [isOpen, initialAgent]);
+  }, [isOpen, initialAgent, symbol]);
 
   const handleSaveProfile = async () => {
     if (!agent) return;

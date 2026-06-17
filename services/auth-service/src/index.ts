@@ -615,24 +615,26 @@ app.post('/forgot-password', async (req: any, res: Response) => {
     // Retrieve SMTP user setting to use as "from" address
     const userSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
     const fromEmail = userSetting?.value || 'muhammadfaisalchughtai@gmail.com';
-    const companyName = user.tenant.name || 'Travel Booking Management System';
+    const companyName = 'Techbarred';
+    const logoUrl = null;
 
     const mailOptions = {
       from: `"${companyName} Support" <${fromEmail}>`,
       to: user.email,
-      subject: 'Reset Your Password - Travel Booking Management System',
+      subject: `Reset Your Password - ${companyName}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          ${logoUrl ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${logoUrl}" alt="${companyName}" style="max-height: 50px; object-fit: contain;" /></div>` : ''}
           <h2 style="color: #1e3a8a; text-align: center;">Reset Your Password</h2>
           <p>Hello ${user.name || 'User'},</p>
-          <p>We received a request to reset your password for your Travel Booking Management System account. Click the button below to set a new password:</p>
+          <p>We received a request to reset your password for your ${companyName} account. Click the button below to set a new password:</p>
           <div style="text-align: center; margin: 30px 0;">
             <a href="${resetLink}" target="_blank" style="background-color: #1e3a8a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
           </div>
           <p>This password reset link is valid for <strong>1 hour</strong>.</p>
           <p>If you did not request a password reset, please ignore this email or contact your system administrator.</p>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
-          <p style="font-size: 11px; color: #64748b; text-align: center;">This is an automated security email. Please do not reply directly.</p>
+          <p style="font-size: 11px; color: #64748b; text-align: center;">This is an automated security email from ${companyName}. Please do not reply directly.</p>
         </div>
       `
     };
@@ -1509,6 +1511,20 @@ app.patch('/agents/payroll/:id', requireTenantContext, async (req: any, res: Res
   }
 });
 
+function getCurrencySymbol(currencyCode: string | null | undefined): string {
+  const code = (currencyCode || "GBP").toUpperCase();
+  switch (code) {
+    case "GBP": return "£";
+    case "EUR": return "€";
+    case "USD": return "$";
+    case "PKR": return "Rs";
+    case "SAR": return "SR";
+    case "AED": return "AED";
+    case "MYR": return "RM";
+    default: return "£";
+  }
+}
+
 // POST /agents/payroll/:id/send - send branded email payroll slip
 app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res: Response) => {
   try {
@@ -1548,7 +1564,8 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
     });
 
     const companyName = tenant?.name || 'Travel Booker';
-    const logoUrl = tenant?.logo || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80';
+    const logoUrl = tenant?.logo || null;
+    const currencySymbol = getCurrencySymbol(tenant?.currency);
 
     // Fetch unique attendance check-ins during the period if not overridden
     let daysPresent = 0;
@@ -1643,7 +1660,8 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
       allowances: finalAllowances,
       deductions,
       notes: customNotes || undefined,
-      issueDateStr
+      issueDateStr,
+      currencySymbol
     });
 
     // Create a beautiful branded HTML email content
@@ -1656,7 +1674,8 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
           body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; margin: 0; padding: 0; background-color: #f1f5f9; }
           .container { max-width: 650px; margin: 40px auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
           .header { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 35px 30px; text-align: center; color: white; position: relative; }
-          .logo { max-height: 50px; margin-bottom: 12px; }
+          .logo { max-height: 50px; margin-bottom: 12px; object-fit: contain; }
+          .logo-text { margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; margin-bottom: 8px; }
           .header h1 { margin: 0; font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #38bdf8; }
           .header p { margin: 4px 0 0 0; font-size: 14px; color: #cbd5e1; font-weight: 500; }
           
@@ -1695,7 +1714,7 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
       <body>
         <div class="container">
           <div class="header">
-            ${logoUrl ? `<img src="${logoUrl}" alt="${companyName} Logo" class="logo" />` : ''}
+            ${logoUrl ? `<img src="${logoUrl}" alt="${companyName} Logo" class="logo" />` : `<h1 class="logo-text">${companyName}</h1>`}
             <h1>Official Salary Slip</h1>
             <p>${companyName}</p>
           </div>
@@ -1753,33 +1772,33 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
                 </tr>
                 <tr>
                   <td>Basic Salary (Monthly contract)</td>
-                  <td class="number">£${basicSalaryVal.toFixed(2)}</td>
+                  <td class="number">${currencySymbol}${basicSalaryVal.toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td>Commission / Margin Share (dynamic yield)</td>
-                  <td class="number">£${marginEarnedVal.toFixed(2)}</td>
+                  <td class="number">${currencySymbol}${marginEarnedVal.toFixed(2)}</td>
                 </tr>
                 ${finalAllowances.map((a: any) => `
                 <tr>
                   <td>${a.description}</td>
-                  <td class="number">£${Number(a.amount).toFixed(2)}</td>
+                  <td class="number">${currencySymbol}${Number(a.amount).toFixed(2)}</td>
                 </tr>
                 `).join('')}
                 ${paidHolidaysCount > 0 ? `
                 <tr>
-                  <td>Paid Holidays (${paidHolidaysCount} days @ £${paidHolidaysRate.toFixed(2)}/day)</td>
-                  <td class="number">£${(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
+                  <td>Paid Holidays (${paidHolidaysCount} days @ ${currencySymbol}${paidHolidaysRate.toFixed(2)}/day)</td>
+                  <td class="number">${currencySymbol}${(paidHolidaysCount * paidHolidaysRate).toFixed(2)}</td>
                 </tr>
                 ` : ''}
                 ${publicHolidaysCount > 0 ? `
                 <tr>
-                  <td>Public Holidays (${publicHolidaysCount} days @ £${publicHolidaysRate.toFixed(2)}/day)</td>
-                  <td class="number">£${(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
+                  <td>Public Holidays (${publicHolidaysCount} days @ ${currencySymbol}${publicHolidaysRate.toFixed(2)}/day)</td>
+                  <td class="number">${currencySymbol}${(publicHolidaysCount * publicHolidaysRate).toFixed(2)}</td>
                 </tr>
                 ` : ''}
                 <tr class="subtotal-row">
                   <td>Total Gross Earnings</td>
-                  <td class="number">£${grossEarnings.toFixed(2)}</td>
+                  <td class="number">${currencySymbol}${grossEarnings.toFixed(2)}</td>
                 </tr>
                 
                 <!-- Deductions Section -->
@@ -1788,25 +1807,25 @@ app.post('/agents/payroll/:id/send', requireTenantContext, async (req: any, res:
                 </tr>
                 ${absents > 0 && dailyRate > 0 ? `
                 <tr>
-                  <td>Absenteeism Penalty (${absents} days absent @ £${dailyRate.toFixed(2)}/day)</td>
-                  <td class="number" style="color: #dc2626;">-£${absentDeduction.toFixed(2)}</td>
+                  <td>Absenteeism Penalty (${absents} days absent @ ${currencySymbol}${dailyRate.toFixed(2)}/day)</td>
+                  <td class="number" style="color: #dc2626;">-${currencySymbol}${absentDeduction.toFixed(2)}</td>
                 </tr>
                 ` : ''}
                 ${deductions.map((d: any) => `
                 <tr>
                   <td>${d.description}</td>
-                  <td class="number" style="color: #dc2626;">-£${Number(d.amount).toFixed(2)}</td>
+                  <td class="number" style="color: #dc2626;">-${currencySymbol}${Number(d.amount).toFixed(2)}</td>
                 </tr>
                 `).join('')}
                 <tr class="subtotal-row">
                   <td>Total Deductions</td>
-                  <td class="number" style="color: #dc2626;">£${totalDeductions.toFixed(2)}</td>
+                  <td class="number" style="color: #dc2626;">${currencySymbol}${totalDeductions.toFixed(2)}</td>
                 </tr>
                 
                 <!-- Net Pay Section -->
                 <tr class="net-pay-row">
                   <td>Total Net Payable (Net Salary)</td>
-                  <td class="number">£${finalNetPay.toFixed(2)}</td>
+                  <td class="number">${currencySymbol}${finalNetPay.toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
@@ -2684,6 +2703,7 @@ interface PdfSlipData {
   deductions: { description: string; amount: number }[];
   notes?: string;
   issueDateStr: string;
+  currencySymbol?: string;
 }
 
 async function fetchLogoBuffer(logoUrl: string): Promise<Buffer | null> {
@@ -2790,39 +2810,41 @@ function generateSalarySlipPdf(data: PdfSlipData): Promise<Buffer> {
       const totalDeductions = absentDeduction + data.deductions.reduce((sum, d) => sum + Number(d.amount), 0);
       const finalNetPay = Math.max(0, grossEarnings - totalDeductions);
 
-      drawRow('Basic Contract Salary (Monthly contract)', `£${data.basicSalaryVal.toFixed(2)}`, '');
-      drawRow('Booking Commission / Margin Share', `+£${data.marginEarnedVal.toFixed(2)}`, '');
+      const curSym = data.currencySymbol || '£';
+
+      drawRow('Basic Contract Salary (Monthly contract)', `${curSym}${data.basicSalaryVal.toFixed(2)}`, '');
+      drawRow('Booking Commission / Margin Share', `+${curSym}${data.marginEarnedVal.toFixed(2)}`, '');
 
       data.allowances.forEach(a => {
-        drawRow(a.description, `+£${Number(a.amount).toFixed(2)}`, '');
+        drawRow(a.description, `+${curSym}${Number(a.amount).toFixed(2)}`, '');
       });
 
       if (data.paidHolidaysCount > 0) {
-        drawRow(`Paid Holidays (${data.paidHolidaysCount} days @ £${data.paidHolidaysRate.toFixed(2)}/day)`, `+£${(data.paidHolidaysCount * data.paidHolidaysRate).toFixed(2)}`, '');
+        drawRow(`Paid Holidays (${data.paidHolidaysCount} days @ ${curSym}${data.paidHolidaysRate.toFixed(2)}/day)`, `+${curSym}${(data.paidHolidaysCount * data.paidHolidaysRate).toFixed(2)}`, '');
       }
 
       if (data.publicHolidaysCount > 0) {
-        drawRow(`Public Holidays (${data.publicHolidaysCount} days @ £${data.publicHolidaysRate.toFixed(2)}/day)`, `+£${(data.publicHolidaysCount * data.publicHolidaysRate).toFixed(2)}`, '');
+        drawRow(`Public Holidays (${data.publicHolidaysCount} days @ ${curSym}${data.publicHolidaysRate.toFixed(2)}/day)`, `+${curSym}${(data.publicHolidaysCount * data.publicHolidaysRate).toFixed(2)}`, '');
       }
 
       if (data.absents > 0 && dailyRate > 0) {
-        drawRow(`Absenteeism Penalty (${data.absents} days absent @ £${dailyRate.toFixed(2)}/day)`, '', `-£${absentDeduction.toFixed(2)}`);
+        drawRow(`Absenteeism Penalty (${data.absents} days absent @ ${curSym}${dailyRate.toFixed(2)}/day)`, '', `-${curSym}${absentDeduction.toFixed(2)}`);
       }
 
       data.deductions.forEach(d => {
-        drawRow(d.description, '', `-£${Number(d.amount).toFixed(2)}`);
+        drawRow(d.description, '', `-${curSym}${Number(d.amount).toFixed(2)}`);
       });
 
       doc.lineWidth(1).strokeColor('#cbd5e1').moveTo(40, currentY).lineTo(555, currentY).stroke();
       doc.rect(40, currentY, 515, 20).fill('#f8fafc');
       doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text('SUBTOTALS', 50, currentY + 6);
-      doc.fillColor('#0f172a').text(`£${grossEarnings.toFixed(2)}`, 340, currentY + 6, { width: 100, align: 'right' });
-      doc.fillColor('#dc2626').text(`£${totalDeductions.toFixed(2)}`, 440, currentY + 6, { width: 100, align: 'right' });
+      doc.fillColor('#0f172a').text(`${curSym}${grossEarnings.toFixed(2)}`, 340, currentY + 6, { width: 100, align: 'right' });
+      doc.fillColor('#dc2626').text(`${curSym}${totalDeductions.toFixed(2)}`, 440, currentY + 6, { width: 100, align: 'right' });
       currentY += 20;
 
       doc.rect(40, currentY, 515, 28).fill('#0f172a');
       doc.fillColor('#ffffff').fontSize(10).font('Helvetica-Bold').text('TOTAL NET PAYABLE (NET SALARY)', 50, currentY + 9);
-      doc.fillColor('#38bdf8').fontSize(12).font('Helvetica-Bold').text(`£${finalNetPay.toFixed(2)}`, 340, currentY + 8, { width: 200, align: 'right' });
+      doc.fillColor('#38bdf8').fontSize(12).font('Helvetica-Bold').text(`${curSym}${finalNetPay.toFixed(2)}`, 340, currentY + 8, { width: 200, align: 'right' });
       currentY += 28;
 
       if (data.notes) {
@@ -2866,7 +2888,7 @@ async function getTenantSmtpTransporter(tenantId: number): Promise<{ transporter
   const transporter = await getSmtpTransporter();
   const userSetting = await prisma.systemSetting.findUnique({ where: { key: 'smtp_user' } });
   const fromEmail = userSetting?.value || 'muhammadfaisalchughtai@gmail.com';
-  return { transporter, fromEmail, fromName: tenant?.name || 'Travel Agency', tenant };
+  return { transporter, fromEmail, fromName: tenant?.name || 'Techbarred', tenant };
 }
 
 // POST /tenants/send-email — Internal endpoint (called by booking-service) to send branded email
@@ -2930,7 +2952,7 @@ app.post('/request-demo', async (req: Request, res: Response) => {
     // 3. Email to admin
     const adminEmail = smtpUser; // Receive admin emails at configured user
     const adminMailOptions = {
-      from: `"TravelBooker Platform" <${smtpUser}>`,
+      from: `"Techbarred Platform" <${smtpUser}>`,
       to: adminEmail,
       subject: `New Demo Request: ${companyName}`,
       html: `
@@ -2967,7 +2989,7 @@ app.post('/request-demo', async (req: Request, res: Response) => {
             </tr>
           </table>
           <div style="margin-top: 25px; font-size: 12px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px;">
-            Received at ${new Date().toLocaleString()} • TravelBooker Platform Command Center
+            Received at ${new Date().toLocaleString()} • Techbarred Platform Command Center
           </div>
         </div>
       `
@@ -2975,18 +2997,18 @@ app.post('/request-demo', async (req: Request, res: Response) => {
 
     // 4. Email to user requesting
     const userMailOptions = {
-      from: `"TravelBooker Support" <${smtpUser}>`,
+      from: `"Techbarred Support" <${smtpUser}>`,
       to: email,
-      subject: `Demo Request Received - TravelBooker`,
+      subject: `Demo Request Received - Techbarred`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #fafafa;">
           <div style="background-color: #0b0f19; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">Travel<span style="color: #3b82f6;">Booker</span></h1>
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">Tech<span style="color: #3b82f6;">barred</span></h1>
           </div>
           <div style="background-color: #ffffff; padding: 25px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none;">
             <p style="font-size: 16px; color: #1e293b; font-weight: 600; margin-top: 0;">Dear ${fullName},</p>
             <p style="font-size: 15px; color: #475569; line-height: 1.6;">
-              Thank you for requesting a demo of <strong>TravelBooker</strong>. We are thrilled to show you how our B2B travel operating system can transform your agency operations.
+              Thank you for requesting a demo of <strong>Techbarred</strong>. We are thrilled to show you how our B2B travel operating system can transform your agency operations.
             </p>
             <p style="font-size: 15px; color: #475569; line-height: 1.6;">
               A member of our team will contact you shortly at <strong>${email}</strong> (or <strong>${phoneNumber || 'your phone number'}</strong>) to schedule a personalized walkthrough.
@@ -3001,7 +3023,7 @@ app.post('/request-demo', async (req: Request, res: Response) => {
             
             <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin-top: 20px;">
               Best regards,<br/>
-              <strong>TravelBooker Sales Team</strong>
+              <strong>Techbarred Sales Team</strong>
             </p>
           </div>
           <div style="margin-top: 20px; font-size: 11px; color: #94a3b8; text-align: center;">
@@ -3413,6 +3435,11 @@ app.get('/roles/permissions/matrix', requireTenantContext, async (req: any, res:
     }
     
     const allPermissions = await prisma.permission.findMany({
+      where: {
+        module: {
+          not: 'Document Studio'
+        }
+      },
       orderBy: [
         { module: 'asc' },
         { name: 'asc' }

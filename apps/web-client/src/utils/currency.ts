@@ -11,6 +11,7 @@ export const useCurrency = () => {
       case 'PKR': return 'Rs';
       case 'USD': return '$';
       case 'AED': return 'AED ';
+      case 'MYR': return 'RM';
       default: return `${currency} `;
     }
   };

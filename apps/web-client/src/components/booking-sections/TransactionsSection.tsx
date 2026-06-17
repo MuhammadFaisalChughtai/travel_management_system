@@ -13,6 +13,7 @@ import { UpdateInvoicePriceModal } from '../booking-modals/UpdateInvoicePriceMod
 import { PieChart, CheckCircle2, Edit2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Pagination } from '../shared/Pagination';
+import { useCurrency } from '../../utils/currency';
 
 interface TransactionsSectionProps {
   booking: BookingDetail;
@@ -24,6 +25,7 @@ interface TransactionsSectionProps {
 }
 
 export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onClawbackMargin, onFinalizeMargin, onUpdateInvoicePrice }: TransactionsSectionProps) {
+  const { symbol } = useCurrency();
   const [filter, setFilter] = useState<'All' | 'Received from Client' | 'Sent to Vendor' | 'Margin Paid to Agent'>('All');
   const [customMarginPercentage, setCustomMarginPercentage] = useState<string>('0');
   const [marginPercentage, setMarginPercentage] = useState<number>(0);
@@ -215,7 +217,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                 <span>Invoice Price</span>
                 {onUpdateInvoicePrice && <Edit2 className="w-3 h-3 text-indigo-300 opacity-60 group-hover:opacity-100 transition-opacity" />}
               </p>
-              <p className="font-black text-white text-lg">£{bookingTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-black text-white text-lg">{symbol}{bookingTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
             {/* Total Received (Net) */}
@@ -224,7 +226,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
               onClick={() => setShowClientTransactions(true)}
             >
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1 flex items-center justify-between">Total Received <ArrowDownLeft className="w-3 h-3 text-emerald-400 opacity-50" /></p>
-              <p className="font-black text-emerald-400 text-lg">£{(clientPayments - refundsToClient).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-black text-emerald-400 text-lg">{symbol}{(clientPayments - refundsToClient).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
             {/* Refunds to Client */}
@@ -233,13 +235,13 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
               onClick={() => setShowClientTransactions(true)}
             >
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1 flex items-center justify-between">Total Refunded <RefreshCcw className="w-3 h-3 text-rose-400 opacity-50" /></p>
-              <p className="font-black text-rose-400 text-lg">£{refundsToClient.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-black text-rose-400 text-lg">{symbol}{refundsToClient.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
             {/* Remaining Balance */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Remaining Balance</p>
-              <p className={`font-black text-lg ${clientBalance > 0 ? 'text-amber-400' : clientBalance < 0 ? 'text-rose-400' : 'text-slate-300'}`}>£{Math.abs(clientBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className={`font-black text-lg ${clientBalance > 0 ? 'text-amber-400' : clientBalance < 0 ? 'text-rose-400' : 'text-slate-300'}`}>{symbol}{Math.abs(clientBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
               {clientBalance === 0 ? (
                 <p className="text-[8px] text-emerald-300 mt-0.5 font-bold">Fully Paid</p>
               ) : clientBalance < 0 ? (
@@ -255,14 +257,14 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
               onClick={() => setShowVendorTransactions(true)}
             >
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1 flex items-center justify-between">Total Sent <ArrowUpRight className="w-3 h-3 text-red-400 opacity-50" /></p>
-              <p className="font-black text-red-400 text-lg">£{netSent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-              {refundsFromVendor > 0 && <p className="text-[8px] text-red-300 mt-0.5">After £{refundsFromVendor.toFixed(2)} refunded by vendor</p>}
+              <p className="font-black text-red-400 text-lg">{symbol}{netSent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              {refundsFromVendor > 0 && <p className="text-[8px] text-red-300 mt-0.5">After {symbol}{refundsFromVendor.toFixed(2)} refunded by vendor</p>}
             </div>
 
             {/* Remaining to Pay Vendors */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Remaining to Pay</p>
-              <p className={`font-black text-lg ${remainingVendorPay > 0 ? 'text-amber-400' : 'text-slate-300'}`}>£{remainingVendorPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className={`font-black text-lg ${remainingVendorPay > 0 ? 'text-amber-400' : 'text-slate-300'}`}>{symbol}{remainingVendorPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
               {remainingVendorPay === 0 ? (
                 <p className="text-[8px] text-emerald-300 mt-0.5 font-bold">All Vendors Paid</p>
               ) : (
@@ -273,7 +275,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
             {/* Discounts */}
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
               <p className="text-[9px] text-indigo-200 font-bold uppercase mb-1">Discounts Saved</p>
-              <p className="font-black text-amber-400 text-lg">£{totalDiscounts.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-black text-amber-400 text-lg">{symbol}{totalDiscounts.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
 
             {/* Agent Margin */}
@@ -283,7 +285,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
               </p>
               {netProfit > 100000 && marginPercentage === 0 && !loadingMargin ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="font-black text-blue-400 text-lg">£{remainingAgentMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="font-black text-blue-400 text-lg">{symbol}{remainingAgentMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   <input type="number" value={customMarginPercentage} onChange={e => {
                     setCustomMarginPercentage(e.target.value);
                     setMarginPercentage(parseFloat(e.target.value) || 0);
@@ -291,12 +293,12 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                 </div>
               ) : (
                 <div className="font-black text-blue-400 text-lg">
-                  {loadingMargin ? <div className="w-4 h-4 mt-1 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" /> : `£${remainingAgentMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  {loadingMargin ? <div className="w-4 h-4 mt-1 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" /> : `${symbol}${remainingAgentMargin.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                 </div>
               )}
               <p className="text-[8px] text-indigo-300 mt-0.5 italic">Remaining to pay</p>
               {marginPaidToAgent > 0 && (
-                <p className="text-[10px] text-emerald-400 font-bold mt-1">Paid: £{marginPaidToAgent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-[10px] text-emerald-400 font-bold mt-1">Paid: {symbol}{marginPaidToAgent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
               )}
             </div>
 
@@ -307,7 +309,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
             >
               <p className="text-[9px] text-emerald-100 font-bold uppercase mb-1 flex items-center justify-between">Net Profit <PieChart className="w-3 h-3 text-emerald-100 opacity-50" /></p>
               <p className={`font-black text-xl ${netProfit >= 0 ? 'text-white' : 'text-red-300'}`}>
-                {netProfit < 0 ? '-' : ''}£{Math.abs(netProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {netProfit < 0 ? '-' : ''}{symbol}{Math.abs(netProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
               <p className="text-[8px] text-emerald-200 mt-0.5">
                 {grossMarginPct.toFixed(1)}% margin
@@ -435,7 +437,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                                   isRejected ? 'text-slate-400 line-through' :
                                   isReceived ? 'text-emerald-600' : 'text-red-600'
                                 }`}>
-                                  {isReceived ? '+' : '-'}£{parseFloat(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  {isReceived ? '+' : '-'}{symbol}{parseFloat(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>
                             );
@@ -462,7 +464,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                                   </div>
                                 </td>
                                 <td className={`py-2 px-4 text-right font-black ${isFromVendor ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {isFromVendor ? '+' : '-'}£{parseFloat(r.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  {isFromVendor ? '+' : '-'}{symbol}{parseFloat(r.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>
                             );
@@ -488,7 +490,7 @@ export function TransactionsSection({ booking, onAddDiscount, onLogRefund, onCla
                                   </div>
                                 </td>
                                 <td className="py-2 px-4 text-right font-black text-emerald-600">
-                                  +£{parseFloat(d.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  +{symbol}{parseFloat(d.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>
                             );

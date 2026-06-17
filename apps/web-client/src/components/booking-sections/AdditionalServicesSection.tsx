@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { PlusCircle, FileText, Edit2, Trash2 } from 'lucide-react';
 import type { AdditionalService } from '../../types/booking';
 import { EmptyState } from '../shared/EmptyState';
+import { useCurrency } from '../../utils/currency';
 
 interface AdditionalServicesSectionProps {
   services: AdditionalService[] | undefined;
@@ -12,6 +13,7 @@ interface AdditionalServicesSectionProps {
 }
 
 export function AdditionalServicesSection({ services, onAdd, onEdit, onDelete, onMarkPaid }: AdditionalServicesSectionProps) {
+  const { symbol } = useCurrency();
   if (!services || services.length === 0) {
     return (
       <EmptyState
@@ -76,7 +78,7 @@ export function AdditionalServicesSection({ services, onAdd, onEdit, onDelete, o
               </label>
             )}
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Charges</span>
-            <span className="text-sm font-black text-slate-900">£{Number(service.charges).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+            <span className="text-sm font-black text-slate-900">{symbol}{Number(service.charges).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
           </div>
         </motion.div>
       ))}

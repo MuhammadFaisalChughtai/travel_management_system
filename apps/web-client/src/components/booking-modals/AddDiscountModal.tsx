@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Tag, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useCurrency } from '../../utils/currency';
 import type { Discount, BookingDetail } from '../../types/booking';
 
 interface AddDiscountModalProps {
@@ -11,6 +12,7 @@ interface AddDiscountModalProps {
 }
 
 export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDiscountModalProps) {
+  const { symbol } = useCurrency();
   const [form, setForm] = useState<Partial<Discount> & { paymentMethod?: string; ccCharges?: string }>({
     vendorCategory: 'Hotel',
     serviceName: '',
@@ -100,7 +102,7 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
                     else if (form.vendorCategory === 'Accommodation') val = `Hotel: ${item.hotelName} (${item.checkIn || 'No Date'})`;
                     else if (form.vendorCategory === 'Transportation') val = `Transport: ${item.vehicleType} (${item.date || 'No Date'})`;
                     else if (form.vendorCategory === 'Visa') val = `Visa: ${item.country} (${item.type || ''})`;
-                    else val = `Service: ${item.serviceName || 'Unknown'} (£${item.charges || 0})`;
+                    else val = `Service: ${item.serviceName || 'Unknown'} (${symbol}${item.charges || 0})`;
                     return <option key={item.id} value={val}>{val}</option>;
                   })}
                 </select>
@@ -108,7 +110,7 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
               {previousDiscounts > 0 && form.serviceName && (
                 <div className="mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold rounded-lg flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                  <p><strong>Notice:</strong> You have already logged £{previousDiscounts.toFixed(2)} in discounts for this service. Are you sure you want to continue?</p>
+                  <p><strong>Notice:</strong> You have already logged {symbol}{previousDiscounts.toFixed(2)} in discounts for this service. Are you sure you want to continue?</p>
                 </div>
               )}
             </div>
@@ -116,7 +118,7 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Amount</label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">{symbol}</span>
                 <input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
               </div>
             </div>
@@ -136,7 +138,7 @@ export function AddDiscountModal({ booking, isOpen, onClose, onSubmit }: AddDisc
               <div className="md:col-span-2">
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Credit Card Charges</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">{symbol}</span>
                   <input type="number" value={(form as any).ccCharges} onChange={e => setForm({...form, ccCharges: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
                 </div>
               </div>

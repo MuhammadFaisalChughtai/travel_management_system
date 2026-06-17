@@ -4,6 +4,7 @@ import { X, Check, Loader2, CreditCard, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MultiSelectDropdown } from '../shared/MultiSelectDropdown';
 import { api } from '../../api/axios';
+import { useCurrency } from '../../utils/currency';
 
 interface ServiceItem {
   id: number;
@@ -22,6 +23,7 @@ interface VendorReconciliationModalProps {
 }
 
 export function VendorReconciliationModal({ onClose, onSaved, bookings: _bookings }: VendorReconciliationModalProps) {
+  const { symbol } = useCurrency();
   // 1. TIER 1 - Basic Inputs
   const [lumpSum, setLumpSum] = useState<number | ''>('');
   const [paidOn, setPaidOn] = useState(new Date().toISOString().split('T')[0]);
@@ -104,9 +106,9 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings: _booking
   const availableBookings = useMemo(() => {
     return unpaidBookings.map(b => ({
       id: b.id,
-      label: `${b.bookingReference} (Total Invoice: £${Number(b.totalPrice).toFixed(2)})`
+      label: `${b.bookingReference} (Total Invoice: ${symbol}${Number(b.totalPrice).toFixed(2)})`
     }));
-  }, [unpaidBookings]);
+  }, [unpaidBookings, symbol]);
 
   const availableServices = useMemo(() => {
     return unpaidServices.filter(s => selectedBookings.includes(s.bookingId));
@@ -119,11 +121,11 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings: _booking
       if (!groups[s.serviceCategory]) groups[s.serviceCategory] = [];
       groups[s.serviceCategory].push({
         id: s.id,
-        label: `${s.bookingRef}: ${s.description} (£${s.pendingAmount})`
+        label: `${s.bookingRef}: ${s.description} (${symbol}${s.pendingAmount})`
       });
     });
     return groups;
-  }, [availableServices]);
+  }, [availableServices, symbol]);
 
   // Calculations
   const effectivePaymentPower = useMemo(() => {
@@ -212,7 +214,7 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings: _booking
           
           <div className="grid grid-cols-2 gap-5">
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Transfer Amount (£)</label>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Transfer Amount ({symbol})</label>
               <input 
                 type="number" step="0.01" required value={lumpSum} 
                 onChange={e => setLumpSum(e.target.value === '' ? '' : Number(e.target.value))} 
@@ -278,7 +280,7 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings: _booking
 
           {walletBalance > 0 && (
             <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl mt-2">
-              <p className="text-emerald-800 font-bold text-xs">You have £{walletBalance.toFixed(2)} in floating credit with this vendor.</p>
+              <p className="text-emerald-800 font-bold text-xs">You have {symbol}{walletBalance.toFixed(2)} in floating credit with this vendor.</p>
               <label className="flex items-center gap-2 mt-2 cursor-pointer">
                 <input 
                   type="checkbox" checked={useWalletCredit} 
@@ -329,18 +331,18 @@ export function VendorReconciliationModal({ onClose, onSaved, bookings: _booking
             <div className="flex justify-between items-end mb-1">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Allocation Tally</span>
               <span className={`text-lg font-black ${overAllocated ? 'text-amber-600' : 'text-indigo-900'}`}>
-                £{totalAllocation.toFixed(2)} <span className="text-sm text-slate-400">/ £{effectivePaymentPower.toFixed(2)}</span>
+                {symbol}{totalAllocation.toFixed(2)} <span className="text-sm text-slate-400">/ {symbol}{effectivePaymentPower.toFixed(2)}</span>
               </span>
             </div>
             {useWalletCredit && (
-              <p className="text-[10px] font-bold text-emerald-600 mb-2">Includes £{walletBalance.toFixed(2)} wallet credit</p>
+              <p className="text-[10px] font-bold text-emerald-600 mb-2">Includes {symbol}{walletBalance.toFixed(2)} wallet credit</p>
             )}
             {overAllocated ? (
               <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5" /> Note: Partial payment. Newest booking(s) will be marked as partially paid.
               </p>
             ) : (
-              remainingLumpSum > 0 && <p className="text-[11px] font-bold text-emerald-600">£{remainingLumpSum.toFixed(2)} remaining to allocate</p>
+              remainingLumpSum > 0 && <p className="text-[11px] font-bold text-emerald-600">{symbol}{remainingLumpSum.toFixed(2)} remaining to allocate</p>
             )}
           </div>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { BookingDetail } from '../../types/booking';
+import { useCurrency } from '../../utils/currency';
 
 interface CommitMarginModalProps {
   booking: BookingDetail | null;
@@ -10,6 +11,7 @@ interface CommitMarginModalProps {
 }
 
 export function CommitMarginModal({ booking, isOpen, onClose, onSubmit, recommendedAmount }: CommitMarginModalProps) {
+  const { symbol } = useCurrency();
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -55,7 +57,7 @@ export function CommitMarginModal({ booking, isOpen, onClose, onSubmit, recommen
           </div>
 
           <div>
-            <label className="block text-xs font-bold tracking-wide text-slate-500 uppercase mb-2">Amount (£)</label>
+            <label className="block text-xs font-bold tracking-wide text-slate-500 uppercase mb-2">Amount ({symbol})</label>
             <input
               type="number"
               step="0.01"

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { api } from '../../api/axios';
 import toast from 'react-hot-toast';
 import type { Payment, BookingDetail } from '../../types/booking';
+import { useCurrency } from '../../utils/currency';
 
 interface LogTransactionModalProps {
   booking?: BookingDetail;
@@ -13,6 +14,7 @@ interface LogTransactionModalProps {
 }
 
 export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogTransactionModalProps) {
+  const { symbol } = useCurrency();
   const [form, setForm] = useState<Partial<Payment> & { ccCharges?: string; serviceName?: string }>({
     paymentType: 'Received from Client',
     amount: '',
@@ -84,7 +86,26 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
     return null;
   };
 
-  const previousPayments = booking?.payments?.filter(p => {
+  const serviceTypeMap: Record<string, string> = {
+    'Flight': 'FLIGHT',
+    'Accommodation': 'HOTEL',
+    'Transportation': 'TRANSPORT',
+    'Visa': 'VISA',
+    'Additional Service': 'ADDITIONAL'
+  };
+
+  const allocationsPaid = (() => {
+    if (!booking || !selectedCategory || !selectedServiceId) return 0;
+    const type = serviceTypeMap[selectedCategory];
+    if (!type) return 0;
+    // @ts-ignore
+    const allocations = booking.allocations || [];
+    return allocations
+      .filter((a: any) => a.serviceType === type && String(a.serviceId) === String(selectedServiceId))
+      .reduce((sum: number, a: any) => sum + (parseFloat(a.allocatedAmount) || 0), 0);
+  })();
+
+  const legacyPaymentsPaid = booking?.payments?.filter(p => {
     if (p.paymentType !== 'Sent to Vendor' || !p.notes) return false;
     if (selectedCategory === 'Flight') {
       const f2 = parseFlightDetails(currentServiceName);
@@ -97,7 +118,11 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
     }
     return p.notes.includes(currentServiceName);
   }).reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0) || 0;
-  const isDuplicate = selectedItem?.isPaidToVendor === true || previousPayments > 0;
+
+  const totalPaidForService = allocationsPaid + legacyPaymentsPaid;
+  const serviceTotalCost = parseFloat((selectedItem?.price || selectedItem?.charges || selectedItem?.cost || 0).toString());
+  const remainingDue = Math.max(0, serviceTotalCost - totalPaidForService);
+  const isFullyPaid = selectedItem?.isPaidToVendor === true || totalPaidForService >= serviceTotalCost;
 
 
   if (!isOpen) return null;
@@ -141,22 +166,49 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
                   setForm(prev => ({ ...prev, serviceName, notes: `Manual payment for ${serviceName}` }));
                 }} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none font-semibold text-slate-700" placeholder="Type specific service..." />
               ) : (
-                <select value={selectedServiceId} onChange={e => { 
-                         const id = e.target.value;
-                         setSelectedServiceId(id); 
-                         const it = availableItems.find(i => i.id == id);
-                         if (it) {
-                           const cost = it.price || it.charges || it.cost || 0;
-                           let serviceName = '';
-                           if (selectedCategory === 'Flight') serviceName = `Flight: ${it.airline || it.vendorName || 'Unknown'} - ${it.flightNo || 'No Flight No'} (${it.pnr})`;
-                           else if (selectedCategory === 'Accommodation') serviceName = `Hotel: ${it.hotelName || it.vendorName || 'Unknown'}`;
-                           else if (selectedCategory === 'Transportation') serviceName = `Transport: ${it.vehicleType || it.vendorName || 'Unknown'}`;
-                           else if (selectedCategory === 'Visa') serviceName = `Visa: ${it.vendorName || 'Unknown'} (${it.visaType})`;
-                           else serviceName = `Service: ${it.serviceName || it.vendorName || 'Unknown'}`;
-                           
-                           setForm(prev => ({ ...prev, amount: cost, notes: `Manual vendor payment for ${serviceName}`, serviceName }));
-                         }
-                       }} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none font-semibold text-slate-700">
+                 <select value={selectedServiceId} onChange={e => { 
+                          const id = e.target.value;
+                          setSelectedServiceId(id); 
+                          const it = availableItems.find(i => i.id == id);
+                          if (it) {
+                            const cost = parseFloat((it.price || it.charges || it.cost || 0).toString());
+                            const type = serviceTypeMap[selectedCategory];
+                            // @ts-ignore
+                            const allocations = booking?.allocations || [];
+                            const allocPaid = type ? allocations
+                              .filter((a: any) => a.serviceType === type && String(a.serviceId) === String(id))
+                              .reduce((sum: number, a: any) => sum + (parseFloat(a.allocatedAmount) || 0), 0) : 0;
+
+                            let serviceName = '';
+                            if (selectedCategory === 'Flight') serviceName = `Flight: ${it.airline || it.vendorName || 'Unknown'} - ${it.flightNo || 'No Flight No'} (${it.pnr})`;
+                            else if (selectedCategory === 'Accommodation') serviceName = `Hotel: ${it.hotelName || it.vendorName || 'Unknown'}`;
+                            else if (selectedCategory === 'Transportation') serviceName = `Transport: ${it.vehicleType || it.vendorName || 'Unknown'}`;
+                            else if (selectedCategory === 'Visa') serviceName = `Visa: ${it.vendorName || 'Unknown'} (${it.visaType})`;
+                            else serviceName = `Service: ${it.serviceName || it.vendorName || 'Unknown'}`;
+
+                            const legPaid = booking?.payments?.filter(p => {
+                              if (p.paymentType !== 'Sent to Vendor' || !p.notes) return false;
+                              if (selectedCategory === 'Flight') {
+                                const f2 = parseFlightDetails(serviceName);
+                                if (f2) {
+                                  const f1 = parseFlightDetails(p.notes);
+                                  if (f1) return f1.flightNo === f2.flightNo && f1.pnr === f2.pnr;
+                                }
+                              }
+                              return p.notes.includes(serviceName);
+                            }).reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0) || 0;
+
+                            const totalPaid = allocPaid + legPaid;
+                            const remaining = Math.max(0, cost - totalPaid);
+
+                            setForm(prev => ({ 
+                              ...prev, 
+                              amount: remaining > 0 ? remaining.toString() : '0', 
+                              notes: `Manual vendor payment for ${serviceName}`, 
+                              serviceName 
+                            }));
+                          }
+                        }} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none font-semibold text-slate-700">
                          <option value="">-- Select Service --</option>
                           {availableItems.map(item => {
                             let label = '';
@@ -164,7 +216,7 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
                              else if (selectedCategory === 'Accommodation') label = `Hotel: ${item.hotelName || item.vendorName || 'Unknown'} (${item.checkIn || item.date || 'No Date'})`;
                              else if (selectedCategory === 'Transportation') label = `Transport: ${item.vehicleType || item.vendorName || 'Unknown'} (${item.date || 'No Date'})`;
                              else if (selectedCategory === 'Visa') label = `Visa: ${item.vendorName || 'Unknown'} (${item.visaType || ''})`;
-                             else label = `Service: ${item.serviceName || item.vendorName || 'Unknown'} (£${item.charges || item.price || 0})`;
+                             else label = `Service: ${item.serviceName || item.vendorName || 'Unknown'} (${symbol}${item.charges || item.price || 0})`;
                             
                             return (
                               <option key={item.id} value={item.id}>
@@ -178,10 +230,23 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
                   )}
                 </div>
 
-                {selectedItem && isDuplicate && (
+                {selectedItem && totalPaidForService > 0 && totalPaidForService < serviceTotalCost && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold rounded-lg flex items-start gap-2 animate-fade-in">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                    <div>
+                      <p><strong>Partial Payment Found:</strong> Total cost is {symbol}{serviceTotalCost.toFixed(2)}. You have already paid/allocated {symbol}{totalPaidForService.toFixed(2)} to this service.</p>
+                      <p className="mt-1 font-extrabold text-[12px] text-amber-950">Remaining pending: {symbol}{remainingDue.toFixed(2)}</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedItem && isFullyPaid && (
                   <div className="mt-2 p-3 bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-lg flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                    <p><strong>Warning:</strong> You have already logged £{previousPayments > 0 ? previousPayments.toFixed(2) : (selectedItem?.price || selectedItem?.charges || 0)} in payments to the vendor for this service. Logging this transaction may result in double-payment!</p>
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+                    <div>
+                      <p><strong>Warning:</strong> This service is already fully paid! Total cost is {symbol}{serviceTotalCost.toFixed(2)}. You have already paid/allocated {symbol}{totalPaidForService.toFixed(2)}.</p>
+                      <p className="mt-1">Logging this transaction may result in double-payment!</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -211,7 +276,7 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Amount</label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">{symbol}</span>
                 <input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
               </div>
             </div>
@@ -236,7 +301,7 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
               <div className="md:col-span-2">
                 <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Credit Card Charges</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">£</span>
+                  <span className="absolute left-3 top-2 text-[11px] font-bold text-slate-400">{symbol}</span>
                   <input type="number" value={form.ccCharges} onChange={e => setForm({...form, ccCharges: e.target.value})} className="w-full pl-7 pr-3 border border-slate-200 bg-white/70 rounded-lg py-2 text-[11px] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold text-slate-700" placeholder="0.00" />
                 </div>
               </div>
@@ -306,9 +371,9 @@ export function LogTransactionModal({ isOpen, onClose, onSubmit, booking }: LogT
         <div className="bg-slate-50/50 p-5 border-t border-slate-200 flex justify-end gap-3 backdrop-blur-md">
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">Cancel</button>
           <button 
-            disabled={form.paymentType === 'Sent to Vendor' && isDuplicate}
+            disabled={form.paymentType === 'Sent to Vendor' && isFullyPaid}
             onClick={() => { onSubmit({ ...form, serviceCategory: selectedCategory, serviceId: selectedServiceId, evidenceUrl: evidenceUrl || undefined }); onClose(); }} 
-            className={`px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg transition-all uppercase tracking-wide ${form.paymentType === 'Sent to Vendor' && isDuplicate ? 'bg-slate-400 text-slate-200 cursor-not-allowed shadow-none' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-95'}`}
+            className={`px-6 py-2.5 rounded-xl text-[11px] font-bold shadow-lg transition-all uppercase tracking-wide ${form.paymentType === 'Sent to Vendor' && isFullyPaid ? 'bg-slate-400 text-slate-200 cursor-not-allowed shadow-none' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-95'}`}
           >
             Log Transaction
           </button>

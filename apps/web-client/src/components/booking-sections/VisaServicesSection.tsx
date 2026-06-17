@@ -1,6 +1,7 @@
 import { FileText, Edit, Trash2 } from 'lucide-react';
 import type { VisaService } from '../../types/booking';
 import { EmptyState } from '../shared/EmptyState';
+import { useCurrency } from '../../utils/currency';
 
 interface VisaServicesSectionProps {
   onAdd?: () => void;
@@ -11,6 +12,7 @@ interface VisaServicesSectionProps {
 }
 
 export function VisaServicesSection({ visas, onEdit, onDelete}: VisaServicesSectionProps) {
+  const { symbol } = useCurrency();
   return (
     <div className="flex flex-col gap-4">
       {visas.length === 0 ? (
@@ -40,7 +42,7 @@ export function VisaServicesSection({ visas, onEdit, onDelete}: VisaServicesSect
                     <td className="py-3 px-4 font-semibold text-slate-700">{v.visaType}</td>
                     <td className="py-3 px-4 font-bold text-slate-700">{v.vendorName || '—'}</td>
                     <td className="py-3 px-4 text-right font-black text-emerald-600">
-                      £{Number(v.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {symbol}{Number(v.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

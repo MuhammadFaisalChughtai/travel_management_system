@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import type { BookingDetail } from '../../types/booking';
+import { useCurrency } from '../../utils/currency';
 
 interface ProfitLedgerModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface ProfitLedgerModalProps {
 }
 
 export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModalProps) {
+  const { symbol } = useCurrency();
   if (!isOpen) return null;
 
   const getVendorPayments = (category: string) => {
@@ -94,34 +96,34 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                 <td className="py-4 font-semibold text-sans text-sm text-slate-700">Client Deposits</td>
                 <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
-                <td className="text-right py-4 px-4 border-l border-slate-200 font-medium">£{totalReceived.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-4 px-4 border-l border-slate-200 font-medium">{symbol}{totalReceived.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
               </tr>
               
               <tr className="border-b border-slate-50">
                 <td className="py-2 pt-4 pl-4 text-slate-500 text-xs italic font-sans">Vendor Expenditure: Flights</td>
-                <td className="text-right py-2 px-4 border-l border-slate-200">£{spendFlight.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-2 px-4 border-l border-slate-200">{symbol}{spendFlight.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-2 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
               <tr className="border-b border-slate-50">
                 <td className="py-2 pl-4 text-slate-500 text-xs italic font-sans">Vendor Expenditure: Hotels</td>
-                <td className="text-right py-2 px-4 border-l border-slate-200">£{spendHotel.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-2 px-4 border-l border-slate-200">{symbol}{spendHotel.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-2 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
               <tr className="border-b border-slate-50">
                 <td className="py-2 pl-4 text-slate-500 text-xs italic font-sans">Vendor Expenditure: Visas</td>
-                <td className="text-right py-2 px-4 border-l border-slate-200">£{spendVisa.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-2 px-4 border-l border-slate-200">{symbol}{spendVisa.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-2 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
               <tr className="border-b border-slate-100">
                 <td className="py-2 pb-4 pl-4 text-slate-500 text-xs italic font-sans">Vendor Expenditure: Transport</td>
-                <td className="text-right py-2 px-4 border-l border-slate-200">£{spendTransport.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-2 px-4 border-l border-slate-200">{symbol}{spendTransport.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-2 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
               
               {spendOther > 0 && (
                 <tr className="border-b border-slate-100">
                   <td className="py-3 pl-4 text-slate-500 text-xs italic font-sans">Other Vendor Spend</td>
-                  <td className="text-right py-3 px-4 border-l border-slate-200">£{spendOther.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                  <td className="text-right py-3 px-4 border-l border-slate-200">{symbol}{spendOther.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                   <td className="text-right py-3 px-4 border-l border-slate-200 text-slate-300">-</td>
                 </tr>
               )}
@@ -129,24 +131,24 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                 <td className="py-4 font-semibold text-sans text-sm text-slate-700">Discounts Applied</td>
                 <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
-                <td className="text-right py-4 px-4 border-l border-slate-200">£{totalDiscounts.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-4 px-4 border-l border-slate-200">{symbol}{totalDiscounts.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
               </tr>
 
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-red-50/20">
                 <td className="py-4 font-semibold text-sans text-sm text-red-700">Refunds to Client</td>
-                <td className="text-right py-4 px-4 border-l border-slate-200 text-red-700">£{clientRefunds.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-4 px-4 border-l border-slate-200 text-red-700">{symbol}{clientRefunds.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
 
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-emerald-50/20">
                 <td className="py-4 font-semibold text-sans text-sm text-emerald-700">Refunds from Vendor</td>
                 <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
-                <td className="text-right py-4 px-4 border-l border-slate-200 text-emerald-700">£{vendorRefunds.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-4 px-4 border-l border-slate-200 text-emerald-700">{symbol}{vendorRefunds.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
               </tr>
 
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-amber-50/20">
                 <td className="py-4 font-semibold text-sans text-sm text-amber-700">Margin Paid to Agent</td>
-                <td className="text-right py-4 px-4 border-l border-slate-200 text-amber-700">£{marginPaidToAgentGross.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-4 px-4 border-l border-slate-200 text-amber-700">{symbol}{marginPaidToAgentGross.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
 
@@ -154,13 +156,13 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
                 <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-purple-50/20">
                   <td className="py-4 font-semibold text-sans text-sm text-purple-700">Margin Clawback from Agent</td>
                   <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
-                  <td className="text-right py-4 px-4 border-l border-slate-200 text-purple-700">£{marginClawback.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                  <td className="text-right py-4 px-4 border-l border-slate-200 text-purple-700">{symbol}{marginClawback.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 </tr>
               )}
 
               <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors bg-orange-50/20">
                 <td className="py-4 font-semibold text-sans text-sm text-orange-700">Credit Card Charges</td>
-                <td className="text-right py-4 px-4 border-l border-slate-200 text-orange-700">£{creditCardCharges.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td className="text-right py-4 px-4 border-l border-slate-200 text-orange-700">{symbol}{creditCardCharges.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td className="text-right py-4 px-4 border-l border-slate-200 text-slate-300">-</td>
               </tr>
 
@@ -170,7 +172,7 @@ export function ProfitLedgerModal({ isOpen, onClose, booking }: ProfitLedgerModa
                 <td className="py-4 px-3 uppercase tracking-widest font-bold text-slate-900 text-xs">Closing Balance (Net Profit)</td>
                 <td className="text-right py-4 px-4 border-l border-slate-300 bg-slate-50"></td>
                 <td className={`text-right py-4 px-4 border-l border-slate-300 font-mono font-bold text-lg ${netProfit >= 0 ? 'text-emerald-700 bg-emerald-50/50' : 'text-red-700 bg-red-50/50'}`}>
-                  £{netProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  {symbol}{netProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
                 </td>
               </tr>
             </tfoot>

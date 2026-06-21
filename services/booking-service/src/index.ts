@@ -142,12 +142,10 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     }
 
     if (!userId || !tenantId) {
-      return res
-        .status(403)
-        .json({
-          error: "Forbidden",
-          message: "Permission Denied: Missing user or tenant context",
-        });
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "Permission Denied: Missing user or tenant context",
+      });
     }
 
     try {
@@ -168,22 +166,18 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
       });
 
       if (!response.ok) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: "Permission Denied: Verification service error",
-          });
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Permission Denied: Verification service error",
+        });
       }
 
       const data = await response.json();
       if (!data.allowed) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: data.message || "Permission Denied",
-          });
+        return res.status(403).json({
+          error: "Forbidden",
+          message: data.message || "Permission Denied",
+        });
       }
     } catch (error) {
       console.error("Booking agent verification error:", error);
@@ -858,6 +852,42 @@ app.delete(
   },
 );
 
+// GET /passengers/search -- Search across all booking customers for autocomplete
+app.get(
+  "/passengers/search",
+  requireGatewayHeaders,
+  requirePermission(Permission.UPDATE_BOOKING),
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const tenantIdNumeric = parseInt(req.tenantId!);
+      const query = ((req.query.q as string) || "").trim();
+
+      if (!query) {
+        return res.json({ passengers: [] });
+      }
+
+      const passengers = await prisma.bookingCustomer.findMany({
+        where: {
+          tenantId: tenantIdNumeric,
+          OR: [
+            { firstName: { contains: query, mode: "insensitive" } },
+            { lastName: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } },
+            { passportNumber: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        take: 10,
+        orderBy: { id: "desc" },
+      });
+
+      res.json({ passengers });
+    } catch (error: any) {
+      console.error("Passenger Search Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
+);
+
 app.get(
   "/:id",
   requireGatewayHeaders,
@@ -869,7 +899,10 @@ app.get(
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          customers: { orderBy: { id: "asc" } },
+          customers: {
+            orderBy: { id: "asc" },
+            include: { documents: { orderBy: { id: "asc" } } },
+          },
           payments: { orderBy: { paidOn: "desc" } },
           vendorPayments: { orderBy: { id: "asc" } },
           accommodations: { orderBy: { id: "asc" } },
@@ -906,7 +939,7 @@ app.get(
       // Fetch allocations for this booking
       const allocations = await prisma.bookingAllocation.findMany({
         where: { bookingId },
-        include: { transaction: true }
+        include: { transaction: true },
       });
 
       const vendorPayments = booking.payments.filter(
@@ -916,7 +949,10 @@ app.get(
       const getAllocatedSum = (type: string, id: number) => {
         return allocations
           .filter((a) => a.serviceType === type && a.serviceId === id)
-          .reduce((sum, a) => sum + parseFloat(a.allocatedAmount.toString()), 0);
+          .reduce(
+            (sum, a) => sum + parseFloat(a.allocatedAmount.toString()),
+            0,
+          );
       };
 
       booking.flightServices.forEach((s) => {
@@ -924,7 +960,9 @@ app.get(
         const allocated = getAllocatedSum("FLIGHT", s.id);
         // @ts-ignore
         const matchString = `- ${s.flightNo || "No Flight No"} (${s.pnr})`;
-        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+        const legacyPaid = vendorPayments.some((p) =>
+          p.notes?.includes(matchString),
+        )
           ? cost
           : 0;
         if (allocated + legacyPaid >= cost) {
@@ -936,7 +974,9 @@ app.get(
         const cost = parseFloat((s.price || 0).toString());
         const allocated = getAllocatedSum("HOTEL", s.id);
         const matchString = `Hotel: ${s.hotelName}`;
-        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+        const legacyPaid = vendorPayments.some((p) =>
+          p.notes?.includes(matchString),
+        )
           ? cost
           : 0;
         if (allocated + legacyPaid >= cost) {
@@ -948,7 +988,9 @@ app.get(
         const cost = parseFloat((s.price || 0).toString());
         const allocated = getAllocatedSum("TRANSPORT", s.id);
         const matchString = `Transport: ${s.vehicleType}`;
-        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+        const legacyPaid = vendorPayments.some((p) =>
+          p.notes?.includes(matchString),
+        )
           ? cost
           : 0;
         if (allocated + legacyPaid >= cost) {
@@ -960,7 +1002,9 @@ app.get(
         const cost = parseFloat((s.price || 0).toString());
         const allocated = getAllocatedSum("VISA", s.id);
         const matchString = `Visa: ${s.vendorName || "Unknown"} (${s.visaType})`;
-        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+        const legacyPaid = vendorPayments.some((p) =>
+          p.notes?.includes(matchString),
+        )
           ? cost
           : 0;
         if (allocated + legacyPaid >= cost) {
@@ -972,7 +1016,9 @@ app.get(
         const cost = parseFloat((s.charges || 0).toString());
         const allocated = getAllocatedSum("ADDITIONAL", s.id);
         const matchString = `Service: ${s.serviceName}`;
-        const legacyPaid = vendorPayments.some((p) => p.notes?.includes(matchString))
+        const legacyPaid = vendorPayments.some((p) =>
+          p.notes?.includes(matchString),
+        )
           ? cost
           : 0;
         if (allocated + legacyPaid >= cost) {
@@ -983,8 +1029,8 @@ app.get(
       res.status(200).json({
         booking: {
           ...booking,
-          allocations
-        }
+          allocations,
+        },
       });
     } catch (error) {
       console.error("Fetch Booking Detail Error:", error);
@@ -1118,6 +1164,8 @@ const addPassengerSchema = z.object({
   passportImage: z.string().nullable().optional(),
   agentName: z.string().nullable().optional(),
   role: z.string().nullable().optional().default("Family Member"),
+  nationality: z.string().nullable().optional(),
+  issuingCountry: z.string().nullable().optional(),
 });
 
 app.post(
@@ -1170,6 +1218,11 @@ app.post(
           passportImage: parsedData.passportImage || null,
           agentName: parsedData.agentName || null,
           role: parsedData.role,
+          nationality: parsedData.nationality || null,
+          issuingCountry: parsedData.issuingCountry || null,
+        },
+        include: {
+          documents: { orderBy: { id: "asc" } },
         },
       });
 
@@ -3584,6 +3637,11 @@ app.patch(
           email: parsedData.email || null,
           phoneNumber: parsedData.phoneNumber || null,
           role: parsedData.role || null,
+          nationality: parsedData.nationality,
+          issuingCountry: parsedData.issuingCountry,
+        },
+        include: {
+          documents: { orderBy: { id: "asc" } },
         },
       });
       res.json({ passenger: updated });
@@ -7979,7 +8037,7 @@ app.post(
   },
 );
 
-// POST /bookings/:id/passengers/:passengerId/send-gdpr-request — Send GDPR request link via email
+// POST /bookings/:id/passengers/:passengerId/send-gdpr-request -- Send GDPR request link via email
 app.post(
   "/:id/passengers/:passengerId/send-gdpr-request",
   requireGatewayHeaders,
@@ -8117,7 +8175,7 @@ app.post(
               <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">
                 We hope this message finds you well. To finalise and secure your upcoming trip booked with
                 <strong style="color:#1e3a8a;">${companyName}</strong>, we kindly ask you to complete your
-                passenger details — including your passport information — using the secure link below.
+                passenger details -- including your passport information -- using the secure link below.
               </p>
 
               <!-- GDPR NOTICE BOX -->
@@ -8232,7 +8290,154 @@ app.post(
   },
 );
 
-// GET /public/passenger-info/:token — Public retrieval of passenger info
+// GET /bookings/:id/passengers/:passengerId/gdpr-link -- Get secure self-fill GDPR link directly
+app.get(
+  "/:id/passengers/:passengerId/gdpr-link",
+  requireGatewayHeaders,
+  requirePermission(Permission.UPDATE_BOOKING),
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const bookingId = parseInt(req.params.id);
+      const passengerId = parseInt(req.params.passengerId);
+      const tenantIdNumeric = parseInt(req.tenantId!);
+
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { customers: true },
+      });
+
+      if (!booking) {
+        return res
+          .status(404)
+          .json({ error: "Not Found", message: "Booking not found" });
+      }
+
+      if (!req.isPlatformAdmin && booking.tenantId !== tenantIdNumeric) {
+        return res
+          .status(403)
+          .json({ error: "Forbidden", message: "Access denied" });
+      }
+
+      const passenger = booking.customers.find((c) => c.id === passengerId);
+      if (!passenger) {
+        return res.status(404).json({
+          error: "Not Found",
+          message: "Passenger not found in booking",
+        });
+      }
+
+      // Generate secure token using crypto
+      const tokenPayload = {
+        bookingId,
+        passengerId,
+        tenantId: tenantIdNumeric,
+        expiry: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days validity
+      };
+      const token = encryptToken(tokenPayload);
+
+      const requestOrigin =
+        req.headers["origin"] ||
+        req.headers["referer"] ||
+        "https://travel.techbarred.com";
+      const parsedOrigin = new URL(requestOrigin as string).origin;
+      const gdprLink = `${parsedOrigin}/passenger-info/${encodeURIComponent(token)}`;
+
+      res.status(200).json({ gdprLink });
+    } catch (error: any) {
+      console.error("Get GDPR Link Error:", error);
+      res
+        .status(500)
+        .json({ error: "Internal Server Error", message: error?.message });
+    }
+  },
+);
+
+// POST /bookings/:id/passengers/:passengerId/documents -- Add passenger additional document
+app.post(
+  "/:id/passengers/:passengerId/documents",
+  requireGatewayHeaders,
+  requirePermission(Permission.UPDATE_BOOKING),
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const bookingId = parseInt(req.params.id);
+      const passengerId = parseInt(req.params.passengerId);
+      const tenantIdNumeric = parseInt(req.tenantId!);
+
+      const { title, description, fileUrl } = req.body;
+      if (!title || !fileUrl) {
+        return res
+          .status(400)
+          .json({ error: "Title and File URL are required" });
+      }
+
+      // Verify the passenger exists in this booking
+      const passenger = await prisma.bookingCustomer.findFirst({
+        where: { id: passengerId, bookingId },
+      });
+
+      if (!passenger) {
+        return res
+          .status(404)
+          .json({ error: "Passenger not found in this booking" });
+      }
+
+      const document = await prisma.passengerDocument.create({
+        data: {
+          tenantId: tenantIdNumeric,
+          passengerId,
+          title,
+          description: description || null,
+          fileUrl,
+        },
+      });
+
+      res
+        .status(201)
+        .json({ message: "Document added successfully", document });
+    } catch (error: any) {
+      console.error("Add Passenger Document Error:", error);
+      res
+        .status(500)
+        .json({ error: "Internal Server Error", message: error?.message });
+    }
+  },
+);
+
+// DELETE /bookings/:id/passengers/:passengerId/documents/:documentId -- Delete passenger additional document
+app.delete(
+  "/:id/passengers/:passengerId/documents/:documentId",
+  requireGatewayHeaders,
+  requirePermission(Permission.UPDATE_BOOKING),
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const bookingId = parseInt(req.params.id);
+      const passengerId = parseInt(req.params.passengerId);
+      const documentId = parseInt(req.params.documentId);
+
+      // Verify the document belongs to this passenger and booking
+      const doc = await prisma.passengerDocument.findFirst({
+        where: { id: documentId, passengerId, passenger: { bookingId } },
+      });
+
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      await prisma.passengerDocument.delete({
+        where: { id: documentId },
+      });
+
+      res.status(200).json({ message: "Document deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete Passenger Document Error:", error);
+      res
+        .status(500)
+        .json({ error: "Internal Server Error", message: error?.message });
+    }
+  },
+);
+
+// GET /public/passenger-info/:token -- Public retrieval of passenger info
 app.get(
   "/public/passenger-info/:token",
   async (req: Request, res: Response) => {
@@ -8257,7 +8462,13 @@ app.get(
 
       const booking = await prisma.booking.findUnique({
         where: { id: Number(decoded.bookingId) },
-        include: { customers: true },
+        include: {
+          customers: {
+            include: {
+              documents: true,
+            },
+          },
+        },
       });
 
       if (!booking) {
@@ -8296,6 +8507,9 @@ app.get(
           passportImage: (passenger as any).passportImage,
           ageCategory: passenger.ageCategory,
           role: passenger.role,
+          nationality: (passenger as any).nationality,
+          issuingCountry: (passenger as any).issuingCountry,
+          documents: (passenger as any).documents || [],
         },
         passengers: booking.customers.map((c) => ({
           id: c.id,
@@ -8310,6 +8524,9 @@ app.get(
           passportImage: (c as any).passportImage,
           ageCategory: c.ageCategory,
           role: c.role,
+          nationality: (c as any).nationality,
+          issuingCountry: (c as any).issuingCountry,
+          documents: (c as any).documents || [],
         })),
         primaryPassengerId: passenger.id,
         bookingReference: booking.bookingReference,
@@ -8325,7 +8542,7 @@ app.get(
   },
 );
 
-// PUT /public/passenger-info/:token — Public submission of updated passenger info
+// PUT /public/passenger-info/:token -- Public submission of updated passenger info
 app.put(
   "/public/passenger-info/:token",
   async (req: Request, res: Response) => {
@@ -8380,35 +8597,99 @@ app.put(
             });
           }
 
-          // Security: Ensure passenger belongs to correct booking
-          const dbPassenger = await prisma.bookingCustomer.findFirst({
-            where: { id: Number(p.id), bookingId: Number(decoded.bookingId) },
-          });
+          let updated;
+          const passengerId = Number(p.id);
 
-          if (!dbPassenger) {
-            return res.status(403).json({
-              error: "Forbidden",
-              message: "Passenger does not belong to this booking.",
+          if (passengerId > 0) {
+            // Security: Ensure passenger belongs to correct booking
+            const dbPassenger = await prisma.bookingCustomer.findFirst({
+              where: { id: passengerId, bookingId: Number(decoded.bookingId) },
+            });
+
+            if (!dbPassenger) {
+              return res.status(403).json({
+                error: "Forbidden",
+                message: "Passenger does not belong to this booking.",
+              });
+            }
+
+            updated = await prisma.bookingCustomer.update({
+              where: { id: passengerId },
+              data: {
+                title: p.title || null,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                email: p.email || null,
+                phoneNumber: p.phoneNumber || null,
+                passportNumber: p.passportNumber || null,
+                passportExpiryDate: p.passportExpiryDate
+                  ? new Date(p.passportExpiryDate)
+                  : null,
+                dob: p.dob ? new Date(p.dob) : null,
+                passportImage: p.passportImage || null,
+                ageCategory: p.ageCategory || "Adult",
+                nationality: p.nationality || null,
+                issuingCountry: p.issuingCountry || null,
+              },
+            });
+          } else {
+            // Create new passenger for this booking
+            updated = await prisma.bookingCustomer.create({
+              data: {
+                tenantId: Number(decoded.tenantId),
+                bookingId: Number(decoded.bookingId),
+                title: p.title || null,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                email: p.email || null,
+                phoneNumber: p.phoneNumber || null,
+                passportNumber: p.passportNumber || null,
+                passportExpiryDate: p.passportExpiryDate
+                  ? new Date(p.passportExpiryDate)
+                  : null,
+                dob: p.dob ? new Date(p.dob) : null,
+                passportImage: p.passportImage || null,
+                ageCategory: p.ageCategory || "Adult",
+                nationality: p.nationality || null,
+                issuingCountry: p.issuingCountry || null,
+                role: p.role || "Traveler",
+              },
             });
           }
 
-          const updated = await prisma.bookingCustomer.update({
-            where: { id: Number(p.id) },
-            data: {
-              title: p.title || null,
-              firstName: p.firstName,
-              lastName: p.lastName,
-              email: p.email || null,
-              phoneNumber: p.phoneNumber || null,
-              passportNumber: p.passportNumber || null,
-              passportExpiryDate: p.passportExpiryDate
-                ? new Date(p.passportExpiryDate)
-                : null,
-              dob: p.dob ? new Date(p.dob) : null,
-              passportImage: p.passportImage || null,
-              ageCategory: p.ageCategory || "Adult",
-            },
-          });
+          // Sync additional documents if provided
+          if (p.documents && Array.isArray(p.documents)) {
+            const payloadDocIds = p.documents
+              .map((d: any) => d.id)
+              .filter((id: any) => id && id > 0);
+
+            // Delete documents that are not in the payload
+            await prisma.passengerDocument.deleteMany({
+              where: {
+                passengerId: updated.id,
+                NOT: {
+                  id: { in: payloadDocIds },
+                },
+              },
+            });
+
+            // Create new documents
+            const newDocs = p.documents.filter(
+              (d: any) => !d.id || d.id < 0
+            );
+            for (const doc of newDocs) {
+              await prisma.passengerDocument.create({
+                data: {
+                  tenantId: Number(decoded.tenantId),
+                  passengerId: updated.id,
+                  title: doc.title,
+                  description: doc.description || null,
+                  fileUrl: doc.fileUrl,
+                },
+              });
+            }
+          }
+
           updatedList.push(updated);
         }
 
@@ -8440,6 +8721,8 @@ app.put(
             dob: dob ? new Date(dob) : null,
             passportImage: passportImage || null,
             ...(ageCategory && { ageCategory }),
+            nationality: req.body.nationality || null,
+            issuingCountry: req.body.issuingCountry || null,
           },
         });
 
@@ -8461,7 +8744,7 @@ app.put(
   },
 );
 
-// GET /finance/agent-margin-summary — Internal: total margin earned by agent in period (for payroll)
+// GET /finance/agent-margin-summary -- Internal: total margin earned by agent in period (for payroll)
 app.get(
   "/finance/agent-margin-summary",
   requireGatewayHeaders,

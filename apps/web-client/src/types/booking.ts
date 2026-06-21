@@ -11,6 +11,9 @@ export interface Passenger {
   dob?: string | null;
   passportImage?: string | null;
   role: string | null;
+  documents?: any[];
+  nationality?: string | null;
+  issuingCountry?: string | null;
 }
 
 export interface Payment {

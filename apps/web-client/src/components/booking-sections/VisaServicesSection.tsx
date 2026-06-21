@@ -1,17 +1,20 @@
-import { FileText, Edit, Trash2 } from 'lucide-react';
-import type { VisaService } from '../../types/booking';
-import { EmptyState } from '../shared/EmptyState';
-import { useCurrency } from '../../utils/currency';
+import { FileText, Edit, Trash2 } from "lucide-react";
+import type { VisaService } from "../../types/booking";
+import { EmptyState } from "../shared/EmptyState";
+import { useCurrency } from "../../utils/currency";
 
 interface VisaServicesSectionProps {
   onAdd?: () => void;
   onEdit?: (item: any) => void;
   onDelete?: (item: any) => void;
   visas: VisaService[];
-  
 }
 
-export function VisaServicesSection({ visas, onEdit, onDelete}: VisaServicesSectionProps) {
+export function VisaServicesSection({
+  visas,
+  onEdit,
+  onDelete,
+}: VisaServicesSectionProps) {
   const { symbol } = useCurrency();
   return (
     <div className="flex flex-col gap-4">
@@ -37,22 +40,40 @@ export function VisaServicesSection({ visas, onEdit, onDelete}: VisaServicesSect
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visas.map((v, i) => (
-                  <tr key={v.id || i} className="hover:bg-indigo-50/30 transition-colors group">
-                    <td className="py-3 px-4 font-mono font-bold text-slate-800">{v.passportNumber}</td>
-                    <td className="py-3 px-4 font-semibold text-slate-700">{v.visaType}</td>
-                    <td className="py-3 px-4 font-bold text-slate-700">{v.vendorName || '—'}</td>
+                  <tr
+                    key={v.id || i}
+                    className="hover:bg-indigo-50/30 transition-colors group"
+                  >
+                    <td className="py-3 px-4 font-mono font-bold text-slate-800">
+                      {v.passportNumber}
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-slate-700">
+                      {v.visaType}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-slate-700">
+                      {v.vendorName || "--"}
+                    </td>
                     <td className="py-3 px-4 text-right font-black text-emerald-600">
-                      {symbol}{Number(v.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {symbol}
+                      {Number(v.price || 0).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {onEdit && (
-                          <button onClick={() => onEdit(v)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
+                          <button
+                            onClick={() => onEdit(v)}
+                            className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all"
+                          >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {onDelete && (
-                          <button onClick={() => onDelete(v)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                          <button
+                            onClick={() => onDelete(v)}
+                            className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all"
+                          >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}

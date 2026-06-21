@@ -1287,6 +1287,8 @@ export function BookingDetailsModal({
             }}
             onSubmit={handleSavePassenger}
             initialData={editingPassenger}
+            bookingId={bookingId}
+            allPassengers={booking?.customers || []}
           />
         )}
         {(showAddFlight || !!editingFlight) && (

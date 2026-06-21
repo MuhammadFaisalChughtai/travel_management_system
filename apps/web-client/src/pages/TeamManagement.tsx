@@ -1,11 +1,29 @@
-import { useEffect, useState, Fragment } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Plus, Search, X, Check, Trash2, Edit3, ShieldAlert, Users, Lock, Compass, Briefcase, FolderOpen, Landmark, Settings2, Clock, Banknote } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { api } from '../api/axios';
-import { EmptyState } from '../components/shared/EmptyState';
-import { LoadingState } from '../components/shared/LoadingState';
-import { Pagination } from '../components/shared/Pagination';
+import { useEffect, useState, Fragment } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Shield,
+  Plus,
+  Search,
+  X,
+  Check,
+  Trash2,
+  Edit3,
+  ShieldAlert,
+  Users,
+  Lock,
+  Compass,
+  Briefcase,
+  FolderOpen,
+  Landmark,
+  Settings2,
+  Clock,
+  Banknote,
+} from "lucide-react";
+import toast from "react-hot-toast";
+import { api } from "../api/axios";
+import { EmptyState } from "../components/shared/EmptyState";
+import { LoadingState } from "../components/shared/LoadingState";
+import { Pagination } from "../components/shared/Pagination";
 
 interface User {
   id: number;
@@ -17,7 +35,7 @@ interface User {
   createdAt: string;
 }
 
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore } from "../store/authStore";
 
 interface PermissionItem {
   name: string;
@@ -30,25 +48,27 @@ interface MatrixRow {
 }
 
 const MODULE_ORDER = [
-  'Agency Dashboard',
-  'Bookings & Itineraries',
-  'Agent Registry',
-  'Attendance',
-  'Payroll',
-  'Vendor Records',
-  'Client Records',
-  'Financials (Refunds/Profit)',
-  'Service Catalog',
-  'Team Management',
-  'System Settings'
+  "Agency Dashboard",
+  "Bookings & Itineraries",
+  "Agent Registry",
+  "Attendance",
+  "Payroll",
+  "Vendor Records",
+  "Client Records",
+  "Financials (Refunds/Profit)",
+  "Service Catalog",
+  "Team Management",
+  "System Settings",
 ];
 
 function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
   const [matrix, setMatrix] = useState<MatrixRow[]>([]);
-  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({
+  const [rolePermissions, setRolePermissions] = useState<
+    Record<string, string[]>
+  >({
     AGENT: [],
     COMPANY_ADMIN: [],
-    MAIN_COMPANY_ADMIN: []
+    MAIN_COMPANY_ADMIN: [],
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -56,22 +76,26 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const fetchMatrix = async () => {
       try {
-        const res = await api.get('/auth/roles/permissions/matrix');
+        const res = await api.get("/auth/roles/permissions/matrix");
         const rawMatrix = res.data.matrix || [];
         const sortedMatrix = [...rawMatrix].sort((a, b) => {
           const indexA = MODULE_ORDER.indexOf(a.module);
           const indexB = MODULE_ORDER.indexOf(b.module);
-          return (indexA !== -1 ? indexA : 999) - (indexB !== -1 ? indexB : 999);
+          return (
+            (indexA !== -1 ? indexA : 999) - (indexB !== -1 ? indexB : 999)
+          );
         });
         setMatrix(sortedMatrix);
-        setRolePermissions(res.data.permissions || {
-          AGENT: [],
-          COMPANY_ADMIN: [],
-          MAIN_COMPANY_ADMIN: []
-        });
+        setRolePermissions(
+          res.data.permissions || {
+            AGENT: [],
+            COMPANY_ADMIN: [],
+            MAIN_COMPANY_ADMIN: [],
+          },
+        );
       } catch (err) {
-        console.error('Failed to fetch permissions matrix:', err);
-        toast.error('Failed to load permissions matrix');
+        console.error("Failed to fetch permissions matrix:", err);
+        toast.error("Failed to load permissions matrix");
       } finally {
         setLoading(false);
       }
@@ -79,15 +103,19 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
     fetchMatrix();
   }, []);
 
-  const handleCheckboxChange = (role: 'AGENT' | 'COMPANY_ADMIN', permission: string, checked: boolean) => {
-    setRolePermissions(prev => {
+  const handleCheckboxChange = (
+    role: "AGENT" | "COMPANY_ADMIN",
+    permission: string,
+    checked: boolean,
+  ) => {
+    setRolePermissions((prev) => {
       const currentList = prev[role] || [];
-      const newList = checked 
-        ? [...currentList, permission] 
-        : currentList.filter(p => p !== permission);
+      const newList = checked
+        ? [...currentList, permission]
+        : currentList.filter((p) => p !== permission);
       return {
         ...prev,
-        [role]: newList
+        [role]: newList,
       };
     });
   };
@@ -95,18 +123,20 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put('/auth/roles/permissions/matrix', { permissions: rolePermissions });
-      toast.success('Permissions matrix updated successfully');
-      
-      const syncRes = await api.get('/auth/my-permissions');
+      await api.put("/auth/roles/permissions/matrix", {
+        permissions: rolePermissions,
+      });
+      toast.success("Permissions matrix updated successfully");
+
+      const syncRes = await api.get("/auth/my-permissions");
       if (syncRes.data.permissions) {
         useAuthStore.getState().setPermissions(syncRes.data.permissions);
       }
-      
+
       onClose();
     } catch (err) {
-      console.error('Failed to save permissions matrix:', err);
-      toast.error('Failed to save changes');
+      console.error("Failed to save permissions matrix:", err);
+      toast.error("Failed to save changes");
     } finally {
       setSaving(false);
     }
@@ -114,23 +144,23 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
 
   const getModuleIcon = (moduleName: string) => {
     switch (moduleName) {
-      case 'Bookings & Itineraries':
+      case "Bookings & Itineraries":
         return <Compass className="w-3.5 h-3.5 text-sky-500" />;
-      case 'Client Records':
+      case "Client Records":
         return <Users className="w-3.5 h-3.5 text-teal-500" />;
-      case 'Vendor Records':
+      case "Vendor Records":
         return <Briefcase className="w-3.5 h-3.5 text-amber-500" />;
-      case 'Agency Dashboard':
+      case "Agency Dashboard":
         return <FolderOpen className="w-3.5 h-3.5 text-indigo-500" />;
-      case 'Team Management':
+      case "Team Management":
         return <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />;
-      case 'Financials (Refunds/Profit)':
+      case "Financials (Refunds/Profit)":
         return <Landmark className="w-3.5 h-3.5 text-emerald-500" />;
-      case 'System Settings':
+      case "System Settings":
         return <Settings2 className="w-3.5 h-3.5 text-slate-500" />;
-      case 'Attendance':
+      case "Attendance":
         return <Clock className="w-3.5 h-3.5 text-blue-500" />;
-      case 'Payroll':
+      case "Payroll":
         return <Banknote className="w-3.5 h-3.5 text-amber-600" />;
       default:
         return <Shield className="w-3.5 h-3.5 text-slate-400" />;
@@ -139,23 +169,42 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-7xl relative z-10 overflow-hidden flex flex-col max-h-[85vh]">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-7xl relative z-10 overflow-hidden flex flex-col max-h-[85vh]"
+      >
         <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-4 py-3 flex justify-between items-center shadow-lg relative overflow-hidden shrink-0">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12"></div>
           <div className="absolute bottom-0 left-10 w-24 h-24 bg-indigo-50/30 rounded-full blur-xl -mb-6"></div>
-          
+
           <div className="relative z-10 flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
               <ShieldAlert className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-white text-[13px] tracking-wide">Permissions Matrix</h3>
-              <p className="text-[10px] text-indigo-200 font-medium">Enforce and edit workspace role-based restrictions</p>
+              <h3 className="font-extrabold text-white text-[13px] tracking-wide">
+                Permissions Matrix
+              </h3>
+              <p className="text-[10px] text-indigo-200 font-medium">
+                Enforce and edit workspace role-based restrictions
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="relative z-10 w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"><X className="w-3.5 h-3.5" /></button>
+          <button
+            onClick={onClose}
+            className="relative z-10 w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
         <div className="p-0 overflow-x-auto overflow-y-auto flex-1 min-h-[200px] flex flex-col">
           {loading ? (
@@ -164,13 +213,19 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
             </div>
           ) : matrix.length === 0 ? (
             <div className="flex items-center justify-center py-12 flex-1">
-              <EmptyState title="No Permissions Loaded" description="Failed to fetch permissions configuration." icon={ShieldAlert} />
+              <EmptyState
+                title="No Permissions Loaded"
+                description="Failed to fetch permissions configuration."
+                icon={ShieldAlert}
+              />
             </div>
           ) : (
             <table className="min-w-[1050px] w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-500 font-extrabold border-b border-slate-200 select-none">
-                  <th className="py-1.5 px-3 pl-4 font-bold w-[35%] text-slate-600">Module / Subsection Permission</th>
+                  <th className="py-1.5 px-3 pl-4 font-bold w-[35%] text-slate-600">
+                    Module / Subsection Permission
+                  </th>
                   <th className="py-1.5 border-l border-slate-200/60 text-center w-[21%] text-slate-600 font-bold">
                     <div className="flex items-center justify-center gap-1">
                       <Users className="w-3 h-3 text-slate-400" />
@@ -195,7 +250,10 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                 {matrix.map((row, i) => (
                   <Fragment key={i}>
                     <tr className="bg-slate-100/80 border-b border-slate-200/60">
-                      <td colSpan={4} className="py-1 px-3 pl-4 text-[9.5px] font-black text-indigo-950 uppercase tracking-wider select-none">
+                      <td
+                        colSpan={4}
+                        className="py-1 px-3 pl-4 text-[9.5px] font-black text-indigo-950 uppercase tracking-wider select-none"
+                      >
                         <div className="flex items-center gap-1.5">
                           <div className="p-0.5 rounded bg-white border border-slate-200 flex items-center justify-center shadow-inner">
                             {getModuleIcon(row.module)}
@@ -205,36 +263,57 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
                       </td>
                     </tr>
                     {row.permissions?.map((perm) => {
-                      const isAgentChecked = rolePermissions.AGENT?.includes(perm.name) || false;
-                      const isCompanyAdminChecked = rolePermissions.COMPANY_ADMIN?.includes(perm.name) || false;
-                      const isMainAdminChecked = rolePermissions.MAIN_COMPANY_ADMIN?.includes(perm.name) || false;
+                      const isAgentChecked =
+                        rolePermissions.AGENT?.includes(perm.name) || false;
+                      const isCompanyAdminChecked =
+                        rolePermissions.COMPANY_ADMIN?.includes(perm.name) ||
+                        false;
+                      const isMainAdminChecked =
+                        rolePermissions.MAIN_COMPANY_ADMIN?.includes(
+                          perm.name,
+                        ) || false;
                       return (
-                        <tr key={perm.name} className="hover:bg-slate-50/55 transition-colors border-b border-slate-200/60">
+                        <tr
+                          key={perm.name}
+                          className="hover:bg-slate-50/55 transition-colors border-b border-slate-200/60"
+                        >
                           <td className="py-1 pl-6 text-[10.5px] font-bold text-slate-700 w-[35%] select-none flex items-center gap-1.5">
                             <span className="w-1 h-1 rounded-full bg-indigo-400 shrink-0"></span>
                             <span>{perm.label}</span>
                           </td>
-                          
+
                           {/* AGENT */}
                           <td className="py-0.5 border-l border-slate-200/60 text-center w-[21%]">
                             <input
                               type="checkbox"
                               checked={isAgentChecked}
-                              onChange={(e) => handleCheckboxChange('AGENT', perm.name, e.target.checked)}
+                              onChange={(e) =>
+                                handleCheckboxChange(
+                                  "AGENT",
+                                  perm.name,
+                                  e.target.checked,
+                                )
+                              }
                               className="rounded w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
                             />
                           </td>
-                          
+
                           {/* COMPANY ADMIN */}
                           <td className="py-0.5 border-l border-slate-200/60 text-center w-[21%]">
                             <input
                               type="checkbox"
                               checked={isCompanyAdminChecked}
-                              onChange={(e) => handleCheckboxChange('COMPANY_ADMIN', perm.name, e.target.checked)}
+                              onChange={(e) =>
+                                handleCheckboxChange(
+                                  "COMPANY_ADMIN",
+                                  perm.name,
+                                  e.target.checked,
+                                )
+                              }
                               className="rounded w-3.5 h-3.5 border-slate-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 transition-all cursor-pointer"
                             />
                           </td>
-                          
+
                           {/* MAIN COMPANY ADMIN (LOCKED) */}
                           <td className="py-0.5 border-l border-slate-200/60 bg-indigo-50/5 text-center w-[23%]">
                             <input
@@ -254,9 +333,22 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
         <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
-          <button onClick={handleSave} disabled={saving || loading} className="px-4 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
-            {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          <button
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || loading}
+            className="px-4 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+          >
+            {saving ? (
+              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Check className="w-3.5 h-3.5" />
+            )}
             Save Changes
           </button>
         </div>
@@ -265,40 +357,55 @@ function PermissionsMatrixModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClose: () => void; onCreated: () => void; editingUser: User | null; agents: any[] }) {
+function InviteMemberModal({
+  onClose,
+  onCreated,
+  editingUser,
+  agents,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+  editingUser: User | null;
+  agents: any[];
+}) {
   const [form, setForm] = useState({
-    name: editingUser?.name || '',
-    email: editingUser?.email || '',
-    password: '',
-    roleName: editingUser?.role || 'AGENT',
-    agentId: editingUser?.agentId ? String(editingUser.agentId) : ''
+    name: editingUser?.name || "",
+    email: editingUser?.email || "",
+    password: "",
+    roleName: editingUser?.role || "AGENT",
+    agentId: editingUser?.agentId ? String(editingUser.agentId) : "",
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (!form.name.trim() || (!editingUser && !form.email.trim()) || (!editingUser && !form.password)) {
-      setError('Please fill out all required fields.'); return;
+    if (
+      !form.name.trim() ||
+      (!editingUser && !form.email.trim()) ||
+      (!editingUser && !form.password)
+    ) {
+      setError("Please fill out all required fields.");
+      return;
     }
     setSaving(true);
-    setError('');
-    
+    setError("");
+
     // Prepare payload
     const payload: any = { ...form };
-    if (payload.agentId === '') payload.agentId = null;
+    if (payload.agentId === "") payload.agentId = null;
 
     try {
       if (editingUser) {
         await api.patch(`/auth/users/${editingUser.id}`, payload);
-        toast.success('User updated successfully');
+        toast.success("User updated successfully");
       } else {
-        await api.post('/auth/users', payload);
-        toast.success('Team member invited successfully');
+        await api.post("/auth/users", payload);
+        toast.success("Team member invited successfully");
       }
       onCreated();
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to process request');
+      setError(err?.response?.data?.error || "Failed to process request");
     } finally {
       setSaving(false);
     }
@@ -306,88 +413,179 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden flex flex-col">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden flex flex-col"
+      >
         <div className="bg-gradient-to-r from-primary-900 to-indigo-900 text-white px-4 py-3 flex justify-between items-center shadow-lg relative overflow-hidden shrink-0">
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl -mr-8 -mt-8"></div>
           <div className="absolute bottom-0 left-6 w-16 h-16 bg-indigo-500/35 rounded-full blur-lg -mb-4"></div>
-          
+
           <div className="relative z-10 flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white flex items-center justify-center backdrop-blur-sm shadow-sm">
-              {editingUser ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editingUser ? (
+                <Edit3 className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
             </div>
             <div>
-              <h3 className="font-extrabold text-white text-[13px] tracking-wide">{editingUser ? 'Edit Team Member' : 'Invite Team Member'}</h3>
-              <p className="text-[10px] text-indigo-200 font-medium">Manage access and role permissions</p>
+              <h3 className="font-extrabold text-white text-[13px] tracking-wide">
+                {editingUser ? "Edit Team Member" : "Invite Team Member"}
+              </h3>
+              <p className="text-[10px] text-indigo-200 font-medium">
+                Manage access and role permissions
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="relative z-10 w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"><X className="w-3.5 h-3.5" /></button>
+          <button
+            onClick={onClose}
+            className="relative z-10 w-6 h-6 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-colors shadow-sm"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         <div className="p-4 max-h-[75vh] overflow-y-auto space-y-3.5">
-          {error && <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded-lg">{error}</div>}
-          
+          {error && (
+            <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded-lg">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-3">
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
-              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-semibold outline-none transition-all placeholder:text-slate-400" placeholder="Sarah Jenkins" />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-semibold outline-none transition-all placeholder:text-slate-400"
+                placeholder="Sarah Jenkins"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Address</label>
-              <input type="email" value={form.email} disabled={!!editingUser} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-semibold outline-none transition-all placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-400" placeholder="sarah@example.com" />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                disabled={!!editingUser}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-semibold outline-none transition-all placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-400"
+                placeholder="sarah@example.com"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{editingUser ? 'Reset Password (optional)' : 'Password'}</label>
-              <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-medium outline-none transition-all placeholder:text-slate-400" placeholder="••••••••" />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                {editingUser ? "Reset Password (optional)" : "Password"}
+              </label>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-medium outline-none transition-all placeholder:text-slate-400"
+                placeholder="••••••••"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assign Role</label>
-              <select value={form.roleName} onChange={e => setForm({ ...form, roleName: e.target.value })} className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-bold outline-none transition-all shadow-xs cursor-pointer">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Assign Role
+              </label>
+              <select
+                value={form.roleName}
+                onChange={(e) => setForm({ ...form, roleName: e.target.value })}
+                className="w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-bold outline-none transition-all shadow-xs cursor-pointer"
+              >
                 <option value="AGENT">Agent (Standard Access)</option>
-                <option value="COMPANY_ADMIN">Company Admin (Manager Access)</option>
-                <option value="MAIN_COMPANY_ADMIN">Main Company Admin (Full Access)</option>
+                <option value="COMPANY_ADMIN">
+                  Company Admin (Manager Access)
+                </option>
+                <option value="MAIN_COMPANY_ADMIN">
+                  Main Company Admin (Full Access)
+                </option>
               </select>
-              <p className="mt-1 text-[9px] text-slate-400 leading-normal">Check permissions matrix to see role restrictions.</p>
+              <p className="mt-1 text-[9px] text-slate-400 leading-normal">
+                Check permissions matrix to see role restrictions.
+              </p>
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Link to Agent Profile (Optional)</label>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Link to Agent Profile (Optional)
+              </label>
               <select
                 value={form.agentId}
                 disabled={!!editingUser}
-                onChange={e => {
+                onChange={(e) => {
                   const selectedId = e.target.value;
-                  const selectedAgent = agents.find(a => String(a.id) === selectedId);
-                  setForm(prev => ({
+                  const selectedAgent = agents.find(
+                    (a) => String(a.id) === selectedId,
+                  );
+                  setForm((prev) => ({
                     ...prev,
                     agentId: selectedId,
                     name: selectedAgent ? selectedAgent.name : prev.name,
-                    email: (!editingUser && selectedAgent?.email) ? selectedAgent.email : prev.email,
+                    email:
+                      !editingUser && selectedAgent?.email
+                        ? selectedAgent.email
+                        : prev.email,
                   }));
                 }}
                 className={`w-full bg-white border border-slate-200 focus:border-primary-500 rounded-lg px-3 py-2 text-slate-800 text-xs font-bold outline-none transition-all shadow-xs ${
-                  editingUser ? 'cursor-not-allowed opacity-60 bg-slate-50' : 'cursor-pointer'
+                  editingUser
+                    ? "cursor-not-allowed opacity-60 bg-slate-50"
+                    : "cursor-pointer"
                 }`}
               >
                 <option value="">-- No Agent Linked --</option>
-                {agents.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}{a.email ? ` — ${a.email}` : ''}</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                    {a.email ? ` -- ${a.email}` : ""}
+                  </option>
                 ))}
               </select>
               <p className="mt-1 text-[9px] text-slate-400 leading-normal">
                 {editingUser
-                  ? '🔒 Agent link cannot be changed when editing. Manage this from the Agents section.'
-                  : 'Linking ensures bookings and commissions are tracked to this user.'}
+                  ? "🔒 Agent link cannot be changed when editing. Manage this from the Agents section."
+                  : "Linking ensures bookings and commissions are tracked to this user."}
               </p>
             </div>
           </div>
         </div>
-        
+
         <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-all">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} className="px-4 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95">
-            {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (editingUser ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />)}
-            {editingUser ? 'Save' : 'Invite'}
+          <button
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="px-4 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+          >
+            {saving ? (
+              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : editingUser ? (
+              <Check className="w-3.5 h-3.5" />
+            ) : (
+              <Plus className="w-3.5 h-3.5" />
+            )}
+            {editingUser ? "Save" : "Invite"}
           </button>
         </div>
       </motion.div>
@@ -398,7 +596,7 @@ function InviteMemberModal({ onClose, onCreated, editingUser, agents }: { onClos
 export function TeamManagement() {
   const [agents, setAgents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [showMatrix, setShowMatrix] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -415,47 +613,56 @@ export function TeamManagement() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.append('search', search);
+      if (search) params.append("search", search);
 
       const paginatedParams = new URLSearchParams(params.toString());
-      paginatedParams.append('page', currentPage.toString());
-      paginatedParams.append('limit', usersPerPage.toString());
+      paginatedParams.append("page", currentPage.toString());
+      paginatedParams.append("limit", usersPerPage.toString());
 
       const [usersRes, agentsRes] = await Promise.all([
         api.get(`/auth/users?${paginatedParams.toString()}`),
-        api.get('/agents?limit=all')
+        api.get("/agents?limit=all"),
       ]);
       setTableUsers(usersRes.data.users || []);
       setTotalTableItems(usersRes.data.total || 0);
       setTotalTablePages(usersRes.data.totalPages || 1);
-      
+
       setAgents(agentsRes.data.agents || []);
     } catch (err) {
-      toast.error('Failed to load team data');
+      toast.error("Failed to load team data");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, [currentPage, search]);
+  useEffect(() => {
+    fetchData();
+  }, [currentPage, search]);
 
   const handleDelete = async () => {
     if (!deletingUserId) return;
     setDeleteLoading(true);
     try {
       await api.delete(`/auth/users/${deletingUserId}`);
-      toast.success('Team member removed successfully');
+      toast.success("Team member removed successfully");
       setDeletingUserId(null);
       fetchData();
     } catch (err) {
-      toast.error('Failed to remove team member');
+      toast.error("Failed to remove team member");
     } finally {
       setDeleteLoading(false);
     }
   };
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
+    return (
+      name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .substring(0, 2)
+        .toUpperCase() || "U"
+    );
   };
 
   return (
@@ -466,13 +673,24 @@ export function TeamManagement() {
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             Team & Permissions
           </h1>
-          <p className="text-slate-500 text-xs mt-0.5">Manage your internal staff and role-based access control.</p>
+          <p className="text-slate-500 text-xs mt-0.5">
+            Manage your internal staff and role-based access control.
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowMatrix(true)} className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all">
+          <button
+            onClick={() => setShowMatrix(true)}
+            className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all"
+          >
             <Shield className="h-4 w-4 text-indigo-500" /> View Matrix
           </button>
-          <button onClick={() => { setEditingUser(null); setShowInvite(true); }} className="flex items-center gap-1.5 bg-primary-600 text-white hover:bg-primary-500 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all">
+          <button
+            onClick={() => {
+              setEditingUser(null);
+              setShowInvite(true);
+            }}
+            className="flex items-center gap-1.5 bg-primary-600 text-white hover:bg-primary-500 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all"
+          >
             <Plus className="h-4 w-4" /> Invite Member
           </button>
         </div>
@@ -483,13 +701,19 @@ export function TeamManagement() {
           <LoadingState message="Loading team members..." />
         </div>
       ) : tableUsers.length === 0 && !search ? (
-        <EmptyState 
-          icon={Users} 
-          title="No team members yet" 
-          description="Get started by inviting a team member." 
+        <EmptyState
+          icon={Users}
+          title="No team members yet"
+          description="Get started by inviting a team member."
           transparent={false}
           action={
-            <button onClick={() => { setEditingUser(null); setShowInvite(true); }} className="flex items-center gap-1.5 bg-primary-600 text-white hover:bg-primary-500 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all">
+            <button
+              onClick={() => {
+                setEditingUser(null);
+                setShowInvite(true);
+              }}
+              className="flex items-center gap-1.5 bg-primary-600 text-white hover:bg-primary-500 px-4.5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary-500/20 active:scale-95 transition-all"
+            >
               <Plus className="h-4 w-4" /> Invite Member
             </button>
           }
@@ -499,16 +723,24 @@ export function TeamManagement() {
           <div className="border-b border-slate-100 px-6 py-4 bg-white/50 flex items-center justify-between">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:border-primary-500 rounded-xl text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400 shadow-sm" placeholder="Search team members..." />
+              <input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:border-primary-500 rounded-xl text-slate-800 text-[13px] outline-none transition-all placeholder:text-slate-400 shadow-sm"
+                placeholder="Search team members..."
+              />
             </div>
           </div>
 
           <div className="p-0">
             {tableUsers.length === 0 ? (
-              <EmptyState 
-                icon={Users} 
-                title="No team members found" 
-                description={`We couldn't find anyone matching "${search}"`} 
+              <EmptyState
+                icon={Users}
+                title="No team members found"
+                description={`We couldn't find anyone matching "${search}"`}
                 size="sm"
                 transparent={true}
               />
@@ -527,25 +759,38 @@ export function TeamManagement() {
                     </thead>
                     <tbody className="divide-y divide-slate-100/50 text-[12px] font-medium bg-white/40">
                       {tableUsers.map((user) => (
-                        <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                        <tr
+                          key={user.id}
+                          className="hover:bg-slate-50/50 transition-colors"
+                        >
                           <td className="py-3 px-6">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-100 to-indigo-100 text-primary-700 flex items-center justify-center font-bold text-[11px] border border-primary-200/50 shadow-sm shrink-0">
                                 {getInitials(user.name)}
                               </div>
-                              <span className="font-bold text-slate-800">{user.name}</span>
+                              <span className="font-bold text-slate-800">
+                                {user.name}
+                              </span>
                             </div>
                           </td>
                           <td className="py-3 px-6 text-slate-500">
                             {user.email}
                           </td>
                           <td className="py-3 px-6">
-                            <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest ${
-                              user.role === 'MAIN_COMPANY_ADMIN' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
-                              user.role === 'COMPANY_ADMIN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                              'bg-slate-100 text-slate-600 border border-slate-200'
-                            }`}>
-                              {user.role === 'MAIN_COMPANY_ADMIN' ? 'MAIN ADMIN' : user.role === 'COMPANY_ADMIN' ? 'ADMIN' : user.role}
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest ${
+                                user.role === "MAIN_COMPANY_ADMIN"
+                                  ? "bg-indigo-50 text-indigo-700 border border-indigo-100"
+                                  : user.role === "COMPANY_ADMIN"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                                    : "bg-slate-100 text-slate-600 border border-slate-200"
+                              }`}
+                            >
+                              {user.role === "MAIN_COMPANY_ADMIN"
+                                ? "MAIN ADMIN"
+                                : user.role === "COMPANY_ADMIN"
+                                  ? "ADMIN"
+                                  : user.role}
                             </span>
                           </td>
                           <td className="py-3 px-6">
@@ -555,20 +800,25 @@ export function TeamManagement() {
                                 {user.agentName || `Agent #${user.agentId}`}
                               </span>
                             ) : (
-                              <span className="text-[11px] text-slate-400 italic">No linked profile</span>
+                              <span className="text-[11px] text-slate-400 italic">
+                                No linked profile
+                              </span>
                             )}
                           </td>
                           <td className="py-3 px-6 text-center">
                             <div className="flex items-center justify-center gap-1">
-                              <button 
-                                onClick={() => { setEditingUser(user); setShowInvite(true); }}
+                              <button
+                                onClick={() => {
+                                  setEditingUser(user);
+                                  setShowInvite(true);
+                                }}
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                                 title="Edit Member"
                               >
                                 <Edit3 className="w-4 h-4" />
                               </button>
-                              {user.role !== 'MAIN_COMPANY_ADMIN' ? (
-                                <button 
+                              {user.role !== "MAIN_COMPANY_ADMIN" ? (
+                                <button
                                   onClick={() => setDeletingUserId(user.id)}
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                                   title="Remove Member"
@@ -576,7 +826,10 @@ export function TeamManagement() {
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               ) : (
-                                <div className="p-1.5 text-slate-300" title="Main Admin cannot be deleted here">
+                                <div
+                                  className="p-1.5 text-slate-300"
+                                  title="Main Admin cannot be deleted here"
+                                >
                                   <Lock className="w-4 h-4" />
                                 </div>
                               )}
@@ -587,7 +840,7 @@ export function TeamManagement() {
                     </tbody>
                   </table>
                 </div>
-                <Pagination 
+                <Pagination
                   currentPage={currentPage}
                   totalPages={totalTablePages}
                   onPageChange={setCurrentPage}
@@ -601,8 +854,17 @@ export function TeamManagement() {
       )}
 
       <AnimatePresence>
-        {showMatrix && <PermissionsMatrixModal onClose={() => setShowMatrix(false)} />}
-        {showInvite && <InviteMemberModal onClose={() => setShowInvite(false)} onCreated={fetchData} editingUser={editingUser} agents={agents} />}
+        {showMatrix && (
+          <PermissionsMatrixModal onClose={() => setShowMatrix(false)} />
+        )}
+        {showInvite && (
+          <InviteMemberModal
+            onClose={() => setShowInvite(false)}
+            onCreated={fetchData}
+            editingUser={editingUser}
+            agents={agents}
+          />
+        )}
         {deletingUserId && (
           <motion.div
             key="delete-modal"
@@ -622,7 +884,7 @@ export function TeamManagement() {
               initial={{ opacity: 0, scale: 0.92, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: 20 }}
-              transition={{ type: 'spring', damping: 24, stiffness: 220 }}
+              transition={{ type: "spring", damping: 24, stiffness: 220 }}
               className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
             >
               {/* Header */}
@@ -632,16 +894,20 @@ export function TeamManagement() {
                   <div className="w-14 h-14 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center mx-auto mb-3 shadow-lg">
                     <Trash2 className="w-7 h-7 text-white" />
                   </div>
-                  <h3 className="text-[17px] font-extrabold tracking-tight">Remove Team Member?</h3>
-                  <p className="text-[12px] text-rose-100 mt-1 font-medium">This action cannot be undone</p>
+                  <h3 className="text-[17px] font-extrabold tracking-tight">
+                    Remove Team Member?
+                  </h3>
+                  <p className="text-[12px] text-rose-100 mt-1 font-medium">
+                    This action cannot be undone
+                  </p>
                 </div>
               </div>
 
               {/* Body */}
               <div className="px-6 py-5 text-center">
                 <p className="text-slate-600 text-[13px] leading-relaxed">
-                  You are about to permanently remove this user from your company workspace.
-                  They will lose all access immediately.
+                  You are about to permanently remove this user from your
+                  company workspace. They will lose all access immediately.
                 </p>
               </div>
 
@@ -659,11 +925,12 @@ export function TeamManagement() {
                   disabled={deleteLoading}
                   className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-[13px] font-bold shadow-md shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  {deleteLoading
-                    ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    : <Trash2 className="w-4 h-4" />
-                  }
-                  {deleteLoading ? 'Removing...' : 'Yes, Remove'}
+                  {deleteLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  {deleteLoading ? "Removing..." : "Yes, Remove"}
                 </button>
               </div>
             </motion.div>

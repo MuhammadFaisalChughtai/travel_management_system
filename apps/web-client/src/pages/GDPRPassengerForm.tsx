@@ -3,10 +3,13 @@ import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { 
   Shield, AlertTriangle, CheckCircle, Mail, Phone, Calendar, 
-  User, FileText, Check, UploadCloud, Trash2, ChevronRight, 
-  ChevronLeft, AlertCircle, Info, Image as ImageIcon
+  User, FileText, Check, ChevronRight, 
+  ChevronLeft, AlertCircle, Info, Upload, Plus, Trash2
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { AnimatePresence } from 'framer-motion';
+import { PassportOcrScannerModal } from '../components/booking-modals/PassportOcrScannerModal';
+import { ManageAdditionalDocumentsModal } from '../components/booking-modals/ManageAdditionalDocumentsModal';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
@@ -23,6 +26,9 @@ interface PassengerData {
   passportImage: string;
   ageCategory: string;
   role: string;
+  nationality?: string;
+  issuingCountry?: string;
+  documents?: any[];
 }
 
 export default function GDPRPassengerForm() {
@@ -37,8 +43,23 @@ export default function GDPRPassengerForm() {
   // Form State
   const [passengers, setPassengers] = useState<PassengerData[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [gdprConsent, setGdprConsent] = useState(false);
+
+  // Checklist options & Modal triggers
+  const [collectPassport, setCollectPassport] = useState(true);
+  const [collectAdditional, setCollectAdditional] = useState(false);
+  const [showOcrScanner, setShowOcrScanner] = useState(false);
+  const [showManageDocuments, setShowManageDocuments] = useState(false);
+
+  const currentPassenger = passengers[activeIdx];
+
+  // Sync checklist state when switching active passenger
+  useEffect(() => {
+    if (currentPassenger) {
+      setCollectPassport(true);
+      setCollectAdditional(!!(currentPassenger.documents && currentPassenger.documents.length > 0));
+    }
+  }, [activeIdx, currentPassenger?.id]);
 
   useEffect(() => {
     const fetchPassengerInfo = async () => {
@@ -67,7 +88,10 @@ export default function GDPRPassengerForm() {
           dob: p.dob ? new Date(p.dob).toISOString().split('T')[0] : '',
           passportImage: p.passportImage || '',
           ageCategory: p.ageCategory || 'Adult',
-          role: p.role || 'Passenger'
+          role: p.role || 'Passenger',
+          nationality: p.nationality || '',
+          issuingCountry: p.issuingCountry || '',
+          documents: p.documents || []
         }));
 
         setPassengers(mapped);
@@ -87,41 +111,57 @@ export default function GDPRPassengerForm() {
     fetchPassengerInfo();
   }, [token]);
 
-  const handlePassportUpload = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size exceeds 10MB limit.');
-      return;
-    }
-
-    setUploadingIdx(idx);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await axios.post(`${API_BASE_URL}/auth/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      const url = response.data.url;
-      setPassengers(prev => prev.map((p, i) => i === idx ? { ...p, passportImage: url } : p));
-      toast.success('Passport photo uploaded successfully!');
-    } catch (err: any) {
-      console.error('Upload error:', err);
-      toast.error(err.response?.data?.error || 'Failed to upload passport photo.');
-    } finally {
-      setUploadingIdx(null);
-    }
-  };
-
-  const handleRemovePassport = (idx: number) => {
-    setPassengers(prev => prev.map((p, i) => i === idx ? { ...p, passportImage: '' } : p));
-    toast.success('Passport photo removed.');
-  };
 
   const updateField = (idx: number, field: keyof PassengerData, value: any) => {
     setPassengers(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+  };
+
+  const handleAddPassenger = () => {
+    const tempId = Math.floor(Math.random() * -100000);
+    const newPassenger: PassengerData = {
+      id: tempId,
+      title: '',
+      firstName: '',
+      lastName: '',
+      email: '',
+      phoneNumber: '',
+      passportNumber: '',
+      passportExpiryDate: '',
+      dob: '',
+      passportImage: '',
+      ageCategory: 'Adult',
+      role: 'Passenger',
+      nationality: '',
+      issuingCountry: '',
+      documents: []
+    };
+    setPassengers([...passengers, newPassenger]);
+    setActiveIdx(passengers.length);
+    toast.success('New traveler added! Please fill in their details.');
+  };
+
+  const handleRemovePassenger = (idxToRemove: number) => {
+    if (passengers.length <= 1) {
+      toast.error('At least one traveler is required.');
+      return;
+    }
+    const passengerToRemove = passengers[idxToRemove];
+    if (passengerToRemove.id > 0) {
+      toast.error('Only newly added travelers can be removed.');
+      return;
+    }
+    
+    const newPassengers = passengers.filter((_, idx) => idx !== idxToRemove);
+    setPassengers(newPassengers);
+    
+    // Adjust active index
+    if (activeIdx >= newPassengers.length) {
+      setActiveIdx(newPassengers.length - 1);
+    } else if (activeIdx === idxToRemove && activeIdx > 0) {
+      setActiveIdx(activeIdx - 1);
+    }
+    toast.success('Traveler removed.');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -160,7 +200,16 @@ export default function GDPRPassengerForm() {
   };
 
   const isPassengerComplete = (p: PassengerData) => {
-    return !!(p.firstName.trim() && p.lastName.trim() && p.passportNumber.trim() && p.passportExpiryDate && p.dob && p.passportImage);
+    return !!(
+      p.firstName.trim() && 
+      p.lastName.trim() && 
+      p.passportNumber.trim() && 
+      p.passportExpiryDate && 
+      p.dob && 
+      p.passportImage &&
+      p.nationality?.trim() &&
+      p.issuingCountry?.trim()
+    );
   };
 
   const getMissingFields = (p: PassengerData) => {
@@ -171,7 +220,93 @@ export default function GDPRPassengerForm() {
     if (!p.passportExpiryDate) missing.push('Passport Expiry');
     if (!p.dob) missing.push('Date of Birth');
     if (!p.passportImage) missing.push('Passport Copy');
+    if (!p.nationality?.trim()) missing.push('Nationality');
+    if (!p.issuingCountry?.trim()) missing.push('Issuing Country');
     return missing;
+  };
+
+  const calculateAgeCategory = (dobString: string) => {
+    if (!dobString) return;
+    const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return;
+
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--;
+    }
+
+    if (age < 2) {
+      return "Infant";
+    } else if (age < 15) {
+      return "Child";
+    } else {
+      return "Adult";
+    }
+  };
+
+  const getPassportExpiryStatus = (expiryDateStr?: string) => {
+    if (!expiryDateStr) return null;
+    const expiryDate = new Date(expiryDateStr);
+    if (isNaN(expiryDate.getTime())) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiryDate.setHours(0, 0, 0, 0);
+
+    const sixMonthsFromNow = new Date();
+    sixMonthsFromNow.setMonth(today.getMonth() + 6);
+    sixMonthsFromNow.setHours(0, 0, 0, 0);
+
+    if (expiryDate < today) {
+      return {
+        type: "expired",
+        message: "Passport has expired!",
+        bgColor: "bg-rose-500/10",
+        textColor: "text-rose-400",
+        borderColor: "border-rose-500/20",
+        iconColor: "text-rose-450"
+      };
+    } else if (expiryDate < sixMonthsFromNow) {
+      return {
+        type: "warning",
+        message: "Passport is going to expire within the next 6 months!",
+        bgColor: "bg-amber-500/10",
+        textColor: "text-amber-400",
+        borderColor: "border-amber-500/20",
+        iconColor: "text-amber-400"
+      };
+    }
+    return null;
+  };
+
+  // Auto-calculate and update age category whenever current passenger's DOB changes
+  useEffect(() => {
+    if (currentPassenger?.dob) {
+      const category = calculateAgeCategory(currentPassenger.dob);
+      if (category && category !== currentPassenger.ageCategory) {
+        updateField(activeIdx, 'ageCategory', category);
+      }
+    }
+  }, [currentPassenger?.dob, activeIdx]);
+
+  const leaderIndex = passengers.findIndex(p => p.role === 'Leader' || p.role === 'leader') !== -1 
+    ? passengers.findIndex(p => p.role === 'Leader' || p.role === 'leader') 
+    : 0;
+  const isCurrentLeader = activeIdx === leaderIndex;
+
+  const handleApplyLeaderContact = (field: 'email' | 'phoneNumber') => {
+    const leader = passengers[leaderIndex];
+    if (leader) {
+      updateField(activeIdx, field, leader[field] || '');
+      toast.success(`Copied ${field === 'email' ? 'email address' : 'phone number'} from booking leader.`);
+    } else {
+      toast.error('No leader passenger found to copy from.');
+    }
   };
 
   if (loading) {
@@ -223,7 +358,7 @@ export default function GDPRPassengerForm() {
     );
   }
 
-  const currentPassenger = passengers[activeIdx];
+  // currentPassenger is defined at the top of the component
 
   return (
     <div className="min-h-screen bg-[#070A13] text-slate-100 flex flex-col justify-between py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
@@ -249,26 +384,31 @@ export default function GDPRPassengerForm() {
         {/* Main Workspace: Sidebar + active form */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           
-          {/* Passenger Tabs Sidebar (Only shown if passengers.length > 1) */}
-          {passengers.length > 1 && (
-            <div className="w-full lg:w-[280px] bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-4 shrink-0 space-y-2.5">
-              <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-2 mb-3">Travelers List</h3>
+          {/* Passenger Tabs Sidebar (Always shown if passengers.length >= 1) */}
+          {passengers.length >= 1 && (
+            <div className="w-full lg:w-[280px] bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-4 shrink-0 space-y-4">
+              <div className="flex justify-between items-center px-2 mb-1">
+                <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Travelers List</h3>
+                <span className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full text-[9px] font-extrabold border border-indigo-500/20">
+                  {passengers.length} total
+                </span>
+              </div>
+              
               <div className="space-y-1.5 max-h-[350px] lg:max-h-none overflow-y-auto pr-1">
                 {passengers.map((p, idx) => {
                   const complete = isPassengerComplete(p);
                   const isActive = idx === activeIdx;
                   return (
-                    <button
+                    <div
                       key={p.id}
-                      type="button"
                       onClick={() => setActiveIdx(idx)}
-                      className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
                         isActive 
                           ? 'bg-gradient-to-r from-blue-600/10 to-indigo-600/15 border-blue-500/50 text-white shadow-lg shadow-blue-500/5' 
                           : 'bg-slate-950/20 border-slate-800/80 text-slate-400 hover:bg-slate-800/35 hover:text-slate-200'
                       }`}
                     >
-                      <div className="truncate min-w-0">
+                      <div className="truncate min-w-0 flex-1">
                         <p className="text-[12px] font-bold truncate">
                           {p.firstName || p.lastName ? `${p.firstName} ${p.lastName}` : `Traveler #${idx + 1}`}
                         </p>
@@ -277,19 +417,43 @@ export default function GDPRPassengerForm() {
                         </span>
                       </div>
                       
-                      {complete ? (
-                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                          <Check className="w-3 h-3" />
-                        </div>
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0" title="Missing details">
-                          <AlertCircle className="w-3.5 h-3.5" />
-                        </div>
-                      )}
-                    </button>
+                      <div className="flex items-center gap-2">
+                        {p.id < 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemovePassenger(idx);
+                            }}
+                            className="p-1 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 hover:text-rose-350 transition-all cursor-pointer"
+                            title="Remove traveler"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {complete ? (
+                          <div className="w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                            <Check className="w-3.5 h-3.5" />
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-550 shrink-0" title="Missing details">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
+
+              <button
+                type="button"
+                onClick={handleAddPassenger}
+                className="w-full py-2.5 px-3 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/25 hover:border-indigo-500/40 text-indigo-400 hover:text-indigo-300 rounded-2xl text-[10px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Traveler
+              </button>
             </div>
           )}
 
@@ -377,12 +541,12 @@ export default function GDPRPassengerForm() {
                     />
                   </div>
 
-                  <div className="sm:col-span-3">
+                  <div className="sm:col-span-2">
                     <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Age Category</label>
                     <select
                       value={currentPassenger.ageCategory}
                       onChange={(e) => updateField(activeIdx, 'ageCategory', e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm focus:outline-none transition-all cursor-pointer"
+                      className="w-full bg-slate-955/60 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm focus:outline-none transition-all cursor-pointer"
                     >
                       <option value="Adult" className="bg-slate-900">Adult</option>
                       <option value="Child" className="bg-slate-900">Child</option>
@@ -390,19 +554,36 @@ export default function GDPRPassengerForm() {
                     </select>
                   </div>
 
-                  <div className="sm:col-span-3">
+                  <div className="sm:col-span-2">
                     <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Date of Birth (DOB) *</label>
                     <div className="relative">
-                      <Calendar className="absolute right-4 top-3.5 w-4 h-4 text-slate-500 pointer-events-none" />
+                      <Calendar className="absolute right-4 top-3.5 w-4 h-4 text-slate-550 pointer-events-none" />
                       <input
                         type="date"
                         required
                         max={new Date().toISOString().split('T')[0]}
                         value={currentPassenger.dob}
-                        onChange={(e) => updateField(activeIdx, 'dob', e.target.value)}
+                        onChange={(e) => {
+                          updateField(activeIdx, 'dob', e.target.value);
+                          const category = calculateAgeCategory(e.target.value);
+                          if (category) {
+                            updateField(activeIdx, 'ageCategory', category);
+                          }
+                        }}
                         className="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm focus:outline-none transition-all"
                       />
                     </div>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Nationality</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. United Kingdom"
+                      value={currentPassenger.nationality || ''}
+                      onChange={(e) => updateField(activeIdx, 'nationality', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-650 focus:outline-none transition-all"
+                    />
                   </div>
                 </div>
 
@@ -415,7 +596,18 @@ export default function GDPRPassengerForm() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Email Address</label>
+                      {!isCurrentLeader && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyLeaderContact('email')}
+                          className="text-[9px] text-indigo-400 hover:text-indigo-300 hover:underline font-extrabold uppercase tracking-wide transition-all"
+                        >
+                          Same as Leader
+                        </button>
+                      )}
+                    </div>
                     <div className="relative">
                       <Mail className="absolute left-4 top-3.5 w-4 h-4 text-slate-550" />
                       <input
@@ -429,7 +621,18 @@ export default function GDPRPassengerForm() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Phone Number</label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Phone Number</label>
+                      {!isCurrentLeader && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyLeaderContact('phoneNumber')}
+                          className="text-[9px] text-indigo-400 hover:text-indigo-300 hover:underline font-extrabold uppercase tracking-wide transition-all"
+                        >
+                          Same as Leader
+                        </button>
+                      )}
+                    </div>
                     <div className="relative">
                       <Phone className="absolute left-4 top-3.5 w-4 h-4 text-slate-550" />
                       <input
@@ -450,7 +653,7 @@ export default function GDPRPassengerForm() {
                   </h2>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                   <div>
                     <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Passport Number *</label>
                     <input
@@ -459,14 +662,25 @@ export default function GDPRPassengerForm() {
                       value={currentPassenger.passportNumber}
                       onChange={(e) => updateField(activeIdx, 'passportNumber', e.target.value)}
                       placeholder="Enter passport number"
-                      className="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-600 focus:outline-none transition-all uppercase font-mono tracking-wider"
+                      className="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-655 focus:outline-none transition-all uppercase font-mono tracking-wider"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Issuing Country</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. United Kingdom"
+                      value={currentPassenger.issuingCountry || ''}
+                      onChange={(e) => updateField(activeIdx, 'issuingCountry', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-655 focus:outline-none transition-all"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Passport Expiry Date *</label>
                     <div className="relative">
-                      <Calendar className="absolute right-4 top-3.5 w-4 h-4 text-slate-500 pointer-events-none" />
+                      <Calendar className="absolute right-4 top-3.5 w-4 h-4 text-slate-550 pointer-events-none" />
                       <input
                         type="date"
                         required
@@ -476,67 +690,154 @@ export default function GDPRPassengerForm() {
                       />
                     </div>
                   </div>
+                </div>
 
-                  {/* Passport Photo Upload Block */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
-                      Upload Passport Copy *
+                {/* Expiry Warning Alert Banner */}
+                {(() => {
+                  const status = getPassportExpiryStatus(currentPassenger.passportExpiryDate);
+                  if (!status) return null;
+                  return (
+                    <div className={`mt-3 flex items-center gap-2 p-3 ${status.bgColor} ${status.textColor} rounded-xl border ${status.borderColor} text-[11px] font-bold`}>
+                      <AlertTriangle className={`w-4 h-4 ${status.iconColor} shrink-0`} />
+                      <span>{status.message}</span>
+                    </div>
+                  );
+                })()}
+
+                {/* Documents to Collect Checklist */}
+                <div className="border border-slate-800/80 rounded-2xl p-5 space-y-3 bg-slate-950/20">
+                  <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5 border-b border-slate-800/50 pb-1.5">
+                    <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                    DOCUMENTS TO COLLECT
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="flex items-center gap-3 p-3 bg-slate-955/60 hover:bg-slate-900/40 border border-slate-800 rounded-xl cursor-pointer transition-all">
+                      <input
+                        type="checkbox"
+                        checked={collectPassport}
+                        onChange={(e) => setCollectPassport(e.target.checked)}
+                        className="w-4 h-4 rounded text-indigo-650 focus:ring-0 border-slate-800 bg-slate-900 checked:bg-indigo-650 checked:border-indigo-650 accent-indigo-600 cursor-pointer"
+                      />
+                      <span className="text-[11px] font-bold text-slate-300">
+                        Collect Passport details & scan
+                      </span>
                     </label>
-                    
+                    <label className="flex items-center gap-3 p-3 bg-slate-955/60 hover:bg-slate-900/40 border border-slate-800 rounded-xl cursor-pointer transition-all">
+                      <input
+                        type="checkbox"
+                        checked={collectAdditional}
+                        onChange={(e) => setCollectAdditional(e.target.checked)}
+                        className="w-4 h-4 rounded text-indigo-650 focus:ring-0 border-slate-800 bg-slate-900 checked:bg-indigo-650 checked:border-indigo-650 accent-indigo-600 cursor-pointer"
+                      />
+                      <span className="text-[11px] font-bold text-slate-300">
+                        Collect Additional documents
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Passport Scan Panel */}
+                {collectPassport && (
+                  <div className="border border-slate-800/80 rounded-2xl p-5 space-y-3 bg-slate-950/20">
+                    <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 border-b border-slate-800/50 pb-1.5">
+                      <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                      PASSPORT SCAN / PHOTO
+                    </h4>
                     {currentPassenger.passportImage ? (
-                      <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
-                        <div className="w-16 h-16 rounded-xl bg-slate-900 border border-slate-850 overflow-hidden flex items-center justify-center shrink-0">
-                          {currentPassenger.passportImage.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                            <img src={currentPassenger.passportImage} alt="Passport Preview" className="w-full h-full object-cover" />
-                          ) : (
-                            <ImageIcon className="w-8 h-8 text-indigo-400" />
-                          )}
+                      <div className="p-3.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-455" />
+                          <span className="text-[11px] font-bold">
+                            Passport Scan Uploaded
+                          </span>
                         </div>
-                        <div className="flex-1 min-w-0 text-center sm:text-left">
-                          <p className="text-xs font-bold text-white truncate">Passport Uploaded Successfully</p>
-                          <a 
-                            href={currentPassenger.passportImage} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-[10px] font-extrabold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider mt-1 inline-block"
+                        <div className="flex gap-3.5 text-[10px] font-extrabold uppercase tracking-wider">
+                          <a
+                            href={currentPassenger.passportImage}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-slate-400 hover:text-white transition-colors"
                           >
-                            View Document &rarr;
+                            View
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => setShowOcrScanner(true)}
+                            className="text-indigo-400 hover:text-indigo-300 transition-colors"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateField(activeIdx, 'passportImage', '')}
+                            className="text-rose-450 hover:text-rose-350 transition-colors"
+                          >
+                            Remove
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePassport(activeIdx)}
-                          className="py-2 px-3 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-xl border border-rose-500/20 text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Remove
-                        </button>
                       </div>
                     ) : (
-                      <div className="relative group border-2 border-dashed border-slate-800 hover:border-indigo-500/50 bg-slate-955/40 hover:bg-slate-950/20 rounded-2xl transition-all cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          id={`passport-file-${activeIdx}`}
-                          onChange={(e) => handlePassportUpload(activeIdx, e)}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                        />
-                        <div className="p-8 text-center flex flex-col items-center justify-center">
-                          <div className={`w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mb-4 transition-transform group-hover:scale-110 ${uploadingIdx === activeIdx ? 'animate-pulse' : ''}`}>
-                            {uploadingIdx === activeIdx ? (
-                              <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <UploadCloud className="w-6 h-6" />
-                            )}
-                          </div>
-                          <p className="text-xs font-bold text-slate-200">
-                            {uploadingIdx === activeIdx ? 'Uploading File...' : 'Upload Passport Image or PDF'}
-                          </p>
-                          <p className="text-[10px] text-slate-500 mt-1 font-medium">JPEG, PNG or PDF formats. Max file size: 10MB.</p>
-                        </div>
+                      <div
+                        onClick={() => setShowOcrScanner(true)}
+                        className="border border-dashed border-slate-800 hover:border-indigo-500/50 rounded-xl p-6 bg-slate-950/20 hover:bg-slate-955/40 flex flex-col items-center justify-center text-center cursor-pointer transition-all"
+                      >
+                        <Upload className="w-5 h-5 text-indigo-400 mb-2" />
+                        <span className="text-[11px] font-bold text-slate-200">
+                          Scan or upload passport details page
+                        </span>
+                        <span className="text-[9px] text-slate-505 mt-1 font-medium">
+                          PDF, JPEG, or PNG up to 10MB
+                        </span>
                       </div>
                     )}
                   </div>
-                </div>
+                )}
+
+                {/* Additional Documents Panel */}
+                {collectAdditional && (
+                  <div className="border border-slate-800/80 rounded-2xl p-5 space-y-3 bg-slate-950/20">
+                    <div className="flex justify-between items-center mb-1 border-b border-slate-800/50 pb-1.5">
+                      <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                        ADDITIONAL DOCUMENTS
+                      </h4>
+                      <span className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full text-[9px] font-extrabold border border-indigo-500/20">
+                        {(currentPassenger.documents || []).length} files
+                      </span>
+                    </div>
+
+                    {(currentPassenger.documents || []).length > 0 && (
+                      <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2">
+                        {(currentPassenger.documents || []).map((doc, idx) => (
+                          <div
+                            key={doc.id || idx}
+                            className="flex items-center justify-between p-3 border border-slate-800 bg-slate-955/60 rounded-xl text-[11px] hover:border-slate-700 transition-colors"
+                          >
+                            <span className="font-bold text-slate-200 truncate max-w-[180px]">
+                              {doc.title}
+                            </span>
+                            <a
+                              href={doc.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-indigo-400 hover:text-indigo-300 font-extrabold uppercase tracking-wider"
+                            >
+                              View
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowManageDocuments(true)}
+                      className="w-full bg-slate-955/60 hover:bg-slate-950 text-slate-300 border border-slate-800 py-3 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wider hover:border-slate-700"
+                    >
+                      Manage Documents
+                    </button>
+                  </div>
+                )}
 
                 {/* Completeness Warning message */}
                 {!isPassengerComplete(currentPassenger) && (
@@ -601,6 +902,41 @@ export default function GDPRPassengerForm() {
           <span className="font-medium">Powered by {companyName} Travel Systems. All rights reserved.</span>
         </div>
       </div>
+
+      {/* Child modals */}
+      <AnimatePresence>
+        {showOcrScanner && (
+          <PassportOcrScannerModal
+            isOpen={showOcrScanner}
+            onClose={() => setShowOcrScanner(false)}
+            isPublic={true}
+            onApply={(ocrData) => {
+              updateField(activeIdx, 'firstName', ocrData.firstName || currentPassenger.firstName);
+              updateField(activeIdx, 'lastName', ocrData.lastName || currentPassenger.lastName);
+              updateField(activeIdx, 'passportNumber', ocrData.passportNumber || currentPassenger.passportNumber);
+              updateField(activeIdx, 'dob', ocrData.dob || currentPassenger.dob);
+              updateField(activeIdx, 'passportExpiryDate', ocrData.passportExpiryDate || currentPassenger.passportExpiryDate);
+              updateField(activeIdx, 'passportImage', ocrData.passportImage || currentPassenger.passportImage);
+              updateField(activeIdx, 'nationality', ocrData.nationality || currentPassenger.nationality);
+              updateField(activeIdx, 'issuingCountry', ocrData.issuingCountry || currentPassenger.issuingCountry);
+              toast.success("Passport OCR details applied!");
+            }}
+          />
+        )}
+
+        {showManageDocuments && (
+          <ManageAdditionalDocumentsModal
+            isOpen={showManageDocuments}
+            onClose={() => setShowManageDocuments(false)}
+            bookingId={null}
+            isPublic={true}
+            documents={currentPassenger.documents || []}
+            onChange={(updatedDocs) => {
+              updateField(activeIdx, 'documents', updatedDocs);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

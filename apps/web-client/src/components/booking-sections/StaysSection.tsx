@@ -1,17 +1,16 @@
-import { Hotel, Edit, Trash2 } from 'lucide-react';
-import type { Accommodation } from '../../types/booking';
-import { EmptyState } from '../shared/EmptyState';
-import { useCurrency } from '../../utils/currency';
+import { Hotel, Edit, Trash2 } from "lucide-react";
+import type { Accommodation } from "../../types/booking";
+import { EmptyState } from "../shared/EmptyState";
+import { useCurrency } from "../../utils/currency";
 
 interface StaysSectionProps {
   onAdd?: () => void;
   onEdit?: (item: any) => void;
   onDelete?: (item: any) => void;
   stays: Accommodation[];
-  
 }
 
-export function StaysSection({ stays, onEdit, onDelete}: StaysSectionProps) {
+export function StaysSection({ stays, onEdit, onDelete }: StaysSectionProps) {
   const { symbol } = useCurrency();
   return (
     <div className="flex flex-col gap-4">
@@ -38,28 +37,56 @@ export function StaysSection({ stays, onEdit, onDelete}: StaysSectionProps) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {stays.map((s, i) => (
-                  <tr key={s.id || i} className="hover:bg-indigo-50/30 transition-colors group">
+                  <tr
+                    key={s.id || i}
+                    className="hover:bg-indigo-50/30 transition-colors group"
+                  >
                     <td className="py-3 px-4">
-                      <div className="font-black text-slate-800">{s.vendorName || s.hotelName}</div>
-                      {s.hotelName && s.vendorName && s.hotelName !== s.vendorName && (
-                        <div className="text-slate-500 font-semibold">{s.hotelName}</div>
-                      )}
+                      <div className="font-black text-slate-800">
+                        {s.vendorName || s.hotelName}
+                      </div>
+                      {s.hotelName &&
+                        s.vendorName &&
+                        s.hotelName !== s.vendorName && (
+                          <div className="text-slate-500 font-semibold">
+                            {s.hotelName}
+                          </div>
+                        )}
                     </td>
-                    <td className="py-3 px-4 font-semibold text-slate-600">{s.checkInDate ? new Date(s.checkInDate).toLocaleDateString() : '—'}</td>
-                    <td className="py-3 px-4 font-semibold text-slate-600">{s.checkOutDate ? new Date(s.checkOutDate).toLocaleDateString() : '—'}</td>
-                    <td className="py-3 px-4 font-mono text-slate-600">{s.qty || 1}</td>
+                    <td className="py-3 px-4 font-semibold text-slate-600">
+                      {s.checkInDate
+                        ? new Date(s.checkInDate).toLocaleDateString()
+                        : "--"}
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-slate-600">
+                      {s.checkOutDate
+                        ? new Date(s.checkOutDate).toLocaleDateString()
+                        : "--"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-600">
+                      {s.qty || 1}
+                    </td>
                     <td className="py-3 px-4 text-right font-black text-emerald-600">
-                      {symbol}{Number(s.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {symbol}
+                      {Number(s.price || 0).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {onEdit && (
-                          <button onClick={() => onEdit(s)} className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all">
+                          <button
+                            onClick={() => onEdit(s)}
+                            className="p-1.5 bg-white text-indigo-500 hover:bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm transition-all"
+                          >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {onDelete && (
-                          <button onClick={() => onDelete(s)}  className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all">
+                          <button
+                            onClick={() => onDelete(s)}
+                            className="p-1.5 bg-white text-red-500 hover:bg-red-50 border border-red-100 rounded-lg shadow-sm transition-all"
+                          >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}

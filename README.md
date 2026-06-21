@@ -29,32 +29,32 @@ Client (Frontend)
       └──► ...other services
 ```
 
-- **Frontend** — React/Vite app served via Nginx
-- **API Gateway** — Single entry point, routes requests to microservices
-- **Auth Service** — Handles authentication, tenants, platform admins, roles & permissions
-- **Booking Service** — Manages bookings, transactions, agents, wallets
-- **PostgreSQL** — Two separate databases (one per service group)
-- **Redis** — Caching / session store
-- **RabbitMQ** — Async messaging between services
-- **MinIO** — Object storage (logos, media uploads)
+- **Frontend** -- React/Vite app served via Nginx
+- **API Gateway** -- Single entry point, routes requests to microservices
+- **Auth Service** -- Handles authentication, tenants, platform admins, roles & permissions
+- **Booking Service** -- Manages bookings, transactions, agents, wallets
+- **PostgreSQL** -- Two separate databases (one per service group)
+- **Redis** -- Caching / session store
+- **RabbitMQ** -- Async messaging between services
+- **MinIO** -- Object storage (logos, media uploads)
 
 ---
 
 ## Services & Ports
 
-| Service         | Container Name          | Host Port | Internal Port |
-|-----------------|-------------------------|-----------|---------------|
-| Frontend        | `travel_frontend`       | `5173`    | `80`          |
-| API Gateway     | `travel_api_gateway`    | `4000`    | `4000`        |
-| Auth Service    | `travel_auth_service`   | `4001`    | `4001`        |
-| Booking Service | `travel_booking_service`| `4006`    | `4005`        |
-| PostgreSQL      | `travel_postgres`       | `5432`    | `5432`        |
-| Adminer (DB UI) | `travel_adminer`        | `8085`    | `8080`        |
-| Redis           | `travel_redis`          | `6379`    | `6379`        |
-| RabbitMQ        | `travel_rabbitmq`       | `5672`    | `5672`        |
-| RabbitMQ UI     | `travel_rabbitmq`       | `15672`   | `15672`       |
-| MinIO API       | `travel_minio`          | `9010`    | `9000`        |
-| MinIO Console   | `travel_minio`          | `9011`    | `9001`        |
+| Service         | Container Name           | Host Port | Internal Port |
+| --------------- | ------------------------ | --------- | ------------- |
+| Frontend        | `travel_frontend`        | `5173`    | `80`          |
+| API Gateway     | `travel_api_gateway`     | `4000`    | `4000`        |
+| Auth Service    | `travel_auth_service`    | `4001`    | `4001`        |
+| Booking Service | `travel_booking_service` | `4006`    | `4005`        |
+| PostgreSQL      | `travel_postgres`        | `5432`    | `5432`        |
+| Adminer (DB UI) | `travel_adminer`         | `8085`    | `8080`        |
+| Redis           | `travel_redis`           | `6379`    | `6379`        |
+| RabbitMQ        | `travel_rabbitmq`        | `5672`    | `5672`        |
+| RabbitMQ UI     | `travel_rabbitmq`        | `15672`   | `15672`       |
+| MinIO API       | `travel_minio`           | `9010`    | `9000`        |
+| MinIO Console   | `travel_minio`           | `9011`    | `9001`        |
 
 ---
 
@@ -97,7 +97,7 @@ docker-compose logs -f auth-service
 docker-compose up -d --build
 ```
 
-### 2. Run database migrations (IMPORTANT — do this after first deploy)
+### 2. Run database migrations (IMPORTANT -- do this after first deploy)
 
 See [Database Migration](#database-migration-prisma) section below.
 
@@ -112,7 +112,7 @@ See [Seeding the Super Admin](#seeding-the-super-admin) section below.
 The **Auth Service** uses its own database (`travel_platform_auth`).  
 After deploying for the first time (or after schema changes), you must run migrations to create all tables.
 
-### Option 1 — Recommended: `prisma migrate deploy`
+### Option 1 -- Recommended: `prisma migrate deploy`
 
 Run this on your production server:
 
@@ -120,7 +120,7 @@ Run this on your production server:
 docker exec -it travel_auth_service npx prisma migrate deploy
 ```
 
-### Option 2 — If no migrations folder: `prisma db push`
+### Option 2 -- If no migrations folder: `prisma db push`
 
 If there is no `prisma/migrations` folder, use `db push` to sync the schema directly:
 
@@ -128,7 +128,7 @@ If there is no `prisma/migrations` folder, use `db push` to sync the schema dire
 docker exec -it travel_auth_service npx prisma db push
 ```
 
-### Option 3 — Manual SQL (last resort)
+### Option 3 -- Manual SQL (last resort)
 
 If Prisma is not available inside the container, connect to the database via Adminer at `http://<your-server>:8085` and run:
 
@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS "PlatformAdmin" (
 ```
 
 > **Adminer connection details:**
+>
 > - System: `PostgreSQL`
 > - Server: `postgres`
 > - Username: `postgres`
@@ -156,7 +157,7 @@ CREATE TABLE IF NOT EXISTS "PlatformAdmin" (
 
 The `PlatformAdmin` table holds the top-level admin credentials (not tied to any tenant).
 
-### Step 1 — Generate a bcrypt password hash
+### Step 1 -- Generate a bcrypt password hash
 
 Run this inside the auth-service container:
 
@@ -169,7 +170,7 @@ bcrypt.hash('YourPassword123!', 10).then(console.log);
 
 Copy the output hash (starts with `$2b$10$...`).
 
-### Step 2 — Insert the Super Admin record
+### Step 2 -- Insert the Super Admin record
 
 Connect to Adminer at `http://<your-server>:8085` and run:
 
@@ -196,25 +197,25 @@ SELECT id, email, name, "createdAt" FROM "PlatformAdmin";
 
 ### Auth Service
 
-| Variable           | Default Value                                                          | Description                      |
-|--------------------|------------------------------------------------------------------------|----------------------------------|
-| `PORT`             | `4001`                                                                 | Service port                     |
-| `DATABASE_URL`     | `postgresql://postgres:password@postgres:5432/travel_platform_auth`   | Auth database connection string  |
-| `JWT_SECRET`       | `super_secret_jwt_key`                                                 | JWT signing secret               |
-| `MINIO_ENDPOINT`   | `minio`                                                                | MinIO host                       |
-| `MINIO_PORT`       | `9000`                                                                 | MinIO port                       |
-| `MINIO_ACCESS_KEY` | `minioadmin`                                                           | MinIO access key                 |
-| `MINIO_SECRET_KEY` | `minioadminpassword`                                                   | MinIO secret key                 |
-| `MINIO_BUCKET`     | `travelbooker-media`                                                   | MinIO bucket name                |
-| `MINIO_EXTERNAL_URL` | `http://localhost:9010`                                              | Public URL for media assets      |
+| Variable             | Default Value                                                       | Description                     |
+| -------------------- | ------------------------------------------------------------------- | ------------------------------- |
+| `PORT`               | `4001`                                                              | Service port                    |
+| `DATABASE_URL`       | `postgresql://postgres:password@postgres:5432/travel_platform_auth` | Auth database connection string |
+| `JWT_SECRET`         | `super_secret_jwt_key`                                              | JWT signing secret              |
+| `MINIO_ENDPOINT`     | `minio`                                                             | MinIO host                      |
+| `MINIO_PORT`         | `9000`                                                              | MinIO port                      |
+| `MINIO_ACCESS_KEY`   | `minioadmin`                                                        | MinIO access key                |
+| `MINIO_SECRET_KEY`   | `minioadminpassword`                                                | MinIO secret key                |
+| `MINIO_BUCKET`       | `travelbooker-media`                                                | MinIO bucket name               |
+| `MINIO_EXTERNAL_URL` | `http://localhost:9010`                                             | Public URL for media assets     |
 
 ### Booking Service
 
-| Variable           | Default Value                                                    | Description                        |
-|--------------------|------------------------------------------------------------------|------------------------------------|
-| `PORT`             | `4005`                                                           | Service port                       |
-| `DATABASE_URL`     | `postgresql://postgres:password@postgres:5432/travel_platform`  | Booking database connection string |
-| `AUTH_SERVICE_URL` | `http://auth-service:4001`                                       | Internal auth service URL          |
+| Variable           | Default Value                                                  | Description                        |
+| ------------------ | -------------------------------------------------------------- | ---------------------------------- |
+| `PORT`             | `4005`                                                         | Service port                       |
+| `DATABASE_URL`     | `postgresql://postgres:password@postgres:5432/travel_platform` | Booking database connection string |
+| `AUTH_SERVICE_URL` | `http://auth-service:4001`                                     | Internal auth service URL          |
 
 ---
 

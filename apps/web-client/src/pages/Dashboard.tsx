@@ -32,8 +32,7 @@ import {
   Tag,
   FileText,
   Clock,
-  Banknote,
-  Package
+  Banknote
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
@@ -129,7 +128,7 @@ const SIDEBAR_ITEMS = [
   { id: 'payments', icon: CreditCard, label: 'Finance & Payments' },
   { id: 'catalog', icon: Tag, label: 'Service Catalog', adminOnly: true },
   { id: 'templates', icon: FileText, label: 'Document Studio', adminOnly: true },
-  { id: 'packages', icon: Package, label: 'Package Generator', adminOnly: false },
+  // { id: 'packages', icon: Package, label: 'Package Generator', adminOnly: false },
   { id: 'team', icon: Shield, label: 'Team & Permissions' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];

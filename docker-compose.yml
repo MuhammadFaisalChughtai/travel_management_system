@@ -121,7 +121,7 @@ services:
       - auth-service
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: travel_minio
     ports:
       - "9010:9000"

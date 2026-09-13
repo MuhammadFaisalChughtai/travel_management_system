@@ -8744,6 +8744,251 @@ app.put(
   },
 );
 
+// GET /airports/:iata -- Lookup airport details by IATA code
+app.get(
+  "/airports/:iata",
+  requireGatewayHeaders,
+  async (req: Request, res: Response) => {
+    try {
+      const { iata } = req.params;
+      if (!iata || iata.length !== 3) {
+        return res.status(400).json({ error: "Invalid IATA code" });
+      }
+      const airport = await prisma.airport.findUnique({
+        where: { iata: iata.toUpperCase() },
+      });
+      if (!airport) {
+        return res.status(404).json({ error: "Airport not found" });
+      }
+      return res.status(200).json(airport);
+    } catch (error: any) {
+      console.error("Get Airport Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+// PACKAGE QUOTATION MODULE ROUTES
+
+// GET /packages -- List all package quotations for the tenant
+app.get(
+  "/packages",
+  requireGatewayHeaders,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const tenantId = parseInt(req.tenantId!);
+      const packages = await prisma.packageQuotation.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: "desc" }
+      });
+      res.status(200).json({ packages });
+    } catch (error: any) {
+      console.error("Get Packages Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+// GET /packages/:id -- Get single package quotation
+app.get(
+  "/packages/:id",
+  requireGatewayHeaders,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const tenantId = parseInt(req.tenantId!);
+      const id = parseInt(req.params.id);
+      const pkg = await prisma.packageQuotation.findFirst({
+        where: { id, tenantId }
+      });
+      if (!pkg) {
+        return res.status(404).json({ error: "Package not found" });
+      }
+      res.status(200).json({ package: pkg });
+    } catch (error: any) {
+      console.error("Get Single Package Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+// POST /packages -- Create a package quotation
+app.post(
+  "/packages",
+  requireGatewayHeaders,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const tenantId = parseInt(req.tenantId!);
+      const {
+        referenceNumber,
+        title,
+        subtitle,
+        preparedFor,
+        passengerBadge,
+        departureAirport,
+        travelDates,
+        totalDuration,
+        airlineCarrier,
+        flightClass,
+        flightOutboundJson,
+        flightInboundJson,
+        hotelsJson,
+        transfersJson,
+        visaJson,
+        pricePerPerson,
+        totalPackagePrice,
+        priceIncludes,
+        importantTerms,
+        agentName,
+        companyName,
+        companyLogo,
+        companyPhone,
+        companyEmail,
+      } = req.body;
+
+      const newPkg = await prisma.packageQuotation.create({
+        data: {
+          tenantId,
+          referenceNumber: referenceNumber || `REF: TT-UMR-${Math.floor(100 + Math.random() * 900)}`,
+          title: title || "UMRAH PACKAGE QUOTATION",
+          subtitle: subtitle || null,
+          preparedFor: preparedFor || null,
+          passengerBadge: passengerBadge || null,
+          departureAirport: departureAirport || null,
+          travelDates: travelDates || null,
+          totalDuration: totalDuration || null,
+          airlineCarrier: airlineCarrier || null,
+          flightClass: flightClass || null,
+          flightOutboundJson: typeof flightOutboundJson === "object" ? JSON.stringify(flightOutboundJson) : (flightOutboundJson || null),
+          flightInboundJson: typeof flightInboundJson === "object" ? JSON.stringify(flightInboundJson) : (flightInboundJson || null),
+          hotelsJson: typeof hotelsJson === "object" ? JSON.stringify(hotelsJson) : (hotelsJson || null),
+          transfersJson: typeof transfersJson === "object" ? JSON.stringify(transfersJson) : (transfersJson || null),
+          visaJson: typeof visaJson === "object" ? JSON.stringify(visaJson) : (visaJson || null),
+          pricePerPerson: pricePerPerson ? parseFloat(pricePerPerson) : null,
+          totalPackagePrice: totalPackagePrice ? parseFloat(totalPackagePrice) : null,
+          priceIncludes: priceIncludes || null,
+          importantTerms: importantTerms || null,
+          agentName: agentName || null,
+          companyName: companyName || null,
+          companyLogo: companyLogo || null,
+          companyPhone: companyPhone || null,
+          companyEmail: companyEmail || null,
+        }
+      });
+
+      res.status(201).json({ message: "Package quotation created successfully", package: newPkg });
+    } catch (error: any) {
+      console.error("Create Package Error:", error);
+      res.status(500).json({ error: "Internal Server Error", message: error?.message });
+    }
+  }
+);
+
+// PUT /packages/:id -- Update a package quotation
+app.put(
+  "/packages/:id",
+  requireGatewayHeaders,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const tenantId = parseInt(req.tenantId!);
+      const id = parseInt(req.params.id);
+
+      const existing = await prisma.packageQuotation.findFirst({
+        where: { id, tenantId }
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Package not found" });
+      }
+
+      const {
+        referenceNumber,
+        title,
+        subtitle,
+        preparedFor,
+        passengerBadge,
+        departureAirport,
+        travelDates,
+        totalDuration,
+        airlineCarrier,
+        flightClass,
+        flightOutboundJson,
+        flightInboundJson,
+        hotelsJson,
+        transfersJson,
+        visaJson,
+        pricePerPerson,
+        totalPackagePrice,
+        priceIncludes,
+        importantTerms,
+        agentName,
+        companyName,
+        companyLogo,
+        companyPhone,
+        companyEmail,
+      } = req.body;
+
+      const updatedPkg = await prisma.packageQuotation.update({
+        where: { id },
+        data: {
+          referenceNumber: referenceNumber ?? existing.referenceNumber,
+          title: title ?? existing.title,
+          subtitle: subtitle ?? existing.subtitle,
+          preparedFor: preparedFor ?? existing.preparedFor,
+          passengerBadge: passengerBadge ?? existing.passengerBadge,
+          departureAirport: departureAirport ?? existing.departureAirport,
+          travelDates: travelDates ?? existing.travelDates,
+          totalDuration: totalDuration ?? existing.totalDuration,
+          airlineCarrier: airlineCarrier ?? existing.airlineCarrier,
+          flightClass: flightClass ?? existing.flightClass,
+          flightOutboundJson: typeof flightOutboundJson === "object" ? JSON.stringify(flightOutboundJson) : (flightOutboundJson ?? existing.flightOutboundJson),
+          flightInboundJson: typeof flightInboundJson === "object" ? JSON.stringify(flightInboundJson) : (flightInboundJson ?? existing.flightInboundJson),
+          hotelsJson: typeof hotelsJson === "object" ? JSON.stringify(hotelsJson) : (hotelsJson ?? existing.hotelsJson),
+          transfersJson: typeof transfersJson === "object" ? JSON.stringify(transfersJson) : (transfersJson ?? existing.transfersJson),
+          visaJson: typeof visaJson === "object" ? JSON.stringify(visaJson) : (visaJson ?? existing.visaJson),
+          pricePerPerson: pricePerPerson !== undefined ? (pricePerPerson ? parseFloat(pricePerPerson) : null) : existing.pricePerPerson,
+          totalPackagePrice: totalPackagePrice !== undefined ? (totalPackagePrice ? parseFloat(totalPackagePrice) : null) : existing.totalPackagePrice,
+          priceIncludes: priceIncludes ?? existing.priceIncludes,
+          importantTerms: importantTerms ?? existing.importantTerms,
+          agentName: agentName ?? existing.agentName,
+          companyName: companyName ?? existing.companyName,
+          companyLogo: companyLogo ?? existing.companyLogo,
+          companyPhone: companyPhone ?? existing.companyPhone,
+          companyEmail: companyEmail ?? existing.companyEmail,
+        }
+      });
+
+      res.status(200).json({ message: "Package quotation updated successfully", package: updatedPkg });
+    } catch (error: any) {
+      console.error("Update Package Error:", error);
+      res.status(500).json({ error: "Internal Server Error", message: error?.message });
+    }
+  }
+);
+
+// DELETE /packages/:id -- Delete a package quotation
+app.delete(
+  "/packages/:id",
+  requireGatewayHeaders,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const tenantId = parseInt(req.tenantId!);
+      const id = parseInt(req.params.id);
+
+      const existing = await prisma.packageQuotation.findFirst({
+        where: { id, tenantId }
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Package not found" });
+      }
+
+      await prisma.packageQuotation.delete({ where: { id } });
+      res.status(200).json({ message: "Package quotation deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete Package Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
 // GET /finance/agent-margin-summary -- Internal: total margin earned by agent in period (for payroll)
 app.get(
   "/finance/agent-margin-summary",

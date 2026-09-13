@@ -178,8 +178,10 @@ model FlightService {
   vendorName        String    @db.VarChar(255)
   flightNo          String    @db.VarChar(100)
   pnr               String    @db.VarChar(50)
-  departedFrom      String    @db.VarChar(255)
-  arrivedAt         String    @db.VarChar(255)
+  departedFrom            String    @db.VarChar(255)
+  departedFromAirportName String?   @db.VarChar(255)
+  arrivedAt               String    @db.VarChar(255)
+  arrivedAtAirportName    String?   @db.VarChar(255)
   departTime        String?   @db.VarChar(50)
   arrivalTime       String?   @db.VarChar(50)
   qty               Int       @default(1)
@@ -200,6 +202,12 @@ model FlightService {
   updatedAt         DateTime  @updatedAt
 
   booking           Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model Airport {
+  id   Int    @id @default(autoincrement())
+  iata String @unique @db.VarChar(3)
+  name String @db.Text
 }
 
 model TransportService {
@@ -471,5 +479,37 @@ model PassengerDocument {
   passenger   BookingCustomer @relation(fields: [passengerId], references: [id], onDelete: Cascade)
 }
 
-
-
+model PackageQuotation {
+  id                 Int      @id @default(autoincrement())
+  tenantId           Int
+  referenceNumber    String   @db.VarChar(100)
+  title              String   @db.VarChar(255)
+  subtitle           String?  @db.VarChar(255)
+  preparedFor        String?  @db.VarChar(255)
+  passengerBadge     String?  @db.VarChar(255)
+  departureAirport    String?  @db.VarChar(255)
+  travelDates        String?  @db.VarChar(255)
+  totalDuration      String?  @db.VarChar(255)
+  airlineCarrier     String?  @db.VarChar(255)
+  flightClass        String?  @db.VarChar(255)
+  
+  flightOutboundJson String?  @db.Text
+  flightInboundJson  String?  @db.Text
+  hotelsJson         String?  @db.Text
+  transfersJson      String?  @db.Text
+  visaJson           String?  @db.Text
+  
+  pricePerPerson     Decimal? @db.Decimal(10, 2)
+  totalPackagePrice  Decimal? @db.Decimal(10, 2)
+  priceIncludes      String?  @db.Text
+  importantTerms     String?  @db.Text
+  
+  agentName          String?  @db.VarChar(255)
+  companyName        String?  @db.VarChar(255)
+  companyLogo        String?  @db.VarChar(550)
+  companyPhone       String?  @db.VarChar(100)
+  companyEmail       String?  @db.VarChar(255)
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

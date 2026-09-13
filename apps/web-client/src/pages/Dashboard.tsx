@@ -32,7 +32,8 @@ import {
   Tag,
   FileText,
   Clock,
-  Banknote
+  Banknote,
+  Package
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
@@ -47,6 +48,7 @@ import { TeamManagement } from './TeamManagement';
 import { FinancePage } from './FinancePage';
 import { ServiceCatalogPage } from './ServiceCatalogPage';
 import { DocumentTemplatesPage } from './DocumentTemplatesPage';
+import { PackageGeneratorPage } from './PackageGeneratorPage';
 import { EmptyState } from '../components/shared/EmptyState';
 import { LoadingState } from '../components/shared/LoadingState';
 import { 
@@ -127,6 +129,7 @@ const SIDEBAR_ITEMS = [
   { id: 'payments', icon: CreditCard, label: 'Finance & Payments' },
   { id: 'catalog', icon: Tag, label: 'Service Catalog', adminOnly: true },
   { id: 'templates', icon: FileText, label: 'Document Studio', adminOnly: true },
+  { id: 'packages', icon: Package, label: 'Package Generator', adminOnly: false },
   { id: 'team', icon: Shield, label: 'Team & Permissions' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
@@ -169,7 +172,7 @@ export function Dashboard() {
 
   // Sidebar navigation tab state
   const { tab } = useParams<{ tab?: string }>();
-  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog' | 'templates' | 'attendance' | 'payroll';
+  const sidebarTab = (tab || 'overview') as 'overview' | 'bookings' | 'agents' | 'vendors' | 'payments' | 'team' | 'settings' | 'catalog' | 'templates' | 'attendance' | 'payroll' | 'packages';
   
   useEffect(() => {
     if (user && permittedItems.length > 0) {
@@ -1854,6 +1857,12 @@ export function Dashboard() {
         {sidebarTab === 'templates' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <DocumentTemplatesPage />
+          </div>
+        )}
+
+        {sidebarTab === 'packages' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <PackageGeneratorPage />
           </div>
         )}
 

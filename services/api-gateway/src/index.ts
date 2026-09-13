@@ -108,6 +108,7 @@ const routes = [
   { path: '/api/ledger', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
   { path: '/api/finance', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
   { path: '/api/public', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
+  { path: '/api/packages', target: process.env.BOOKING_SERVICE_URL || 'http://localhost:4005' },
   { path: '/api/agents', target: AUTH_SERVICE_URL },
   { path: '/api/vendors', target: AUTH_SERVICE_URL },
 ];
@@ -117,7 +118,7 @@ routes.forEach(route => {
     target: route.target,
     changeOrigin: true,
     pathRewrite: {
-      [`^${route.path}`]: route.path === '/api/agents' ? '/agents' : route.path === '/api/vendors' ? '/vendors' : route.path === '/api/catalog' ? '/catalog' : route.path === '/api/ledger' ? '/ledger' : route.path === '/api/finance' ? '/finance' : route.path === '/api/public' ? '/public' : '',
+      [`^${route.path}`]: route.path === '/api/agents' ? '/agents' : route.path === '/api/vendors' ? '/vendors' : route.path === '/api/catalog' ? '/catalog' : route.path === '/api/ledger' ? '/ledger' : route.path === '/api/finance' ? '/finance' : route.path === '/api/public' ? '/public' : route.path === '/api/packages' ? '/packages' : '',
     },
     onProxyReq: (proxyReq, req, res) => {
       // Forward the injected SaaS headers downstream explicitly

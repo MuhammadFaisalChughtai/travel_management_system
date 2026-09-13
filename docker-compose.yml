@@ -121,7 +121,7 @@ services:
       - auth-service
 
   minio:
-    image: minio/minio:RELEASE.2024-01-28T22-35-53Z
+    image: minio/minio:latest
     container_name: travel_minio
     ports:
       - "9010:9000"

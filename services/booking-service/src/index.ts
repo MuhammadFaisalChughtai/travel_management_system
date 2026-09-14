@@ -628,10 +628,7 @@ app.get(
         whereClause.AND = whereClause.AND || [];
         whereClause.AND.push({
           status: { not: "hidden" },
-          OR: [
-            { isDeleted: false },
-            { isDeleted: null }
-          ]
+          isDeleted: { not: true }
         });
       }
       if (isLocked !== undefined && isLocked !== "Any") {
@@ -763,9 +760,9 @@ app.get(
         limit: limitNum,
         totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Fetch Bookings Error:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      res.status(500).json({ error: "Internal Server Error", message: error?.message || String(error) });
     }
   },
 );

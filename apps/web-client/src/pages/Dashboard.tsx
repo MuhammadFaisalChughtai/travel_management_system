@@ -843,7 +843,7 @@ export function Dashboard() {
     <div className="flex min-h-[calc(100vh-4rem)] bg-slate-50/50">
       
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-r border-slate-200/80 flex-shrink-0 hidden md:flex flex-col justify-between">
+      <aside className="w-64 bg-white border-r border-slate-200/80 flex-shrink-0 hidden md:flex flex-col justify-between print:hidden">
         <div className="p-6">
           <div className="flex items-center gap-4 mb-8">
             <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-primary-600 to-indigo-500 flex items-center justify-center text-white font-extrabold text-xl shadow-md shadow-primary-500/20">

@@ -2173,26 +2173,34 @@ export function PackageGeneratorPage() {
     <div className="w-full flex justify-center">
       <style>{`
         @media print {
-          body * {
-            visibility: hidden !important;
+          nav, aside, header, footer, .print\\:hidden, button, form {
+            display: none !important;
           }
-          #printable-quotation-document,
-          #printable-quotation-document * {
-            visibility: visible !important;
+          html, body, #root, main, div {
+            background: #ffffff !important;
+            color: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            width: 100% !important;
+            max-width: none !important;
+            position: static !important;
+            box-shadow: none !important;
+            border: none !important;
           }
           #printable-quotation-document {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
+            display: block !important;
+            visibility: visible !important;
             width: 100% !important;
             max-width: 100% !important;
-            height: auto !important;
-            margin: 0 !important;
+            margin: 0 auto !important;
             padding: 10mm !important;
             box-shadow: none !important;
             border: none !important;
             background: #ffffff !important;
-            z-index: 99999 !important;
           }
           @page {
             size: A4 portrait;
@@ -2676,9 +2684,9 @@ export function PackageGeneratorPage() {
 
       {/* SPLIT VIEW TAB (55% Editor / 45% Live Preview) */}
       {activeTab === 'split' && (
-        <div className="print:hidden max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column (55%): Collapsible Accordion Editor */}
-          <div className="lg:col-span-6 space-y-4">
+          <div className="lg:col-span-6 space-y-4 print:hidden">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
               <h2 className="text-sm font-black text-slate-800 flex items-center gap-2 uppercase tracking-wide">
                 <Edit3 className="w-4 h-4 text-primary-600" /> Package Quotation Accordion Builder
@@ -2692,7 +2700,7 @@ export function PackageGeneratorPage() {
 
           {/* Right Column (45%): Sticky Live PDF Preview */}
           <div className="lg:col-span-6 sticky top-6">
-            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-3 flex justify-between items-center">
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-3 flex justify-between items-center print:hidden">
               <span className="text-xs font-black text-slate-800 flex items-center gap-2 uppercase tracking-wide">
                 <FileText className="w-4 h-4 text-blue-600" /> Live Quotation PDF Document Preview
               </span>

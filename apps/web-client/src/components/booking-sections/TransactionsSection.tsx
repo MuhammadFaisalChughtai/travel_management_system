@@ -29,6 +29,7 @@ import { PieChart, CheckCircle2, Edit2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Pagination } from "../shared/Pagination";
 import { useCurrency } from "../../utils/currency";
+import { useAuthStore } from "../../store/authStore";
 
 interface TransactionsSectionProps {
   booking: BookingDetail;
@@ -47,6 +48,10 @@ export function TransactionsSection({
   onFinalizeMargin,
   onUpdateInvoicePrice,
 }: TransactionsSectionProps) {
+  const { user } = useAuthStore();
+  if (user?.role === 'AGENT') {
+    return null;
+  }
   const { symbol } = useCurrency();
   const [filter, setFilter] = useState<
     "All" | "Received from Client" | "Sent to Vendor" | "Margin Paid to Agent"

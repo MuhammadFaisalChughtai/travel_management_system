@@ -971,12 +971,14 @@ export function BookingDetailsModal({
                         >
                           <Plus className="w-3 h-3" /> Discount
                         </button>
-                        <button
-                          onClick={() => setShowLogTransaction(true)}
-                          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
-                        >
-                          <Plus className="w-3 h-3" /> Log Transaction
-                        </button>
+                        {user?.role !== "AGENT" && (
+                          <button
+                            onClick={() => setShowLogTransaction(true)}
+                            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all uppercase tracking-wide"
+                          >
+                            <Plus className="w-3 h-3" /> Log Transaction
+                          </button>
+                        )}
                       </div>
                     ) : undefined
                   }

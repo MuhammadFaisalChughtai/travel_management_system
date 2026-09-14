@@ -672,73 +672,75 @@ export function BookingDetailsPage() {
             </div>
 
             {/* Transactions / Payments Block */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4.5 w-4.5 text-primary-600" />
-                  <h3 className="font-bold text-slate-900 text-sm">Transactions</h3>
+            {user?.role !== 'AGENT' && (
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-4.5 w-4.5 text-primary-600" />
+                    <h3 className="font-bold text-slate-900 text-sm">Transactions</h3>
+                  </div>
+                  <button 
+                    onClick={() => setActiveModal('payment')}
+                    className="p-1.5 hover:bg-slate-100 rounded-lg text-primary-600 transition-colors"
+                    title="Add Transaction"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
-                <button 
-                  onClick={() => setActiveModal('payment')}
-                  className="p-1.5 hover:bg-slate-100 rounded-lg text-primary-600 transition-colors"
-                  title="Add Transaction"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
 
-              {booking.payments.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs">
-                  No payment transactions recorded yet.
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100 text-xs">
-                  {booking.payments.map(p => (
-                    <div key={p.id} className="p-4 hover:bg-slate-50/30 transition-colors flex justify-between items-start gap-3">
-                      <div className="flex-grow min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-slate-900">{format(p.amount)}</span>
-                          {/* Status Badge */}
-                          <span className={`inline-block px-1.5 py-0.2 rounded text-[8px] font-extrabold tracking-wide uppercase ${
-                            p.status === 'pending'
-                              ? 'bg-amber-50 text-amber-600 border border-amber-100'
-                              : p.status === 'rejected'
-                              ? 'bg-rose-50 text-rose-600 border border-rose-100'
-                              : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                          }`}>
-                            {p.status || 'approved'}
-                          </span>
-                        </div>
-                        <div className="text-slate-400 text-[10px] mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">
-                          <span>{p.paymentMethod} • {p.paymentType}</span>
-                          {p.loggedByName && (
-                            <span className="text-slate-400/80">({p.loggedByName})</span>
+                {booking.payments.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs">
+                    No payment transactions recorded yet.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 text-xs">
+                    {booking.payments.map(p => (
+                      <div key={p.id} className="p-4 hover:bg-slate-50/30 transition-colors flex justify-between items-start gap-3">
+                        <div className="flex-grow min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900">{format(p.amount)}</span>
+                            {/* Status Badge */}
+                            <span className={`inline-block px-1.5 py-0.2 rounded text-[8px] font-extrabold tracking-wide uppercase ${
+                              p.status === 'pending'
+                                ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                                : p.status === 'rejected'
+                                ? 'bg-rose-50 text-rose-600 border border-rose-100'
+                                : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                            }`}>
+                              {p.status || 'approved'}
+                            </span>
+                          </div>
+                          <div className="text-slate-400 text-[10px] mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">
+                            <span>{p.paymentMethod} • {p.paymentType}</span>
+                            {p.loggedByName && (
+                              <span className="text-slate-400/80">({p.loggedByName})</span>
+                            )}
+                          </div>
+                          {p.notes && <p className="text-[10px] text-slate-500 italic mt-1 font-medium break-words leading-relaxed">{p.notes}</p>}
+                          
+                          {/* Evidence Attachment */}
+                          {p.evidenceUrl && (
+                            <div className="mt-1.5">
+                              <a 
+                                href={p.evidenceUrl} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="inline-flex items-center gap-1 text-[9px] font-extrabold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-100/50 transition-colors"
+                              >
+                                <Receipt className="w-3 h-3 text-indigo-500" /> Receipt Screenshot
+                              </a>
+                            </div>
                           )}
                         </div>
-                        {p.notes && <p className="text-[10px] text-slate-500 italic mt-1 font-medium break-words leading-relaxed">{p.notes}</p>}
-                        
-                        {/* Evidence Attachment */}
-                        {p.evidenceUrl && (
-                          <div className="mt-1.5">
-                            <a 
-                              href={p.evidenceUrl} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="inline-flex items-center gap-1 text-[9px] font-extrabold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-100/50 transition-colors"
-                            >
-                              <Receipt className="w-3 h-3 text-indigo-500" /> Receipt Screenshot
-                            </a>
-                          </div>
-                        )}
+                        <div className="text-[10px] text-slate-400 font-mono shrink-0">
+                          {new Date(p.paidOn).toLocaleDateString()}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono shrink-0">
-                        {new Date(p.paidOn).toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
 

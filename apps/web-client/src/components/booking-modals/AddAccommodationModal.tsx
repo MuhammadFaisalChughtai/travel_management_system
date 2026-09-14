@@ -5,6 +5,7 @@ import type { Accommodation } from '../../types/booking';
 import { VendorSelect } from '../shared/VendorSelect';
 import { api as axios } from '../../api/axios';
 import { useCurrency } from '../../utils/currency';
+import { useAuthStore } from '../../store/authStore';
 
 interface AddAccommodationModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface AddAccommodationModalProps {
 }
 
 export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }: AddAccommodationModalProps) {
+  const { user } = useAuthStore();
   const { currency: tenantCurrency } = useCurrency();
   const [form, setForm] = useState<Partial<Accommodation>>({
     vendorName: '',
@@ -307,22 +309,24 @@ export function AddAccommodationModal({ isOpen, onClose, onSubmit, initialData }
 
         
           
-          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-            <label className="flex items-center gap-2 cursor-pointer group w-fit">
-              <input 
-                type="checkbox" 
-                checked={form.isPaidToVendor || false} 
-                onChange={(e) => setForm({ ...form, isPaidToVendor: e.target.checked })}
-                disabled={initialData?.isPaidToVendor}
-                className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <span className="text-[12px] font-bold text-slate-700 group-hover:text-slate-900 flex items-center gap-1.5 transition-colors">
-                Paid to Vendor?
-                {initialData?.isPaidToVendor && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">(Already Paid)</span>}
-              </span>
-            </label>
-            <p className="text-[10px] text-slate-500 mt-1 ml-6">Check this to manually mark as paid if you have already transferred the money to the vendor. (To log a formal transaction, use the Log Transaction button).</p>
-          </div>
+          {user?.role !== 'AGENT' && (
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <label className="flex items-center gap-2 cursor-pointer group w-fit">
+                <input 
+                  type="checkbox" 
+                  checked={form.isPaidToVendor || false} 
+                  onChange={(e) => setForm({ ...form, isPaidToVendor: e.target.checked })}
+                  disabled={initialData?.isPaidToVendor}
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <span className="text-[12px] font-bold text-slate-700 group-hover:text-slate-900 flex items-center gap-1.5 transition-colors">
+                  Paid to Vendor?
+                  {initialData?.isPaidToVendor && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">(Already Paid)</span>}
+                </span>
+              </label>
+              <p className="text-[10px] text-slate-500 mt-1 ml-6">Check this to manually mark as paid if you have already transferred the money to the vendor. (To log a formal transaction, use the Log Transaction button).</p>
+            </div>
+          )}
           <div className="bg-slate-50/50 p-5 border-t border-slate-200 flex justify-end items-center backdrop-blur-md">
             
             <div className="flex gap-3">

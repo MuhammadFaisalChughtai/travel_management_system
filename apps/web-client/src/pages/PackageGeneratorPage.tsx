@@ -4,20 +4,34 @@ import {
   Building2, Car, ShieldCheck, RefreshCw, FileText,
   Download, Edit3, Folder, Star, CheckCircle2, 
   X, ArrowRight, Tag, ChevronDown, ChevronUp, Lock, Unlock, Pencil,
-  Sparkles, Columns
+  Sparkles, Columns, Zap
 } from 'lucide-react';
 import { api } from '../api/axios';
 import { useAuthStore } from '../store/authStore';
 import { toast } from 'react-hot-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { getAirlineName, getAirportName, calculateTransitTime } from '../utils/flightUtils';
+import { getAirlineName, getAirportName, getAirportShort, calculateTransitTime } from '../utils/flightUtils';
+
+export interface FlightSegment {
+  id: string;
+  airline: string;
+  flightNo: string;
+  departedFrom: string;
+  arrivedAt: string;
+  date: string;
+  departTime: string;
+  arrivalTime: string;
+  craft?: string;
+  baggage?: string;
+  pnr?: string;
+}
 
 interface HotelItem {
   name: string;
   location: string;
-  ratingStars: number; // 1 to 5
-  ratingLabel: string; // e.g. "(4-Star)" or "(Luxury)"
+  ratingStars: number;
+  ratingLabel: string;
   checkInDate: string;
   checkOutDate: string;
   stayDuration: string;
@@ -76,6 +90,14 @@ const CABIN_BAGGAGE_OPTIONS = [
   'No Cabin Bag'
 ];
 
+const BRAND_THEMES = [
+  { label: 'Navy Slate', value: '#0f172a' },
+  { label: 'Royal Blue', value: '#1e3a8a' },
+  { label: 'Deep Indigo', value: '#312e81' },
+  { label: 'Emerald Green', value: '#065f46' },
+  { label: 'Royal Purple', value: '#4c1d95' }
+];
+
 const VISA_TEMPLATES = [
   {
     id: 'uk_eta',
@@ -121,6 +143,7 @@ export function PackageGeneratorPage() {
 
   // Accordion Expand/Collapse States
   const [openSections, setOpenSections] = useState({
+    company: false,
     meta: true,
     flights: true,
     hotels: true,
@@ -137,13 +160,14 @@ export function PackageGeneratorPage() {
   const [showPnrModal, setShowPnrModal] = useState(false);
   const [pnrText, setPnrText] = useState('');
 
-  // Company / Tenant Context
+  // Dynamic Tenant & Company Context
   const [companyInfo, setCompanyInfo] = useState({
-    companyName: 'Tooba Travels',
-    logoPrimary: '',
-    officeAddress: '',
-    emailSender: '',
-    landlineFormat: ''
+    companyName: 'Tooba Travels Ltd',
+    logoPrimary: 'https://bucket.techbarred.com/travelbooker-media/4fa089c9-3a6f-459b-b488-ea12a7f4d992.png',
+    officeAddress: '63 Buxton Road, London, E17 7EH',
+    emailSender: 'office.toobatravels.co.uk',
+    landlineFormat: '0203 371 8774',
+    brandColor: '#0f172a'
   });
 
   // Quotation Meta
@@ -165,52 +189,83 @@ export function PackageGeneratorPage() {
   const [airlineCarrier, setAirlineCarrier] = useState('Royal Jordanian');
   const [flightClass, setFlightClass] = useState('Royal Jordanian • Economy Class');
 
-  // Structured Outbound Flight
-  const [outboundRoute, setOutboundRoute] = useState('LHR ➔ JED');
+  // Dynamic Outbound Flight Segments (Matching Booking Flight Section)
+  const [outboundPnr, setOutboundPnr] = useState('RJ-OUTBOUND-PNR');
+  const [outboundRoute, setOutboundRoute] = useState('LHR -> JED');
   const [outboundDepDate, setOutboundDepDate] = useState('2026-11-09');
   const [outboundDateText, setOutboundDateText] = useState('Mon, 09 Nov 2026');
-  
-  const [outboundLeg1No, setOutboundLeg1No] = useState('RJ 112');
-  const [outboundLeg1Craft, setOutboundLeg1Craft] = useState('Boeing 787-9');
-  const [outboundLeg1Dep, setOutboundLeg1Dep] = useState('16:05 LHR (T3)');
-  const [outboundLeg1Arr, setOutboundLeg1Arr] = useState('00:05 AMM (+1)');
-
   const [outboundTransitText, setOutboundTransitText] = useState('Transit in Amman (AMM): 1 hr 30 mins');
-
-  const [outboundLeg2No, setOutboundLeg2No] = useState('RJ 704');
-  const [outboundLeg2Craft, setOutboundLeg2Craft] = useState('Boeing 787');
-  const [outboundLeg2Dep, setOutboundLeg2Dep] = useState('01:35 AMM');
-  const [outboundLeg2Arr, setOutboundLeg2Arr] = useState('03:45 JED (T1)');
-
   const [outboundArrivalNote, setOutboundArrivalNote] = useState('Arrival: Tue, 10 Nov (03:45)');
   
-  // Baggage Selectors
   const [outboundCheckedBag, setOutboundCheckedBag] = useState('1x 23kg (pp)');
   const [outboundCabinBag, setOutboundCabinBag] = useState('+ Cabin Bag (pp)');
   const [outboundBaggage, setOutboundBaggage] = useState('Baggage: 1x 23kg + Cabin Bag (pp)');
 
-  // Structured Inbound Flight
-  const [inboundRoute, setInboundRoute] = useState('MED ➔ LHR');
+  const [outboundLegs, setOutboundLegs] = useState<FlightSegment[]>([
+    {
+      id: 'out-1',
+      airline: 'Royal Jordanian',
+      flightNo: 'RJ 112',
+      craft: 'Boeing 787-9',
+      departedFrom: 'LHR',
+      arrivedAt: 'AMM',
+      date: '2026-11-09',
+      departTime: '16:05 LHR (T3)',
+      arrivalTime: '00:05 AMM (+1)',
+      baggage: '23 Kg'
+    },
+    {
+      id: 'out-2',
+      airline: 'Royal Jordanian',
+      flightNo: 'RJ 704',
+      craft: 'Boeing 787',
+      departedFrom: 'AMM',
+      arrivedAt: 'JED',
+      date: '2026-11-10',
+      departTime: '01:35 AMM',
+      arrivalTime: '03:45 JED (T1)',
+      baggage: '23 Kg'
+    }
+  ]);
+
+  // Dynamic Inbound Flight Segments
+  const [inboundPnr, setInboundPnr] = useState('RJ-INBOUND-PNR');
+  const [inboundRoute, setInboundRoute] = useState('MED -> LHR');
   const [inboundDepDate, setInboundDepDate] = useState('2026-11-19');
   const [inboundDateText, setInboundDateText] = useState('Thu, 19 Nov 2026');
-
-  const [inboundLeg1No, setInboundLeg1No] = useState('RJ 723');
-  const [inboundLeg1Craft, setInboundLeg1Craft] = useState('Boeing 787-8');
-  const [inboundLeg1Dep, setInboundLeg1Dep] = useState('07:00 MED');
-  const [inboundLeg1Arr, setInboundLeg1Arr] = useState('08:55 AMM');
-
   const [inboundTransitText, setInboundTransitText] = useState('Transit in Amman (AMM): 3 hrs 00 mins');
-
-  const [inboundLeg2No, setInboundLeg2No] = useState('RJ 111');
-  const [inboundLeg2Craft, setInboundLeg2Craft] = useState('Boeing 787-9');
-  const [inboundLeg2Dep, setInboundLeg2Dep] = useState('11:55 AMM');
-  const [inboundLeg2Arr, setInboundLeg2Arr] = useState('14:20 LHR (T3)');
-
   const [inboundArrivalNote, setInboundArrivalNote] = useState('Arrival: Thu, 19 Nov (14:20)');
   
   const [inboundCheckedBag, setInboundCheckedBag] = useState('1x 23kg (pp)');
   const [inboundCabinBag, setInboundCabinBag] = useState('+ Cabin Bag (pp)');
   const [inboundBaggage, setInboundBaggage] = useState('Baggage: 1x 23kg + Cabin Bag (pp)');
+
+  const [inboundLegs, setInboundLegs] = useState<FlightSegment[]>([
+    {
+      id: 'in-1',
+      airline: 'Royal Jordanian',
+      flightNo: 'RJ 723',
+      craft: 'Boeing 787-8',
+      departedFrom: 'MED',
+      arrivedAt: 'AMM',
+      date: '2026-11-19',
+      departTime: '07:00 MED',
+      arrivalTime: '08:55 AMM',
+      baggage: '23 Kg'
+    },
+    {
+      id: 'in-2',
+      airline: 'Royal Jordanian',
+      flightNo: 'RJ 111',
+      craft: 'Boeing 787-9',
+      departedFrom: 'AMM',
+      arrivedAt: 'LHR',
+      date: '2026-11-19',
+      departTime: '11:55 AMM',
+      arrivalTime: '14:20 LHR (T3)',
+      baggage: '23 Kg'
+    }
+  ]);
 
   // Hotels
   const [hotelStaySummaryBadge, setHotelStaySummaryBadge] = useState('9 Nights Total Stay');
@@ -246,9 +301,9 @@ export function PackageGeneratorPage() {
   // Transfers & Visa
   const [transferTitle, setTransferTitle] = useState('Private AC Vehicle Circuit');
   const [transferSectors, setTransferSectors] = useState<SectorItem[]>([
-    { label: 'Sector 1: Jeddah Airport (JED) ➔ voco Makkah Hotel' },
-    { label: 'Sector 2: Makkah Hotel ➔ Millennium Taiba Madinah' },
-    { label: 'Sector 3: Millennium Taiba Madinah ➔ Madinah Airport (MED)' }
+    { label: 'Sector 1: Jeddah Airport (JED) -> voco Makkah Hotel' },
+    { label: 'Sector 2: Makkah Hotel -> Millennium Taiba Madinah' },
+    { label: 'Sector 3: Millennium Taiba Madinah -> Madinah Airport (MED)' }
   ]);
 
   const [selectedVisaTemplate, setSelectedVisaTemplate] = useState('uk_eta');
@@ -290,6 +345,35 @@ export function PackageGeneratorPage() {
     }
   };
 
+  // Helper: Compute route string from flight legs array
+  const getRouteFromLegs = (legs: FlightSegment[], defaultRoute: string): string => {
+    if (!legs || legs.length === 0) return defaultRoute;
+    const start = getAirportShort(legs[0].departedFrom) || legs[0].departedFrom;
+    const end = getAirportShort(legs[legs.length - 1].arrivedAt) || legs[legs.length - 1].arrivedAt;
+    if (start && end) return `${start} -> ${end}`;
+    return defaultRoute;
+  };
+
+  // Helper: Compute transit layover between consecutive legs
+  const computeTransitTextForLegs = (legs: FlightSegment[]): string => {
+    if (!legs || legs.length <= 1) return '';
+    const layovers: string[] = [];
+    for (let i = 0; i < legs.length - 1; i++) {
+      const leg1 = legs[i];
+      const leg2 = legs[i + 1];
+      const arrMatch = leg1.arrivalTime?.match(/(\d{1,2}:\d{2})/);
+      const depMatch = leg2.departTime?.match(/(\d{1,2}:\d{2})/);
+      const airportCode = getAirportShort(leg1.arrivedAt) || leg1.arrivedAt || 'Transit';
+      if (arrMatch && depMatch) {
+        const transit = calculateTransitTime(leg1.date, arrMatch[1], leg2.date, depMatch[1]);
+        if (transit) {
+          layovers.push(`Transit in ${getAirportName(airportCode)} (${airportCode}): ${transit}`);
+        }
+      }
+    }
+    return layovers.join(' • ');
+  };
+
   // Sync Outbound Baggage text
   useEffect(() => {
     setOutboundBaggage(`Baggage: ${outboundCheckedBag} ${outboundCabinBag}`.trim());
@@ -300,11 +384,49 @@ export function PackageGeneratorPage() {
     setInboundBaggage(`Baggage: ${inboundCheckedBag} ${inboundCabinBag}`.trim());
   }, [inboundCheckedBag, inboundCabinBag]);
 
-  // Fetch company context & saved packages on load
+  // Fetch company context & tenant profile on load
   useEffect(() => {
     fetchCompanyContext();
     fetchSavedPackages();
   }, []);
+
+  const fetchCompanyContext = async () => {
+    try {
+      const [ctxRes, tenantRes] = await Promise.all([
+        api.get('/finance/company-context').catch(() => null),
+        api.get('/tenants/profile').catch(() => null)
+      ]);
+      
+      const ctx = ctxRes?.data?.companyContext;
+      const tenant = tenantRes?.data?.tenant;
+
+      setCompanyInfo(prev => ({
+        ...prev,
+        companyName: ctx?.companyName || tenant?.name || 'Tooba Travels Ltd',
+        logoPrimary: ctx?.logoPrimary || tenant?.logo || 'https://bucket.techbarred.com/travelbooker-media/4fa089c9-3a6f-459b-b488-ea12a7f4d992.png',
+        officeAddress: ctx?.officeAddress || tenant?.location || '63 Buxton Road, London, E17 7EH',
+        emailSender: ctx?.emailSender || tenant?.email || 'office.toobatravels.co.uk',
+        landlineFormat: ctx?.landlineFormat || tenant?.phone || '0203 371 8774',
+        brandColor: ctx?.brandColor || prev.brandColor || '#0f172a'
+      }));
+    } catch (err) {
+      console.error('Failed to fetch company context:', err);
+    }
+  };
+
+  const fetchSavedPackages = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/packages');
+      if (res.data?.packages) {
+        setSavedPackages(res.data.packages);
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved packages:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Auto calculate overall trip dates & nights
   useEffect(() => {
@@ -360,68 +482,21 @@ export function PackageGeneratorPage() {
     }
   }, [pricePerPerson, passengerCount, isManualTotalPrice]);
 
-  // Auto calculate transit layovers when leg times change
+  // Auto sync Outbound transit & route
   useEffect(() => {
-    if (outboundLeg1Arr && outboundLeg2Dep) {
-      const arrMatch = outboundLeg1Arr.match(/(\d{1,2}:\d{2})/);
-      const depMatch = outboundLeg2Dep.match(/(\d{1,2}:\d{2})/);
-      const codeMatch = outboundLeg1Arr.match(/([A-Z]{3})/);
-      const airportCode = codeMatch ? codeMatch[1] : 'AMM';
-      if (arrMatch && depMatch) {
-        const transit = calculateTransitTime(null, arrMatch[1], null, depMatch[1]);
-        if (transit) {
-          setOutboundTransitText(`Transit in ${getAirportName(airportCode)} (${airportCode}): ${transit}`);
-        }
-      }
-    }
-  }, [outboundLeg1Arr, outboundLeg2Dep]);
+    const computedRoute = getRouteFromLegs(outboundLegs, outboundRoute);
+    if (computedRoute) setOutboundRoute(computedRoute);
+    const transit = computeTransitTextForLegs(outboundLegs);
+    if (transit) setOutboundTransitText(transit);
+  }, [outboundLegs]);
 
+  // Auto sync Inbound transit & route
   useEffect(() => {
-    if (inboundLeg1Arr && inboundLeg2Dep) {
-      const arrMatch = inboundLeg1Arr.match(/(\d{1,2}:\d{2})/);
-      const depMatch = inboundLeg2Dep.match(/(\d{1,2}:\d{2})/);
-      const codeMatch = inboundLeg1Arr.match(/([A-Z]{3})/);
-      const airportCode = codeMatch ? codeMatch[1] : 'AMM';
-      if (arrMatch && depMatch) {
-        const transit = calculateTransitTime(null, arrMatch[1], null, depMatch[1]);
-        if (transit) {
-          setInboundTransitText(`Transit in ${getAirportName(airportCode)} (${airportCode}): ${transit}`);
-        }
-      }
-    }
-  }, [inboundLeg1Arr, inboundLeg2Dep]);
-
-  const fetchCompanyContext = async () => {
-    try {
-      const res = await api.get('/finance/company-context');
-      if (res.data?.companyContext) {
-        const ctx = res.data.companyContext;
-        setCompanyInfo({
-          companyName: ctx.companyName || 'Tooba Travels',
-          logoPrimary: ctx.logoPrimary || '',
-          officeAddress: ctx.officeAddress || '',
-          emailSender: ctx.emailSender || '',
-          landlineFormat: ctx.landlineFormat || ''
-        });
-      }
-    } catch (err) {
-      console.error('Failed to fetch company context:', err);
-    }
-  };
-
-  const fetchSavedPackages = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/packages');
-      if (res.data?.packages) {
-        setSavedPackages(res.data.packages);
-      }
-    } catch (err) {
-      console.error('Failed to fetch saved packages:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const computedRoute = getRouteFromLegs(inboundLegs, inboundRoute);
+    if (computedRoute) setInboundRoute(computedRoute);
+    const transit = computeTransitTextForLegs(inboundLegs);
+    if (transit) setInboundTransitText(transit);
+  }, [inboundLegs]);
 
   // Visa Template Handler
   const handleSelectVisaTemplate = (templateId: string) => {
@@ -451,35 +526,73 @@ export function PackageGeneratorPage() {
     setAirlineCarrier('Royal Jordanian');
     setFlightClass('Royal Jordanian • Economy Class');
 
-    setOutboundRoute('LHR ➔ JED');
+    setOutboundPnr('RJ-OUTBOUND-PNR');
+    setOutboundRoute('LHR -> JED');
     setOutboundDepDate('2026-11-09');
-    setOutboundLeg1No('RJ 112');
-    setOutboundLeg1Craft('Boeing 787-9');
-    setOutboundLeg1Dep('16:05 LHR (T3)');
-    setOutboundLeg1Arr('00:05 AMM (+1)');
-    setOutboundTransitText('Transit in Amman (AMM): 1 hr 30 mins');
-    setOutboundLeg2No('RJ 704');
-    setOutboundLeg2Craft('Boeing 787');
-    setOutboundLeg2Dep('01:35 AMM');
-    setOutboundLeg2Arr('03:45 JED (T1)');
-    setOutboundArrivalNote('Arrival: Tue, 10 Nov (03:45)');
     setOutboundCheckedBag('1x 23kg (pp)');
     setOutboundCabinBag('+ Cabin Bag (pp)');
+    setOutboundArrivalNote('Arrival: Tue, 10 Nov (03:45)');
 
-    setInboundRoute('MED ➔ LHR');
+    setOutboundLegs([
+      {
+        id: 'out-1',
+        airline: 'Royal Jordanian',
+        flightNo: 'RJ 112',
+        craft: 'Boeing 787-9',
+        departedFrom: 'LHR',
+        arrivedAt: 'AMM',
+        date: '2026-11-09',
+        departTime: '16:05 LHR (T3)',
+        arrivalTime: '00:05 AMM (+1)',
+        baggage: '23 Kg'
+      },
+      {
+        id: 'out-2',
+        airline: 'Royal Jordanian',
+        flightNo: 'RJ 704',
+        craft: 'Boeing 787',
+        departedFrom: 'AMM',
+        arrivedAt: 'JED',
+        date: '2026-11-10',
+        departTime: '01:35 AMM',
+        arrivalTime: '03:45 JED (T1)',
+        baggage: '23 Kg'
+      }
+    ]);
+
+    setInboundPnr('RJ-INBOUND-PNR');
+    setInboundRoute('MED -> LHR');
     setInboundDepDate('2026-11-19');
-    setInboundLeg1No('RJ 723');
-    setInboundLeg1Craft('Boeing 787-8');
-    setInboundLeg1Dep('07:00 MED');
-    setInboundLeg1Arr('08:55 AMM');
-    setInboundTransitText('Transit in Amman (AMM): 3 hrs 00 mins');
-    setInboundLeg2No('RJ 111');
-    setInboundLeg2Craft('Boeing 787-9');
-    setInboundLeg2Dep('11:55 AMM');
-    setInboundLeg2Arr('14:20 LHR (T3)');
-    setInboundArrivalNote('Arrival: Thu, 19 Nov (14:20)');
     setInboundCheckedBag('1x 23kg (pp)');
     setInboundCabinBag('+ Cabin Bag (pp)');
+    setInboundArrivalNote('Arrival: Thu, 19 Nov (14:20)');
+
+    setInboundLegs([
+      {
+        id: 'in-1',
+        airline: 'Royal Jordanian',
+        flightNo: 'RJ 723',
+        craft: 'Boeing 787-8',
+        departedFrom: 'MED',
+        arrivedAt: 'AMM',
+        date: '2026-11-19',
+        departTime: '07:00 MED',
+        arrivalTime: '08:55 AMM',
+        baggage: '23 Kg'
+      },
+      {
+        id: 'in-2',
+        airline: 'Royal Jordanian',
+        flightNo: 'RJ 111',
+        craft: 'Boeing 787-9',
+        departedFrom: 'AMM',
+        arrivedAt: 'LHR',
+        date: '2026-11-19',
+        departTime: '11:55 AMM',
+        arrivalTime: '14:20 LHR (T3)',
+        baggage: '23 Kg'
+      }
+    ]);
 
     setHotels([
       {
@@ -512,9 +625,9 @@ export function PackageGeneratorPage() {
 
     setTransferTitle('Private AC Vehicle Circuit');
     setTransferSectors([
-      { label: 'Sector 1: Jeddah Airport (JED) ➔ voco Makkah Hotel' },
-      { label: 'Sector 2: Makkah Hotel ➔ Millennium Taiba Madinah' },
-      { label: 'Sector 3: Millennium Taiba Madinah ➔ Madinah Airport (MED)' }
+      { label: 'Sector 1: Jeddah Airport (JED) -> voco Makkah Hotel' },
+      { label: 'Sector 2: Makkah Hotel -> Millennium Taiba Madinah' },
+      { label: 'Sector 3: Millennium Taiba Madinah -> Madinah Airport (MED)' }
     ]);
 
     handleSelectVisaTemplate('uk_eta');
@@ -545,50 +658,41 @@ export function PackageGeneratorPage() {
       const matches = [...text.matchAll(flightRegex)];
 
       if (matches.length > 0) {
-        if (matches[0]) {
-          const detectedAirline = getAirlineName(matches[0][1]);
-          if (detectedAirline) {
-            setAirlineCarrier(detectedAirline);
-          }
-          setOutboundLeg1No(`${matches[0][1]} ${matches[0][2]}`);
-          setOutboundLeg1Dep(`${matches[0][6].slice(0,2)}:${matches[0][6].slice(2)} ${matches[0][4]}`);
-          setOutboundLeg1Arr(`${matches[0][7].slice(0,2)}:${matches[0][7].slice(2)} ${matches[0][5]}`);
-          setDepartureAirport(getAirportName(matches[0][4]));
-        }
-        if (matches[1]) {
-          setOutboundLeg2No(`${matches[1][1]} ${matches[1][2]}`);
-          setOutboundLeg2Dep(`${matches[1][6].slice(0,2)}:${matches[1][6].slice(2)} ${matches[1][4]}`);
-          setOutboundLeg2Arr(`${matches[1][7].slice(0,2)}:${matches[1][7].slice(2)} ${matches[1][5]}`);
-          
-          const arrTime = `${matches[0][7].slice(0,2)}:${matches[0][7].slice(2)}`;
-          const depTime = `${matches[1][6].slice(0,2)}:${matches[1][6].slice(2)}`;
-          const transit = calculateTransitTime(null, arrTime, null, depTime);
-          if (transit) {
-            setOutboundTransitText(`Transit in ${getAirportName(matches[0][5])} (${matches[0][5]}): ${transit}`);
-          }
-        }
-        if (matches[2]) {
-          setInboundLeg1No(`${matches[2][1]} ${matches[2][2]}`);
-          setInboundLeg1Dep(`${matches[2][6].slice(0,2)}:${matches[2][6].slice(2)} ${matches[2][4]}`);
-          setInboundLeg1Arr(`${matches[2][7].slice(0,2)}:${matches[2][7].slice(2)} ${matches[2][5]}`);
-        }
-        if (matches[3]) {
-          setInboundLeg2No(`${matches[3][1]} ${matches[3][2]}`);
-          setInboundLeg2Dep(`${matches[3][6].slice(0,2)}:${matches[3][6].slice(2)} ${matches[3][4]}`);
-          setInboundLeg2Arr(`${matches[3][7].slice(0,2)}:${matches[3][7].slice(2)} ${matches[3][5]}`);
+        const parsedLegs: FlightSegment[] = matches.map((m, idx) => {
+          const airline = getAirlineName(m[1]) || m[1];
+          const depTimeStr = `${m[6].slice(0,2)}:${m[6].slice(2)} ${m[4]}`;
+          const arrTimeStr = `${m[7].slice(0,2)}:${m[7].slice(2)} ${m[5]}`;
+          return {
+            id: `pnr-leg-${idx}`,
+            airline,
+            flightNo: `${m[1]} ${m[2]}`,
+            departedFrom: m[4],
+            arrivedAt: m[5],
+            date: startDate || new Date().toISOString().split('T')[0],
+            departTime: depTimeStr,
+            arrivalTime: arrTimeStr,
+            baggage: '23 Kg'
+          };
+        });
 
-          const arrTime = `${matches[2][7].slice(0,2)}:${matches[2][7].slice(2)}`;
-          const depTime = `${matches[3][6].slice(0,2)}:${matches[3][6].slice(2)}`;
-          const transit = calculateTransitTime(null, arrTime, null, depTime);
-          if (transit) {
-            setInboundTransitText(`Transit in ${getAirportName(matches[2][5])} (${matches[2][5]}): ${transit}`);
+        if (parsedLegs.length > 0) {
+          const detectedAirline = parsedLegs[0].airline;
+          if (detectedAirline) setAirlineCarrier(detectedAirline);
+          setDepartureAirport(getAirportName(parsedLegs[0].departedFrom));
+
+          if (parsedLegs.length >= 2) {
+            setOutboundLegs(parsedLegs.slice(0, Math.ceil(parsedLegs.length / 2)));
+            setInboundLegs(parsedLegs.slice(Math.ceil(parsedLegs.length / 2)));
+          } else {
+            setOutboundLegs(parsedLegs);
           }
         }
-        toast.success(`Successfully parsed ${matches.length} flight legs from PNR text!`);
+
+        toast.success(`Successfully parsed ${matches.length} flight segments from PNR text!`);
         setShowPnrModal(false);
         setPnrText('');
       } else {
-        toast.error('Could not auto-detect standard PNR format. You can fill out the structured leg fields below.');
+        toast.error('Could not auto-detect standard PNR format. You can edit the segment fields directly.');
       }
     } catch (e) {
       toast.error('Error parsing PNR text.');
@@ -610,36 +714,42 @@ export function PackageGeneratorPage() {
         airlineCarrier,
         flightClass,
         flightOutboundJson: {
+          pnr: outboundPnr,
           route: outboundRoute,
           dateText: outboundDateText,
           depDate: outboundDepDate,
-          leg1No: outboundLeg1No,
-          leg1Craft: outboundLeg1Craft,
-          leg1Dep: outboundLeg1Dep,
-          leg1Arr: outboundLeg1Arr,
           transitText: outboundTransitText,
-          leg2No: outboundLeg2No,
-          leg2Craft: outboundLeg2Craft,
-          leg2Dep: outboundLeg2Dep,
-          leg2Arr: outboundLeg2Arr,
           arrivalNote: outboundArrivalNote,
-          baggage: outboundBaggage
+          baggage: outboundBaggage,
+          legs: outboundLegs,
+          // Backward compatibility fallback fields:
+          leg1No: outboundLegs[0]?.flightNo || '',
+          leg1Craft: outboundLegs[0]?.craft || '',
+          leg1Dep: outboundLegs[0]?.departTime || '',
+          leg1Arr: outboundLegs[0]?.arrivalTime || '',
+          leg2No: outboundLegs[1]?.flightNo || '',
+          leg2Craft: outboundLegs[1]?.craft || '',
+          leg2Dep: outboundLegs[1]?.departTime || '',
+          leg2Arr: outboundLegs[1]?.arrivalTime || ''
         },
         flightInboundJson: {
+          pnr: inboundPnr,
           route: inboundRoute,
           dateText: inboundDateText,
           depDate: inboundDepDate,
-          leg1No: inboundLeg1No,
-          leg1Craft: inboundLeg1Craft,
-          leg1Dep: inboundLeg1Dep,
-          leg1Arr: inboundLeg1Arr,
           transitText: inboundTransitText,
-          leg2No: inboundLeg2No,
-          leg2Craft: inboundLeg2Craft,
-          leg2Dep: inboundLeg2Dep,
-          leg2Arr: inboundLeg2Arr,
           arrivalNote: inboundArrivalNote,
-          baggage: inboundBaggage
+          baggage: inboundBaggage,
+          legs: inboundLegs,
+          // Backward compatibility fallback fields:
+          leg1No: inboundLegs[0]?.flightNo || '',
+          leg1Craft: inboundLegs[0]?.craft || '',
+          leg1Dep: inboundLegs[0]?.departTime || '',
+          leg1Arr: inboundLegs[0]?.arrivalTime || '',
+          leg2No: inboundLegs[1]?.flightNo || '',
+          leg2Craft: inboundLegs[1]?.craft || '',
+          leg2Dep: inboundLegs[1]?.departTime || '',
+          leg2Arr: inboundLegs[1]?.arrivalTime || ''
         },
         hotelsJson: hotels,
         transfersJson: {
@@ -660,7 +770,8 @@ export function PackageGeneratorPage() {
         companyName: companyInfo.companyName,
         companyLogo: companyInfo.logoPrimary,
         companyPhone: companyInfo.landlineFormat,
-        companyEmail: companyInfo.emailSender
+        companyEmail: companyInfo.emailSender,
+        brandColor: companyInfo.brandColor
       };
 
       if (quoteId) {
@@ -673,6 +784,19 @@ export function PackageGeneratorPage() {
         }
         toast.success('Package quotation saved successfully');
       }
+
+      // Also persist updated company context to backend
+      try {
+        await api.put('/finance/company-context', {
+          companyName: companyInfo.companyName,
+          logoPrimary: companyInfo.logoPrimary,
+          officeAddress: companyInfo.officeAddress,
+          emailSender: companyInfo.emailSender,
+          landlineFormat: companyInfo.landlineFormat,
+          brandColor: companyInfo.brandColor
+        });
+      } catch (e) {}
+
       fetchSavedPackages();
     } catch (err: any) {
       console.error(err);
@@ -697,40 +821,99 @@ export function PackageGeneratorPage() {
       setAirlineCarrier(item.airlineCarrier || '');
       setFlightClass(item.flightClass || '');
 
+      if (item.companyName || item.companyLogo) {
+        setCompanyInfo(prev => ({
+          ...prev,
+          companyName: item.companyName || prev.companyName,
+          logoPrimary: item.companyLogo || prev.logoPrimary,
+          officeAddress: item.companyAddress || prev.officeAddress,
+          emailSender: item.companyEmail || prev.emailSender,
+          landlineFormat: item.companyPhone || prev.landlineFormat
+        }));
+      }
+
       if (item.flightOutboundJson) {
         const out = typeof item.flightOutboundJson === 'string' ? JSON.parse(item.flightOutboundJson) : item.flightOutboundJson;
-        setOutboundRoute(out.route || 'LHR ➔ JED');
+        if (out.pnr) setOutboundPnr(out.pnr);
+        setOutboundRoute(out.route || 'LHR -> JED');
         setOutboundDateText(out.dateText || '');
         if (out.depDate) setOutboundDepDate(out.depDate);
-        setOutboundLeg1No(out.leg1No || out.leg1Flight || '');
-        setOutboundLeg1Craft(out.leg1Craft || '');
-        setOutboundLeg1Dep(out.leg1Dep || out.leg1Time || '');
-        setOutboundLeg1Arr(out.leg1Arr || '');
-        setOutboundTransitText(out.transitText || out.transit || '');
-        setOutboundLeg2No(out.leg2No || out.leg2Flight || '');
-        setOutboundLeg2Craft(out.leg2Craft || '');
-        setOutboundLeg2Dep(out.leg2Dep || out.leg2Time || '');
-        setOutboundLeg2Arr(out.leg2Arr || '');
+        setOutboundTransitText(out.transitText || '');
         setOutboundArrivalNote(out.arrivalNote || '');
         setOutboundBaggage(out.baggage || '');
+
+        if (Array.isArray(out.legs) && out.legs.length > 0) {
+          setOutboundLegs(out.legs);
+        } else {
+          setOutboundLegs([
+            {
+              id: 'out-1',
+              airline: item.airlineCarrier || 'Airline',
+              flightNo: out.leg1No || 'RJ 112',
+              craft: out.leg1Craft || '',
+              departedFrom: 'LHR',
+              arrivedAt: 'AMM',
+              date: out.depDate || '',
+              departTime: out.leg1Dep || '',
+              arrivalTime: out.leg1Arr || '',
+              baggage: '23 Kg'
+            },
+            ...(out.leg2No ? [{
+              id: 'out-2',
+              airline: item.airlineCarrier || 'Airline',
+              flightNo: out.leg2No || 'RJ 704',
+              craft: out.leg2Craft || '',
+              departedFrom: 'AMM',
+              arrivedAt: 'JED',
+              date: out.depDate || '',
+              departTime: out.leg2Dep || '',
+              arrivalTime: out.leg2Arr || '',
+              baggage: '23 Kg'
+            }] : [])
+          ]);
+        }
       }
 
       if (item.flightInboundJson) {
         const inb = typeof item.flightInboundJson === 'string' ? JSON.parse(item.flightInboundJson) : item.flightInboundJson;
-        setInboundRoute(inb.route || 'MED ➔ LHR');
+        if (inb.pnr) setInboundPnr(inb.pnr);
+        setInboundRoute(inb.route || 'MED -> LHR');
         setInboundDateText(inb.dateText || '');
         if (inb.depDate) setInboundDepDate(inb.depDate);
-        setInboundLeg1No(inb.leg1No || inb.leg1Flight || '');
-        setInboundLeg1Craft(inb.leg1Craft || '');
-        setInboundLeg1Dep(inb.leg1Dep || inb.leg1Time || '');
-        setInboundLeg1Arr(inb.leg1Arr || '');
-        setInboundTransitText(inb.transitText || inb.transit || '');
-        setInboundLeg2No(inb.leg2No || inb.leg2Flight || '');
-        setInboundLeg2Craft(inb.leg2Craft || '');
-        setInboundLeg2Dep(inb.leg2Dep || inb.leg2Time || '');
-        setInboundLeg2Arr(inb.leg2Arr || '');
+        setInboundTransitText(inb.transitText || '');
         setInboundArrivalNote(inb.arrivalNote || '');
         setInboundBaggage(inb.baggage || '');
+
+        if (Array.isArray(inb.legs) && inb.legs.length > 0) {
+          setInboundLegs(inb.legs);
+        } else {
+          setInboundLegs([
+            {
+              id: 'in-1',
+              airline: item.airlineCarrier || 'Airline',
+              flightNo: inb.leg1No || 'RJ 723',
+              craft: inb.leg1Craft || '',
+              departedFrom: 'MED',
+              arrivedAt: 'AMM',
+              date: inb.depDate || '',
+              departTime: inb.leg1Dep || '',
+              arrivalTime: inb.leg1Arr || '',
+              baggage: '23 Kg'
+            },
+            ...(inb.leg2No ? [{
+              id: 'in-2',
+              airline: item.airlineCarrier || 'Airline',
+              flightNo: inb.leg2No || 'RJ 111',
+              craft: inb.leg2Craft || '',
+              departedFrom: 'AMM',
+              arrivedAt: 'LHR',
+              date: inb.depDate || '',
+              departTime: inb.leg2Dep || '',
+              arrivalTime: inb.leg2Arr || '',
+              baggage: '23 Kg'
+            }] : [])
+          ]);
+        }
       }
 
       if (item.hotelsJson) {
@@ -776,7 +959,7 @@ export function PackageGeneratorPage() {
     }
   };
 
-  // High-Resolution 1-Click PDF Download
+  // High-Resolution PDF Download
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
     setGeneratingPdf(true);
@@ -795,8 +978,8 @@ export function PackageGeneratorPage() {
         format: 'a4'
       });
 
-      const imgWidth = 210; // A4 width mm
-      const pageHeight = 297; // A4 height mm
+      const imgWidth = 210;
+      const pageHeight = 297;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
       pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight));
@@ -815,6 +998,55 @@ export function PackageGeneratorPage() {
     window.print();
   };
 
+  // Flight Leg Management Handlers
+  const addLeg = (isOutbound: boolean) => {
+    const newLeg: FlightSegment = {
+      id: `leg-${Date.now()}`,
+      airline: airlineCarrier || 'Royal Jordanian',
+      flightNo: 'RJ 100',
+      craft: 'Boeing 787',
+      departedFrom: 'LHR',
+      arrivedAt: 'JED',
+      date: startDate || new Date().toISOString().split('T')[0],
+      departTime: '12:00',
+      arrivalTime: '18:00',
+      baggage: '23 Kg'
+    };
+
+    if (isOutbound) {
+      setOutboundLegs([...outboundLegs, newLeg]);
+    } else {
+      setInboundLegs([...inboundLegs, newLeg]);
+    }
+  };
+
+  const updateLeg = (isOutbound: boolean, index: number, field: keyof FlightSegment, value: string) => {
+    const list = isOutbound ? [...outboundLegs] : [...inboundLegs];
+    const item = { ...list[index], [field]: value };
+
+    // Auto detect airline from flightNo
+    if (field === 'flightNo') {
+      const detected = getAirlineName(value);
+      if (detected) item.airline = detected;
+    }
+
+    list[index] = item;
+    if (isOutbound) {
+      setOutboundLegs(list);
+    } else {
+      setInboundLegs(list);
+    }
+  };
+
+  const removeLeg = (isOutbound: boolean, index: number) => {
+    if (isOutbound) {
+      if (outboundLegs.length > 1) setOutboundLegs(outboundLegs.filter((_, i) => i !== index));
+    } else {
+      if (inboundLegs.length > 1) setInboundLegs(inboundLegs.filter((_, i) => i !== index));
+    }
+  };
+
+  // Hotel Handlers
   const addHotel = () => {
     const defaultCheckIn = startDate || '';
     const defaultCheckOut = endDate || '';
@@ -842,14 +1074,11 @@ export function PackageGeneratorPage() {
     const updated = [...hotels];
     const hotel = { ...updated[index], [field]: value };
 
-    // Auto update stay duration if checkIn or checkOut changes and manual override is off
     if ((field === 'checkInDate' || field === 'checkOutDate') && !hotel.isManualStayDuration) {
       const checkIn = field === 'checkInDate' ? value : hotel.checkInDate;
       const checkOut = field === 'checkOutDate' ? value : hotel.checkOutDate;
       const autoDuration = computeStayDuration(checkIn, checkOut);
-      if (autoDuration) {
-        hotel.stayDuration = autoDuration;
-      }
+      if (autoDuration) hotel.stayDuration = autoDuration;
     }
 
     updated[index] = hotel;
@@ -861,7 +1090,7 @@ export function PackageGeneratorPage() {
   };
 
   const addSector = () => {
-    setTransferSectors([...transferSectors, { label: `Sector ${transferSectors.length + 1}: Airport ➔ Hotel` }]);
+    setTransferSectors([...transferSectors, { label: `Sector ${transferSectors.length + 1}: Airport -> Hotel` }]);
   };
 
   const removeSector = (index: number) => {
@@ -881,6 +1110,95 @@ export function PackageGeneratorPage() {
   // Render Editor Accordions Panel
   const renderEditorForm = () => (
     <div className="space-y-4">
+      {/* SECTION 0: COMPANY / TENANT BRANDING */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        <button
+          onClick={() => toggleSection('company')}
+          className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100 flex items-center justify-between transition-all"
+        >
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-primary-600" />
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+              Company Branding & Contact Details
+            </h3>
+            <span className="text-[10px] font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-200">
+              {companyInfo.companyName}
+            </span>
+          </div>
+          {openSections.company ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+        </button>
+
+        {openSections.company && (
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 border-t border-slate-200 bg-slate-50/30">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Company Name</label>
+              <input
+                type="text"
+                value={companyInfo.companyName}
+                onChange={(e) => setCompanyInfo({ ...companyInfo, companyName: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Logo URL</label>
+              <input
+                type="text"
+                value={companyInfo.logoPrimary}
+                onChange={(e) => setCompanyInfo({ ...companyInfo, logoPrimary: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Brand Accent Color</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="color"
+                  value={companyInfo.brandColor}
+                  onChange={(e) => setCompanyInfo({ ...companyInfo, brandColor: e.target.value })}
+                  className="w-9 h-8 rounded border border-slate-300 cursor-pointer p-0.5"
+                />
+                <select
+                  value={companyInfo.brandColor}
+                  onChange={(e) => setCompanyInfo({ ...companyInfo, brandColor: e.target.value })}
+                  className="flex-1 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold bg-white outline-none"
+                >
+                  {BRAND_THEMES.map(theme => (
+                    <option key={theme.value} value={theme.value}>{theme.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Registered Address</label>
+              <input
+                type="text"
+                value={companyInfo.officeAddress}
+                onChange={(e) => setCompanyInfo({ ...companyInfo, officeAddress: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number</label>
+              <input
+                type="text"
+                value={companyInfo.landlineFormat}
+                onChange={(e) => setCompanyInfo({ ...companyInfo, landlineFormat: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
+              <input
+                type="text"
+                value={companyInfo.emailSender}
+                onChange={(e) => setCompanyInfo({ ...companyInfo, emailSender: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* SECTION 1: HEADER & META */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         <button
@@ -892,8 +1210,8 @@ export function PackageGeneratorPage() {
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
               1. Header & Quote Meta
             </h3>
-            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-              ✓ Ref: {refNumber}
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+              Ref: {refNumber}
             </span>
           </div>
           {openSections.meta ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
@@ -959,7 +1277,7 @@ export function PackageGeneratorPage() {
         )}
       </div>
 
-      {/* SECTION 2: FLIGHT ITINERARY BUILDER */}
+      {/* SECTION 2: FLIGHT ITINERARY BUILDER (MATCHING BOOKING FLIGHT SECTION) */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="px-4 py-3 bg-slate-50 hover:bg-slate-100 flex items-center justify-between transition-all">
           <button onClick={() => toggleSection('flights')} className="flex items-center gap-2 text-left">
@@ -968,7 +1286,7 @@ export function PackageGeneratorPage() {
               2. Flight Itinerary Builder
             </h3>
             <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-              ✓ {airlineCarrier}
+              {airlineCarrier}
             </span>
           </button>
           <div className="flex items-center gap-2">
@@ -976,7 +1294,7 @@ export function PackageGeneratorPage() {
               onClick={() => setShowPnrModal(true)}
               className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-lg shadow-sm flex items-center gap-1 transition-all"
             >
-              <Sparkles className="w-3.5 h-3.5" /> ⚡ Auto-Fill via GDS PNR
+              <Zap className="w-3.5 h-3.5 fill-white text-white" /> Auto-Fill via GDS PNR
             </button>
             <button onClick={() => toggleSection('flights')}>
               {openSections.flights ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
@@ -994,7 +1312,7 @@ export function PackageGeneratorPage() {
                   type="text"
                   value={departureAirport}
                   onChange={(e) => setDepartureAirport(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold"
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold bg-white"
                 />
               </div>
               <div>
@@ -1003,7 +1321,7 @@ export function PackageGeneratorPage() {
                   type="text"
                   value={airlineCarrier}
                   onChange={(e) => setAirlineCarrier(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold"
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold bg-white"
                 />
               </div>
               <div>
@@ -1012,117 +1330,184 @@ export function PackageGeneratorPage() {
                   type="text"
                   value={flightClass}
                   onChange={(e) => setFlightClass(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold"
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold bg-white"
                 />
               </div>
             </div>
 
-            {/* Outbound & Inbound Leg Builders */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Outbound */}
-              <div className="border border-blue-200 bg-blue-50/40 rounded-xl p-3 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-bold text-xs text-blue-900 uppercase flex items-center gap-1.5">
-                    <Plane className="w-3.5 h-3.5 text-blue-600" /> Outbound Flight
-                  </h4>
-                  <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                    {outboundRoute}
-                  </span>
+            {/* Outbound & Inbound Leg Builders (Matching Booking Details Flight Cards) */}
+            <div className="grid grid-cols-1 gap-5">
+              {/* OUTBOUND FLIGHT BUILDER */}
+              <div className="border border-blue-200 bg-blue-50/30 rounded-xl p-4 space-y-3">
+                <div className="flex justify-between items-center pb-2 border-b border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-black text-xs text-blue-900 bg-blue-100 px-2 py-0.5 rounded border border-blue-300 uppercase">
+                      OUTBOUND PNR: {outboundPnr}
+                    </span>
+                    <span className="text-xs font-black text-blue-800">
+                      Route: {outboundRoute}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => addLeg(true)}
+                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Segment
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Route (e.g. LHR ➔ JED)"
-                    value={outboundRoute}
-                    onChange={(e) => setOutboundRoute(e.target.value)}
-                    className="border rounded-lg px-2.5 py-1 text-xs font-bold bg-white"
-                  />
-                  <input
-                    type="date"
-                    value={outboundDepDate}
-                    onChange={(e) => setOutboundDepDate(e.target.value)}
-                    className="border rounded-lg px-2.5 py-1 text-xs bg-white"
-                  />
-                </div>
-
-                <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-2">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase">Outbound Leg 1</span>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">PNR Reference</label>
                     <input
                       type="text"
-                      placeholder="Flight No (e.g. RJ 112)"
-                      value={outboundLeg1No}
-                      onChange={(e) => setOutboundLeg1No(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
+                      value={outboundPnr}
+                      onChange={(e) => setOutboundPnr(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs font-mono font-bold bg-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Departure Date</label>
                     <input
-                      type="text"
-                      placeholder="Craft (e.g. Boeing 787-9)"
-                      value={outboundLeg1Craft}
-                      onChange={(e) => setOutboundLeg1Craft(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
+                      type="date"
+                      value={outboundDepDate}
+                      onChange={(e) => setOutboundDepDate(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Overall Route Label</label>
                     <input
                       type="text"
-                      placeholder="Dep Time & Airport (e.g. 16:05 LHR)"
-                      value={outboundLeg1Dep}
-                      onChange={(e) => setOutboundLeg1Dep(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Arr Time & Airport (e.g. 00:05 AMM)"
-                      value={outboundLeg1Arr}
-                      onChange={(e) => setOutboundLeg1Arr(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
+                      value={outboundRoute}
+                      onChange={(e) => setOutboundRoute(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs font-bold bg-white"
                     />
                   </div>
                 </div>
 
-                <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-2">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase">Outbound Leg 2</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Flight No (e.g. RJ 704)"
-                      value={outboundLeg2No}
-                      onChange={(e) => setOutboundLeg2No(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Craft (e.g. Boeing 787)"
-                      value={outboundLeg2Craft}
-                      onChange={(e) => setOutboundLeg2Craft(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Dep Time & Airport (e.g. 01:35 AMM)"
-                      value={outboundLeg2Dep}
-                      onChange={(e) => setOutboundLeg2Dep(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Arr Time & Airport (e.g. 03:45 JED)"
-                      value={outboundLeg2Arr}
-                      onChange={(e) => setOutboundLeg2Arr(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                  </div>
+                {/* Segments List */}
+                <div className="space-y-2">
+                  {outboundLegs.map((leg, idx) => (
+                    <div key={leg.id || idx} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2 relative">
+                      <div className="flex justify-between items-center text-[11px] font-black text-slate-800 pb-1.5 border-b border-slate-100">
+                        <span className="flex items-center gap-1.5 text-blue-800">
+                          <Plane className="w-3.5 h-3.5 text-blue-600" /> Outbound Segment #{idx + 1}
+                        </span>
+                        {outboundLegs.length > 1 && (
+                          <button onClick={() => removeLeg(true, idx)} className="text-slate-400 hover:text-red-600">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Flight No</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. RJ 112"
+                            value={leg.flightNo}
+                            onChange={(e) => updateLeg(true, idx, 'flightNo', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-bold font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Airline</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Royal Jordanian"
+                            value={leg.airline}
+                            onChange={(e) => updateLeg(true, idx, 'airline', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Origin (Airport)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. LHR"
+                            value={leg.departedFrom}
+                            onChange={(e) => updateLeg(true, idx, 'departedFrom', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Destination (Airport)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. AMM"
+                            value={leg.arrivedAt}
+                            onChange={(e) => updateLeg(true, idx, 'arrivedAt', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Dep Time</label>
+                          <input
+                            type="text"
+                            placeholder="16:05 LHR"
+                            value={leg.departTime}
+                            onChange={(e) => updateLeg(true, idx, 'departTime', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Arr Time</label>
+                          <input
+                            type="text"
+                            placeholder="00:05 AMM"
+                            value={leg.arrivalTime}
+                            onChange={(e) => updateLeg(true, idx, 'arrivalTime', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Aircraft / Craft</label>
+                          <input
+                            type="text"
+                            placeholder="Boeing 787-9"
+                            value={leg.craft || ''}
+                            onChange={(e) => updateLeg(true, idx, 'craft', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Baggage</label>
+                          <input
+                            type="text"
+                            placeholder="23 Kg"
+                            value={leg.baggage || ''}
+                            onChange={(e) => updateLeg(true, idx, 'baggage', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Transit & Layover Text</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Transit in Amman (AMM): 1 hr 30 mins"
-                    value={outboundTransitText}
-                    onChange={(e) => setOutboundTransitText(e.target.value)}
-                    className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Transit & Layover Text</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Transit in Amman (AMM): 1 hr 30 mins"
+                      value={outboundTransitText}
+                      onChange={(e) => setOutboundTransitText(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Arrival Note</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Arrival: Tue, 10 Nov (03:45)"
+                      value={outboundArrivalNote}
+                      onChange={(e) => setOutboundArrivalNote(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
+                    />
+                  </div>
                 </div>
 
                 {/* Baggage Selectors */}
@@ -1154,110 +1539,177 @@ export function PackageGeneratorPage() {
                 </div>
               </div>
 
-              {/* Inbound */}
-              <div className="border border-indigo-200 bg-indigo-50/40 rounded-xl p-3 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-bold text-xs text-indigo-900 uppercase flex items-center gap-1.5">
-                    <Plane className="w-3.5 h-3.5 text-indigo-600 rotate-180" /> Inbound Flight
-                  </h4>
-                  <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
-                    {inboundRoute}
-                  </span>
+              {/* INBOUND FLIGHT BUILDER */}
+              <div className="border border-indigo-200 bg-indigo-50/30 rounded-xl p-4 space-y-3">
+                <div className="flex justify-between items-center pb-2 border-b border-indigo-200">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-black text-xs text-indigo-900 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-300 uppercase">
+                      INBOUND PNR: {inboundPnr}
+                    </span>
+                    <span className="text-xs font-black text-indigo-800">
+                      Route: {inboundRoute}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => addLeg(false)}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Segment
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Route (e.g. MED ➔ LHR)"
-                    value={inboundRoute}
-                    onChange={(e) => setInboundRoute(e.target.value)}
-                    className="border rounded-lg px-2.5 py-1 text-xs font-bold bg-white"
-                  />
-                  <input
-                    type="date"
-                    value={inboundDepDate}
-                    onChange={(e) => setInboundDepDate(e.target.value)}
-                    className="border rounded-lg px-2.5 py-1 text-xs bg-white"
-                  />
-                </div>
-
-                <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-2">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase">Inbound Leg 1</span>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">PNR Reference</label>
                     <input
                       type="text"
-                      placeholder="Flight No (e.g. RJ 723)"
-                      value={inboundLeg1No}
-                      onChange={(e) => setInboundLeg1No(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
+                      value={inboundPnr}
+                      onChange={(e) => setInboundPnr(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs font-mono font-bold bg-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Departure Date</label>
                     <input
-                      type="text"
-                      placeholder="Craft (e.g. Boeing 787-8)"
-                      value={inboundLeg1Craft}
-                      onChange={(e) => setInboundLeg1Craft(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
+                      type="date"
+                      value={inboundDepDate}
+                      onChange={(e) => setInboundDepDate(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Overall Route Label</label>
                     <input
                       type="text"
-                      placeholder="Dep Time & Airport (e.g. 07:00 MED)"
-                      value={inboundLeg1Dep}
-                      onChange={(e) => setInboundLeg1Dep(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Arr Time & Airport (e.g. 08:55 AMM)"
-                      value={inboundLeg1Arr}
-                      onChange={(e) => setInboundLeg1Arr(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
+                      value={inboundRoute}
+                      onChange={(e) => setInboundRoute(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs font-bold bg-white"
                     />
                   </div>
                 </div>
 
-                <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-2">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase">Inbound Leg 2</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Flight No (e.g. RJ 111)"
-                      value={inboundLeg2No}
-                      onChange={(e) => setInboundLeg2No(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Craft (e.g. Boeing 787-9)"
-                      value={inboundLeg2Craft}
-                      onChange={(e) => setInboundLeg2Craft(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Dep Time & Airport (e.g. 11:55 AMM)"
-                      value={inboundLeg2Dep}
-                      onChange={(e) => setInboundLeg2Dep(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Arr Time & Airport (e.g. 14:20 LHR)"
-                      value={inboundLeg2Arr}
-                      onChange={(e) => setInboundLeg2Arr(e.target.value)}
-                      className="border rounded-lg px-2.5 py-1 text-xs"
-                    />
-                  </div>
+                {/* Segments List */}
+                <div className="space-y-2">
+                  {inboundLegs.map((leg, idx) => (
+                    <div key={leg.id || idx} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2 relative">
+                      <div className="flex justify-between items-center text-[11px] font-black text-slate-800 pb-1.5 border-b border-slate-100">
+                        <span className="flex items-center gap-1.5 text-indigo-800">
+                          <Plane className="w-3.5 h-3.5 text-indigo-600 rotate-180" /> Inbound Segment #{idx + 1}
+                        </span>
+                        {inboundLegs.length > 1 && (
+                          <button onClick={() => removeLeg(false, idx)} className="text-slate-400 hover:text-red-600">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Flight No</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. RJ 723"
+                            value={leg.flightNo}
+                            onChange={(e) => updateLeg(false, idx, 'flightNo', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-bold font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Airline</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Royal Jordanian"
+                            value={leg.airline}
+                            onChange={(e) => updateLeg(false, idx, 'airline', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Origin (Airport)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. MED"
+                            value={leg.departedFrom}
+                            onChange={(e) => updateLeg(false, idx, 'departedFrom', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Destination (Airport)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. AMM"
+                            value={leg.arrivedAt}
+                            onChange={(e) => updateLeg(false, idx, 'arrivedAt', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Dep Time</label>
+                          <input
+                            type="text"
+                            placeholder="07:00 MED"
+                            value={leg.departTime}
+                            onChange={(e) => updateLeg(false, idx, 'departTime', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Arr Time</label>
+                          <input
+                            type="text"
+                            placeholder="08:55 AMM"
+                            value={leg.arrivalTime}
+                            onChange={(e) => updateLeg(false, idx, 'arrivalTime', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Aircraft / Craft</label>
+                          <input
+                            type="text"
+                            placeholder="Boeing 787-8"
+                            value={leg.craft || ''}
+                            onChange={(e) => updateLeg(false, idx, 'craft', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9.5px] font-extrabold text-slate-500 uppercase">Baggage</label>
+                          <input
+                            type="text"
+                            placeholder="23 Kg"
+                            value={leg.baggage || ''}
+                            onChange={(e) => updateLeg(false, idx, 'baggage', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Transit & Layover Text</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Transit in Amman (AMM): 3 hrs 00 mins"
-                    value={inboundTransitText}
-                    onChange={(e) => setInboundTransitText(e.target.value)}
-                    className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Transit & Layover Text</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Transit in Amman (AMM): 3 hrs 00 mins"
+                      value={inboundTransitText}
+                      onChange={(e) => setInboundTransitText(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Arrival Note</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Arrival: Thu, 19 Nov (14:20)"
+                      value={inboundArrivalNote}
+                      onChange={(e) => setInboundArrivalNote(e.target.value)}
+                      className="w-full border rounded-lg px-2.5 py-1 text-xs bg-white"
+                    />
+                  </div>
                 </div>
 
                 {/* Baggage Selectors */}
@@ -1302,7 +1754,7 @@ export function PackageGeneratorPage() {
               3. Hotel Accommodations
             </h3>
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-              ✓ {hotels.length} Hotel{hotels.length > 1 ? 's' : ''}
+              {hotels.length} Hotel{hotels.length > 1 ? 's' : ''}
             </span>
           </button>
           <div className="flex items-center gap-2">
@@ -1479,7 +1931,7 @@ export function PackageGeneratorPage() {
               4. Ground Transfers
             </h3>
             <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
-              ✓ {transferSectors.length} Sectors
+              {transferSectors.length} Sectors
             </span>
           </button>
           <div className="flex items-center gap-2">
@@ -1545,7 +1997,7 @@ export function PackageGeneratorPage() {
               5. Visa Support & Services
             </h3>
             <span className="text-[10px] font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
-              ✓ {visaValidity}
+              {visaValidity}
             </span>
           </button>
           <button onClick={() => toggleSection('visa')}>
@@ -1557,8 +2009,8 @@ export function PackageGeneratorPage() {
           <div className="p-4 space-y-3 border-t border-slate-200">
             {/* Visa Template Quick Selector */}
             <div className="bg-teal-50/50 p-3 rounded-xl border border-teal-200">
-              <label className="block text-xs font-black text-teal-900 mb-1.5 uppercase">
-                ⚡ Select Quick Visa Template
+              <label className="block text-xs font-black text-teal-900 mb-1.5 uppercase flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-teal-600" /> Select Visa Template
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {VISA_TEMPLATES.map(tmpl => (
@@ -1628,7 +2080,7 @@ export function PackageGeneratorPage() {
               6. Pricing & Booking Terms
             </h3>
             <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-              ✓ Total: £{parseFloat(totalPackagePrice || '0').toFixed(2)}
+              Total: £{parseFloat(totalPackagePrice || '0').toFixed(2)}
             </span>
           </button>
           <button onClick={() => toggleSection('pricing')}>
@@ -1721,25 +2173,33 @@ export function PackageGeneratorPage() {
         {/* Document Header */}
         <div className="flex justify-between items-start pb-6 border-b border-slate-200">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {companyInfo.logoPrimary ? (
-                <img src={companyInfo.logoPrimary} alt="Company Logo" className="h-10 object-contain" />
+                <img src={companyInfo.logoPrimary} alt="Company Logo" className="h-12 max-w-[180px] object-contain rounded-md" />
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-primary-700 text-white flex items-center justify-center font-black text-lg">
-                  T
+                <div 
+                  className="w-10 h-10 rounded-lg text-white flex items-center justify-center font-black text-xl shadow-sm"
+                  style={{ backgroundColor: companyInfo.brandColor || '#0f172a' }}
+                >
+                  {companyInfo.companyName.charAt(0)}
                 </div>
               )}
-              <span className="text-xl font-black tracking-tight text-slate-900">
-                {companyInfo.companyName || 'TOOBA TRAVELS'}
-              </span>
+              <div>
+                <span className="text-xl font-black tracking-tight text-slate-900 block">
+                  {companyInfo.companyName || 'TOOBA TRAVELS LTD'}
+                </span>
+                <p className="text-[11px] font-semibold text-slate-500 leading-tight">
+                  {companyInfo.officeAddress || '63 Buxton Road, London, E17 7EH'}
+                </p>
+                <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                  Tel: {companyInfo.landlineFormat} • Email: {companyInfo.emailSender}
+                </p>
+              </div>
             </div>
-            <p className="text-[11px] font-semibold text-slate-500 mt-1 max-w-xs leading-tight">
-              {companyInfo.officeAddress || 'ATOL & IATA Licensed Travel Agency'}
-            </p>
           </div>
 
-          <div className="text-right">
-            <span className="inline-block bg-primary-50 text-primary-800 text-[11px] font-extrabold px-3 py-1 rounded-full border border-primary-200 mb-1">
+          <div className="text-right shrink-0">
+            <span className="inline-block bg-slate-100 text-slate-800 text-[11px] font-extrabold px-3 py-1 rounded-full border border-slate-200 mb-1">
               {refNumber}
             </span>
             <p className="text-[10px] font-bold text-slate-400">Date: {quoteDate}</p>
@@ -1747,15 +2207,20 @@ export function PackageGeneratorPage() {
           </div>
         </div>
 
-        {/* Title Banner */}
-        <div className="my-6 bg-gradient-to-r from-primary-900 via-primary-800 to-indigo-950 text-white rounded-xl p-5 shadow-sm relative overflow-hidden">
-          <div className="relative z-10 flex justify-between items-center">
+        {/* Dynamic Title Banner matching Company Brand Color */}
+        <div 
+          className="my-6 text-white rounded-xl p-5 shadow-sm relative overflow-hidden"
+          style={{
+            background: `linear-gradient(135deg, ${companyInfo.brandColor || '#0f172a'} 0%, #1e293b 100%)`
+          }}
+        >
+          <div className="relative z-10 flex justify-between items-center gap-4">
             <div>
               <h2 className="text-xl font-black tracking-wide text-amber-300 uppercase">{title}</h2>
-              <p className="text-xs font-semibold text-blue-100 mt-0.5">{subtitle}</p>
+              <p className="text-xs font-semibold text-slate-200 mt-0.5">{subtitle}</p>
             </div>
-            <div className="text-right">
-              <span className="bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-black px-3 py-1 rounded-full backdrop-blur-sm">
+            <div className="shrink-0 text-right">
+              <span className="inline-block bg-white/10 text-amber-300 border border-amber-400/40 text-[10.5px] font-black px-3 py-1 rounded-full whitespace-nowrap backdrop-blur-sm">
                 {passengerBadge}
               </span>
             </div>
@@ -1782,7 +2247,7 @@ export function PackageGeneratorPage() {
           </div>
         </div>
 
-        {/* FLIGHT ITINERARY SECTION */}
+        {/* FLIGHT ITINERARY SECTION (MATCHING BOOKING FLIGHT DETAILS LAYOUT) */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3 pb-1 border-b border-slate-200">
             <Plane className="w-4 h-4 text-blue-600" />
@@ -1790,60 +2255,110 @@ export function PackageGeneratorPage() {
             <span className="text-[10px] font-bold text-slate-400 ml-auto">{flightClass}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Outbound */}
-            <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50/50 space-y-2.5">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-xs font-extrabold text-blue-900 flex items-center gap-1">
-                  <Plane className="w-3.5 h-3.5 text-blue-600" /> OUTBOUND: {outboundRoute}
-                </span>
-                <span className="text-[10px] font-bold text-slate-500">{outboundDateText}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Outbound Card */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 flex flex-col justify-between">
+              <div>
+                <div className="bg-slate-900 text-white px-3.5 py-2 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Plane className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-xs font-black uppercase text-amber-300 font-mono">
+                      OUTBOUND PNR: {outboundPnr}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-300">{outboundDateText}</span>
+                </div>
+
+                <div className="p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-black text-slate-800 border-b border-slate-200 pb-1.5">
+                    <span>Route: {outboundRoute}</span>
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {outboundLegs.length} Segment{outboundLegs.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {outboundLegs.map((leg, i) => (
+                    <div key={leg.id || i} className="bg-white p-2.5 rounded-lg border border-slate-200 text-[11px] space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-slate-900">{leg.airline || airlineCarrier}</span>
+                        <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{leg.flightNo}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                        <span className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">{getAirportShort(leg.departedFrom)}</span>
+                        <span className="text-slate-400">{"->"}</span>
+                        <span className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">{getAirportShort(leg.arrivedAt)}</span>
+                        <span className="text-slate-400 font-normal ml-auto text-[10px]">{leg.craft}</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-600 flex justify-between pt-0.5">
+                        <span>Dep: {leg.departTime}</span>
+                        <span>Arr: {leg.arrivalTime}</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {outboundTransitText && (
+                    <p className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
+                      {outboundTransitText}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <div className="text-[11px] space-y-1 text-slate-700">
-                <p className="font-semibold">
-                  <strong className="text-slate-900">Leg 1:</strong> {outboundLeg1No} ({outboundLeg1Craft}) • Dep: {outboundLeg1Dep} ➔ Arr: {outboundLeg1Arr}
-                </p>
-                {outboundTransitText && (
-                  <p className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block">
-                    {outboundTransitText}
-                  </p>
-                )}
-                <p className="font-semibold">
-                  <strong className="text-slate-900">Leg 2:</strong> {outboundLeg2No} ({outboundLeg2Craft}) • Dep: {outboundLeg2Dep} ➔ Arr: {outboundLeg2Arr}
-                </p>
-              </div>
-
-              <div className="pt-2 border-t border-slate-200 flex justify-between text-[10px] font-bold text-slate-500">
+              <div className="p-3 bg-slate-100/80 border-t border-slate-200 flex justify-between items-center text-[10px] font-bold text-slate-600">
                 <span>{outboundArrivalNote}</span>
                 <span className="text-blue-700">{outboundBaggage}</span>
               </div>
             </div>
 
-            {/* Inbound */}
-            <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50/50 space-y-2.5">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-xs font-extrabold text-indigo-900 flex items-center gap-1">
-                  <Plane className="w-3.5 h-3.5 text-indigo-600 rotate-180" /> INBOUND: {inboundRoute}
-                </span>
-                <span className="text-[10px] font-bold text-slate-500">{inboundDateText}</span>
+            {/* Inbound Card */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 flex flex-col justify-between">
+              <div>
+                <div className="bg-slate-900 text-white px-3.5 py-2 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Plane className="w-3.5 h-3.5 text-indigo-400 rotate-180" />
+                    <span className="text-xs font-black uppercase text-amber-300 font-mono">
+                      INBOUND PNR: {inboundPnr}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-300">{inboundDateText}</span>
+                </div>
+
+                <div className="p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-black text-slate-800 border-b border-slate-200 pb-1.5">
+                    <span>Route: {inboundRoute}</span>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                      {inboundLegs.length} Segment{inboundLegs.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {inboundLegs.map((leg, i) => (
+                    <div key={leg.id || i} className="bg-white p-2.5 rounded-lg border border-slate-200 text-[11px] space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-slate-900">{leg.airline || airlineCarrier}</span>
+                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{leg.flightNo}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                        <span className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">{getAirportShort(leg.departedFrom)}</span>
+                        <span className="text-slate-400">{"->"}</span>
+                        <span className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">{getAirportShort(leg.arrivedAt)}</span>
+                        <span className="text-slate-400 font-normal ml-auto text-[10px]">{leg.craft}</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-600 flex justify-between pt-0.5">
+                        <span>Dep: {leg.departTime}</span>
+                        <span>Arr: {leg.arrivalTime}</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {inboundTransitText && (
+                    <p className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
+                      {inboundTransitText}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <div className="text-[11px] space-y-1 text-slate-700">
-                <p className="font-semibold">
-                  <strong className="text-slate-900">Leg 1:</strong> {inboundLeg1No} ({inboundLeg1Craft}) • Dep: {inboundLeg1Dep} ➔ Arr: {inboundLeg1Arr}
-                </p>
-                {inboundTransitText && (
-                  <p className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block">
-                    {inboundTransitText}
-                  </p>
-                )}
-                <p className="font-semibold">
-                  <strong className="text-slate-900">Leg 2:</strong> {inboundLeg2No} ({inboundLeg2Craft}) • Dep: {inboundLeg2Dep} ➔ Arr: {inboundLeg2Arr}
-                </p>
-              </div>
-
-              <div className="pt-2 border-t border-slate-200 flex justify-between text-[10px] font-bold text-slate-500">
+              <div className="p-3 bg-slate-100/80 border-t border-slate-200 flex justify-between items-center text-[10px] font-bold text-slate-600">
                 <span>{inboundArrivalNote}</span>
                 <span className="text-indigo-700">{inboundBaggage}</span>
               </div>
@@ -1926,8 +2441,13 @@ export function PackageGeneratorPage() {
           </div>
         </div>
 
-        {/* PRICING BREAKDOWN BANNER */}
-        <div className="bg-gradient-to-r from-slate-900 via-primary-950 to-slate-900 text-white rounded-xl p-4 mb-6 shadow-md">
+        {/* PRICING BREAKDOWN BANNER MATCHING BRAND COLOR */}
+        <div 
+          className="text-white rounded-xl p-4 mb-6 shadow-md"
+          style={{
+            background: `linear-gradient(135deg, ${companyInfo.brandColor || '#0f172a'} 0%, #1e293b 100%)`
+          }}
+        >
           <div className="flex justify-between items-center">
             <div>
               <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block">GRAND TOTAL INVESTMENT</span>
@@ -1940,7 +2460,7 @@ export function PackageGeneratorPage() {
                 <span className="text-lg font-black text-white">£{parseFloat(pricePerPerson || '0').toFixed(2)}</span>
               </div>
 
-              <div className="text-right pl-6 border-l border-blue-400/30">
+              <div className="text-right pl-6 border-l border-white/20">
                 <span className="block text-[9px] font-extrabold text-blue-300 uppercase tracking-wider">TOTAL PACKAGE ({passengerCount} PAX)</span>
                 <span className="text-2xl font-black text-amber-300">£{parseFloat(totalPackagePrice || '0').toFixed(2)}</span>
               </div>
@@ -1957,7 +2477,7 @@ export function PackageGeneratorPage() {
 
         {/* Footer */}
         <div className="pt-4 border-t border-slate-200 flex justify-between items-center text-[10px] text-slate-400 font-bold">
-          <span>{companyInfo.companyName || 'Tooba Travels'} • Umrah Package Quotation</span>
+          <span>{companyInfo.companyName || 'Tooba Travels Ltd'} • Umrah Package Quotation</span>
           <span>{departureAirport} • {passengerBadge}</span>
           <span>Page 1 of 1</span>
         </div>
@@ -1984,7 +2504,7 @@ export function PackageGeneratorPage() {
             onClick={() => setShowPnrModal(true)}
             className="px-3 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-all flex items-center gap-1.5 shadow-sm"
           >
-            <Sparkles className="w-4 h-4 text-indigo-600" />
+            <Zap className="w-4 h-4 text-indigo-600 fill-indigo-600" />
             Paste GDS PNR
           </button>
 
@@ -2127,7 +2647,9 @@ export function PackageGeneratorPage() {
               <h2 className="text-sm font-black text-slate-800 flex items-center gap-2 uppercase tracking-wide">
                 <Edit3 className="w-4 h-4 text-primary-600" /> Package Quotation Accordion Builder
               </h2>
-              <span className="text-[11px] font-bold text-slate-500">Live Syncing ⚡</span>
+              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> Live Syncing
+              </span>
             </div>
             {renderEditorForm()}
           </div>

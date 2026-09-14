@@ -7816,26 +7816,49 @@ app.get(
         where: { tenantId },
       });
 
-      if (!context) {
-        context = {
-          id: 0,
-          tenantId,
-          companyName: "Tooba Travels Ltd",
-          logoPrimary:
-            "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80",
-          logoSecondary: "",
-          officeAddress: "Registered Office: 123 Travel Tower, London, UK",
-          emailSender: "operations@toobatravels.co.uk",
-          landlineFormat: "+44 20 7946 0958",
-          whatsappWebhook: "https://api.whatsapp.com/send?phone=442079460958",
-          website: "https://www.toobatravels.co.uk",
-          registrationNumber: "12345678",
-          vatNumber: "GB123456789",
-          licenceNumber: "ATOL 11234 / IATA 96-0 1234",
-          defaultTerms: "Rates and flight availability are subject to re-confirmation at the time of final booking and payment. British passport validity must be at least 6 months from the departure date. Hotel standard check-in is 16:00 and check-out is 12:00. Non-refundable package terms apply upon ticket issuance.",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
+      let tenantProfile: any = null;
+      try {
+        const tenantRes = await fetch(`${process.env.AUTH_SERVICE_URL || 'http://auth-service:4001'}/tenants/profile`, {
+          headers: { 'x-tenant-id': String(tenantId) }
+        });
+        if (tenantRes.ok) {
+          const tdata: any = await tenantRes.json();
+          tenantProfile = tdata.tenant;
+        }
+      } catch (e) {}
+
+      if (!context || !context.logoPrimary || context.logoPrimary.includes('unsplash.com') || context.officeAddress?.includes('123 Travel Tower')) {
+        const defaultLogo = tenantProfile?.logo || 'https://bucket.techbarred.com/travelbooker-media/4fa089c9-3a6f-459b-b488-ea12a7f4d992.png';
+        const defaultName = tenantProfile?.name || 'Tooba Travels Ltd';
+        const defaultAddress = tenantProfile?.location || '63 Buxton Road, London, E17 7EH';
+        const defaultEmail = tenantProfile?.email || 'office.toobatravels.co.uk';
+        const defaultPhone = tenantProfile?.phone || '0203 371 8774';
+
+        context = await prisma.companyContext.upsert({
+          where: { tenantId },
+          update: {
+            companyName: defaultName,
+            logoPrimary: defaultLogo,
+            officeAddress: defaultAddress,
+            emailSender: defaultEmail,
+            landlineFormat: defaultPhone
+          },
+          create: {
+            tenantId,
+            companyName: defaultName,
+            logoPrimary: defaultLogo,
+            logoSecondary: "",
+            officeAddress: defaultAddress,
+            emailSender: defaultEmail,
+            landlineFormat: defaultPhone,
+            whatsappWebhook: `https://api.whatsapp.com/send?phone=${defaultPhone.replace(/[^0-9+]/g, '')}`,
+            website: tenantProfile?.domain || "https://office.toobatravels.co.uk",
+            registrationNumber: "12345678",
+            vatNumber: "GB123456789",
+            licenceNumber: "ATOL 11234 / IATA 96-0 1234",
+            defaultTerms: "Rates and flight availability are subject to re-confirmation at the time of final booking and payment. British passport validity must be at least 6 months from the departure date. Hotel standard check-in is 16:00 and check-out is 12:00. Non-refundable package terms apply upon ticket issuance.",
+          }
+        });
       }
 
       res.status(200).json({ companyContext: context });

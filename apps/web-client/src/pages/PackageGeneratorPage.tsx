@@ -965,9 +965,15 @@ export function PackageGeneratorPage() {
     setGeneratingPdf(true);
     try {
       const element = printRef.current;
+      const imgs = element.querySelectorAll('img');
+      imgs.forEach((img) => {
+        img.setAttribute('crossOrigin', 'anonymous');
+      });
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         logging: false,
         backgroundColor: '#ffffff'
       });
@@ -2165,8 +2171,38 @@ export function PackageGeneratorPage() {
   // Render Document PDF Live Preview Component
   const renderQuotationPreview = () => (
     <div className="w-full flex justify-center">
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #printable-quotation-document,
+          #printable-quotation-document * {
+            visibility: visible !important;
+          }
+          #printable-quotation-document {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 10mm !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: #ffffff !important;
+            z-index: 99999 !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+        }
+      `}</style>
       <div 
         ref={printRef}
+        id="printable-quotation-document"
         className="w-full bg-white shadow-xl border border-slate-200 text-slate-800 p-6 sm:p-10 rounded-2xl relative print:shadow-none print:border-none print:p-0"
         style={{ minHeight: '297mm' }}
       >

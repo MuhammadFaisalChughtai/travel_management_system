@@ -1,4 +1,5 @@
 // Comprehensive Utility for Airlines, Airports, and Transit Time Calculations
+import { AIRPORT_TEXT_MAP } from './airportData';
 
 const AIRLINE_MAP: Record<string, string> = {
   DL: 'Delta Air Lines',
@@ -100,7 +101,7 @@ export function getAirlineName(flightNoOrCode?: string | null): string {
 }
 
 /**
- * Returns Airport Name & City from 3-letter IATA code (e.g. LHR -> London Heathrow Airport)
+ * Returns Airport Name & City from 3-letter IATA code using AIRPORT_MAP & airport.text data
  */
 export function getAirportName(code?: string | null): string {
   if (!code) return '';
@@ -109,11 +110,14 @@ export function getAirportName(code?: string | null): string {
     const item = AIRPORT_MAP[cleanCode];
     return `${item.city} (${cleanCode}) - ${item.name}`;
   }
+  if (AIRPORT_TEXT_MAP[cleanCode]) {
+    return `${cleanCode} - ${AIRPORT_TEXT_MAP[cleanCode]}`;
+  }
   return cleanCode;
 }
 
 /**
- * Returns short Airport City + Code (e.g. London Heathrow (LHR))
+ * Returns short Airport City + Code (e.g. London (LHR))
  */
 export function getAirportShort(code?: string | null): string {
   if (!code) return '';
@@ -122,13 +126,18 @@ export function getAirportShort(code?: string | null): string {
     const item = AIRPORT_MAP[cleanCode];
     return `${item.city} (${cleanCode})`;
   }
+  if (AIRPORT_TEXT_MAP[cleanCode]) {
+    const full = AIRPORT_TEXT_MAP[cleanCode];
+    const cityOrName = full.split(' ')[0] || cleanCode;
+    return `${cityOrName} (${cleanCode})`;
+  }
   return cleanCode;
 }
 
 /**
  * Parses time string like "17:50", "1750", "5:50 PM", "17:50:00" into { hours, minutes }
  */
-function parseTimeString(timeStr?: string | null): { hours: number; minutes: number } | null {
+export function parseTimeString(timeStr?: string | null): { hours: number; minutes: number } | null {
   if (!timeStr) return null;
   const clean = timeStr.trim();
   
@@ -150,7 +159,7 @@ function parseTimeString(timeStr?: string | null): { hours: number; minutes: num
 /**
  * Parses date string into a Date object at 00:00:00
  */
-function parseDateString(dateStr?: string | null): Date | null {
+export function parseDateString(dateStr?: string | null): Date | null {
   if (!dateStr) return null;
   const d = new Date(dateStr);
   if (!isNaN(d.getTime())) {
@@ -161,8 +170,8 @@ function parseDateString(dateStr?: string | null): Date | null {
 }
 
 /**
- * Automatically calculates transit / layover time between arrival and departure.
- * Returns formatted string like "2h 15m" or "4h 55m".
+ * Automatically calculates flight duration / layover duration between departure and arrival.
+ * Returns formatted string like "2h 50m" or "4h 55m".
  */
 export function calculateTransitTime(
   arrDateStr?: string | null,
@@ -207,10 +216,21 @@ export function calculateTransitTime(
 }
 
 /**
- * Calculates layover between two consecutive flight services if Leg 1 arrives at Leg 2 departure airport.
+ * Calculates layover between two CONSECUTIVE flight services (Leg 1 Arrival -> Leg 2 Departure).
+ * Does NOT calculate on the same flight's departure and arrival time.
+ * Respects user's choice of Direct Flight vs Transit Flight.
  */
 export function getTransitBetweenFlights(f1: any, f2: any): string | null {
   if (!f1 || !f2) return null;
+
+  // Direct flight check: If both flights are set as Direct Flight, do NOT calculate transit layover
+  if (f1.flightType === 'Direct' && f2.flightType === 'Direct') {
+    return null;
+  }
+  if (f1.isTransit === false && f2.isTransit === false && f1.flightType !== 'Transit' && f2.flightType !== 'Transit') {
+    return null;
+  }
+
   const f1ArrAirport = (f1.arrivedAt || '').trim().toUpperCase();
   const f2DepAirport = (f2.departedFrom || '').trim().toUpperCase();
 
@@ -222,9 +242,24 @@ export function getTransitBetweenFlights(f1: any, f2: any): string | null {
       f2.date || f1.date,
       f2.departTime
     );
-    if (transit) {
-      return `${transit} layover at ${f1ArrAirport}`;
+    if (!transit) return null;
+
+    // Check connecting window: If layover is > 36 hours (e.g. 194h return flight), ignore unless explicitly marked 'Transit'
+    const arrTimeParsed = parseTimeString(f1.arrivalTime);
+    const depTimeParsed = parseTimeString(f2.departTime);
+    if (arrTimeParsed && depTimeParsed) {
+      const arrD = parseDateString(f1.date) || new Date();
+      arrD.setHours(arrTimeParsed.hours, arrTimeParsed.minutes, 0, 0);
+      const depD = parseDateString(f2.date || f1.date) || new Date();
+      depD.setHours(depTimeParsed.hours, depTimeParsed.minutes, 0, 0);
+
+      const diffHours = (depD.getTime() - arrD.getTime()) / (1000 * 60 * 60);
+      if (diffHours > 36 && f1.flightType !== 'Transit' && f2.flightType !== 'Transit' && !f1.isTransit && !f2.isTransit) {
+        return null;
+      }
     }
+
+    return `${transit} layover at ${f1ArrAirport}`;
   }
   return null;
 }

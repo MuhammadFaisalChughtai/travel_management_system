@@ -32,6 +32,10 @@ interface Agent {
   personalEmail?: string | null;
   jobStatus: string;
   basicSalary: number | null;
+  salaryCurrency?: string | null;
+  salarySymbol?: string | null;
+  salaryRoe?: number | null;
+  rawBasicSalary?: number | null;
   gdsSystem?: string | null;
   pcc?: string | null;
 }
@@ -42,6 +46,10 @@ interface Payroll {
   periodFrom: string;
   periodTo: string;
   basicSalary: number;
+  salaryCurrency?: string | null;
+  salarySymbol?: string | null;
+  salaryRoe?: number | null;
+  rawBasicSalary?: number | null;
   totalMarginEarned: number;
   totalPaid: number;
   status: "Draft" | "Sent" | "Paid";
@@ -63,6 +71,10 @@ interface Payroll {
     email: string | null;
     personalEmail?: string | null;
     basicSalary: number | null;
+    salaryCurrency?: string | null;
+    salarySymbol?: string | null;
+    salaryRoe?: number | null;
+    rawBasicSalary?: number | null;
     jobStatus: string;
     gdsSystem?: string | null;
     pcc?: string | null;
@@ -256,6 +268,22 @@ function GeneratePayrollModal({
 }
 
 // ─── Set Basic Salary Modal ──────────────────────────────────────────────────
+const PRESET_CURRENCIES: Record<
+  string,
+  { code: string; label: string; symbol: string }
+> = {
+  GBP: { code: "GBP", label: "GBP (£) - British Pound", symbol: "£" },
+  USD: { code: "USD", label: "USD ($) - US Dollar", symbol: "$" },
+  EUR: { code: "EUR", label: "EUR (€) - Euro", symbol: "€" },
+  PKR: { code: "PKR", label: "PKR (Rs) - Pakistani Rupee", symbol: "Rs" },
+  SAR: { code: "SAR", label: "SAR (SR) - Saudi Riyal", symbol: "SR" },
+  AED: { code: "AED", label: "AED (AED) - UAE Dirham", symbol: "AED " },
+  CAD: { code: "CAD", label: "CAD ($) - Canadian Dollar", symbol: "$" },
+  AUD: { code: "AUD", label: "AUD ($) - Australian Dollar", symbol: "$" },
+  INR: { code: "INR", label: "INR (₹) - Indian Rupee", symbol: "₹" },
+  MYR: { code: "MYR", label: "MYR (RM) - Malaysian Ringgit", symbol: "RM" },
+};
+
 function SetSalaryModal({
   agent,
   onClose,
@@ -265,17 +293,85 @@ function SetSalaryModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { symbol } = useCurrency();
-  const [salary, setSalary] = useState(
-    agent.basicSalary !== null ? String(agent.basicSalary) : "",
+  const { currency: companyCurrency, symbol: companySymbol } = useCurrency();
+
+  // Determine initial currency selection
+  const initialCurrencyCode = agent.salaryCurrency || companyCurrency || "GBP";
+  const isInitialCustom = !!(
+    agent.salaryCurrency &&
+    !PRESET_CURRENCIES[agent.salaryCurrency] &&
+    agent.salaryCurrency.toUpperCase() !== companyCurrency.toUpperCase()
+  );
+
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(
+    isInitialCustom ? "CUSTOM" : initialCurrencyCode
+  );
+  const [customCode, setCustomCode] = useState<string>(
+    isInitialCustom ? agent.salaryCurrency || "" : ""
+  );
+  const [customSymbol, setCustomSymbol] = useState<string>(
+    isInitialCustom ? agent.salarySymbol || "" : ""
+  );
+
+  const [salary, setSalary] = useState<string>(() => {
+    if (agent.rawBasicSalary !== null && agent.rawBasicSalary !== undefined) {
+      return String(agent.rawBasicSalary);
+    }
+    if (agent.basicSalary !== null && agent.basicSalary !== undefined) {
+      return String(agent.basicSalary);
+    }
+    return "";
+  });
+
+  const [roe, setRoe] = useState<string>(
+    agent.salaryRoe ? String(agent.salaryRoe) : "1"
   );
   const [loading, setLoading] = useState(false);
+
+  // Derive current active code and symbol
+  let activeCode = selectedCurrency;
+  let activeSymbol = companySymbol;
+
+  if (selectedCurrency === "CUSTOM") {
+    activeCode = customCode.trim().toUpperCase() || "CUSTOM";
+    activeSymbol = customSymbol.trim() || activeCode;
+  } else if (PRESET_CURRENCIES[selectedCurrency]) {
+    activeCode = selectedCurrency;
+    activeSymbol = PRESET_CURRENCIES[selectedCurrency].symbol;
+  } else {
+    activeCode = companyCurrency;
+    activeSymbol = companySymbol;
+  }
+
+  const isForeign = activeCode.toUpperCase() !== companyCurrency.toUpperCase();
+
+  // Convert
+  const rawSalaryNum = parseFloat(salary);
+  const isSalaryValid = !isNaN(rawSalaryNum) && rawSalaryNum > 0;
+  const roeNum = isForeign ? (parseFloat(roe) || 1.0) : 1.0;
+  const convertedBaseSalary = isSalaryValid ? rawSalaryNum * roeNum : 0;
+
+  const handleCurrencyChange = (newVal: string) => {
+    setSelectedCurrency(newVal);
+    if (newVal.toUpperCase() === companyCurrency.toUpperCase()) {
+      setRoe("1");
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
     try {
+      const finalRaw = salary.trim() === "" ? null : parseFloat(salary);
+      const finalRoe = isForeign ? (parseFloat(roe) || 1.0) : 1.0;
+      const finalBase =
+        finalRaw !== null && !isNaN(finalRaw) ? finalRaw * finalRoe : null;
+
       await api.patch(`/agents/${agent.id}`, {
-        basicSalary: salary === "" ? null : salary,
+        basicSalary: finalBase,
+        rawBasicSalary: finalRaw,
+        salaryCurrency: activeCode,
+        salarySymbol: activeSymbol,
+        salaryRoe: finalRoe,
       });
       toast.success(`Basic salary updated for ${agent.name}`);
       onSaved();
@@ -304,7 +400,7 @@ function SetSalaryModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92, y: 20 }}
         transition={{ type: "spring", damping: 24, stiffness: 220 }}
-        className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+        className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
       >
         <div className="bg-gradient-to-r from-amber-600 to-orange-500 px-6 py-5 text-white relative overflow-hidden">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
@@ -324,12 +420,70 @@ function SetSalaryModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-6 space-y-4">
+
+        <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* Currency Selector Dropdown */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">{`Monthly Basic Salary (${symbol})`}</label>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Salary Currency
+            </label>
+            <select
+              value={selectedCurrency}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 text-[13px] font-semibold outline-none focus:border-amber-500 bg-white"
+            >
+              {Object.entries(PRESET_CURRENCIES).map(([code, item]) => (
+                <option key={code} value={code}>
+                  {item.label}
+                </option>
+              ))}
+              <option value="CUSTOM">Custom Currency...</option>
+            </select>
+          </div>
+
+          {/* Custom Currency Fields */}
+          {selectedCurrency === "CUSTOM" && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="grid grid-cols-2 gap-3 p-3 bg-amber-50/60 border border-amber-200/60 rounded-xl"
+            >
+              <div>
+                <label className="block text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">
+                  Currency Code *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. JPY, KWD"
+                  value={customCode}
+                  onChange={(e) => setCustomCode(e.target.value)}
+                  className="w-full border border-amber-200 rounded-lg px-3 py-1.5 text-[12px] font-bold text-slate-800 bg-white outline-none focus:border-amber-500 uppercase"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">
+                  Symbol *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. ¥, KD"
+                  value={customSymbol}
+                  onChange={(e) => setCustomSymbol(e.target.value)}
+                  className="w-full border border-amber-200 rounded-lg px-3 py-1.5 text-[12px] font-bold text-slate-800 bg-white outline-none focus:border-amber-500"
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {/* Basic Salary Input with Dynamic Currency Symbol Prefix */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Monthly Basic Salary ({activeSymbol.trim()})
+            </label>
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[15px]">
-                {symbol}
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[14px]">
+                {activeSymbol}
               </span>
               <input
                 type="number"
@@ -338,7 +492,13 @@ function SetSalaryModal({
                 value={salary}
                 onChange={(e) => setSalary(e.target.value)}
                 placeholder="e.g. 2000.00"
-                className="w-full border border-slate-200 rounded-xl pl-8 pr-4 py-2.5 text-slate-800 text-[14px] font-bold outline-none focus:border-primary-500 placeholder:text-slate-300 placeholder:font-normal"
+                style={{
+                  paddingLeft: `${Math.max(
+                    2.2,
+                    activeSymbol.trim().length * 0.7 + 1.2
+                  )}rem`,
+                }}
+                className="w-full border border-slate-200 rounded-xl pr-4 py-2.5 text-slate-800 text-[14px] font-bold outline-none focus:border-amber-500 placeholder:text-slate-300 placeholder:font-normal"
               />
             </div>
             <p className="mt-1.5 text-[10px] text-slate-400">
@@ -346,7 +506,79 @@ function SetSalaryModal({
               calculations.
             </p>
           </div>
-          <div className="flex gap-3">
+
+          {/* Rate of Exchange (ROE) Input Field */}
+          {isForeign && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-1.5"
+            >
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Rate of Exchange (ROE)
+                </label>
+                <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+                  1 {activeCode} = ? {companyCurrency}
+                </span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                step="0.000001"
+                value={roe}
+                onChange={(e) => setRoe(e.target.value)}
+                placeholder="e.g. 0.0028"
+                className="w-full border border-slate-200 rounded-xl px-4 py-2 text-slate-800 text-[13px] font-bold outline-none focus:border-amber-500"
+              />
+              <p className="text-[10px] text-slate-400">
+                Conversion factor to compute salary in Company Base Currency ({companyCurrency}).
+              </p>
+            </motion.div>
+          )}
+
+          {/* Conversion Summary Note */}
+          {isSalaryValid && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                  Company Base Equivalent ({companyCurrency})
+                </span>
+                {isForeign && (
+                  <span className="text-[10px] font-bold text-slate-500">
+                    ROE: {roeNum}
+                  </span>
+                )}
+              </div>
+              <div className="text-[18px] font-black text-amber-900">
+                {companySymbol}
+                {convertedBaseSalary.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                <span className="text-[12px] font-bold text-amber-700">
+                  {companyCurrency}
+                </span>
+              </div>
+              {isForeign ? (
+                <p className="text-[10.5px] text-amber-700/90 font-medium">
+                  Converted from {activeSymbol}
+                  {rawSalaryNum.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  {activeCode} at ROE {roeNum}
+                </p>
+              ) : (
+                <p className="text-[10.5px] text-amber-700/90 font-medium">
+                  Matches Company Base Currency ({companyCurrency})
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
             <button
               onClick={onClose}
               disabled={loading}
@@ -364,7 +596,7 @@ function SetSalaryModal({
               ) : (
                 <Check className="w-4 h-4" />
               )}
-              Save Salary
+              {loading ? "Saving…" : "Save Salary"}
             </button>
           </div>
         </div>

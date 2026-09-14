@@ -769,7 +769,7 @@ export function FinancePage({
                                   txn.type === "PAYMENT"
                                     ? "bg-indigo-100 text-indigo-700"
                                     : txn.type === "FEE"
-                                      ? "bg-rose-100 text-rose-700"
+                                      ? "bg-orange-100 text-orange-700 border border-orange-200/60 font-black"
                                       : txn.type === "REFUND"
                                         ? "bg-amber-100 text-amber-700"
                                         : txn.type === "DISCOUNT"
@@ -873,14 +873,26 @@ export function FinancePage({
                         0,
                       );
 
-                      const closingBalanceVal = ledgerAccounts.reduce(
-                        (sum, a) => sum + parseFloat(a.balance),
-                        0,
-                      );
-                      const closingDebit =
-                        closingBalanceVal > 0 ? closingBalanceVal : 0;
-                      const closingCredit =
-                        closingBalanceVal < 0 ? Math.abs(closingBalanceVal) : 0;
+                      const closingBalanceVal =
+                        ledgerAccounts.length > 0
+                          ? ledgerAccounts.reduce(
+                              (sum, a) => sum + parseFloat(a.balance || 0),
+                              0,
+                            )
+                          : totalCredit - totalDebit;
+
+                      // In double-entry ledger: balance = Credit - Debit.
+                      // If totalDebit > totalCredit (or closingBalanceVal < 0), the company is in a NET DEBIT position (Deficit / Negative balance).
+                      // If totalCredit > totalDebit (or closingBalanceVal > 0), the company is in a NET CREDIT position (Surplus / Positive balance).
+                      const isNegativeDebit = closingBalanceVal < 0 || (closingBalanceVal === 0 && totalDebit > totalCredit);
+                      const isPositiveCredit = closingBalanceVal > 0;
+
+                      const closingDebitDisplay = isNegativeDebit
+                        ? format(closingBalanceVal < 0 ? closingBalanceVal : -(totalDebit - totalCredit))
+                        : "-";
+                      const closingCreditDisplay = isPositiveCredit
+                        ? format(closingBalanceVal)
+                        : "-";
 
                       return (
                         <>
@@ -900,7 +912,7 @@ export function FinancePage({
                             </td>
                             <td className="py-4 px-5"></td>
                           </tr>
-                          <tr className="bg-white border-b-4 border-emerald-500 rounded-b-3xl">
+                          <tr className={`bg-white border-b-4 ${isNegativeDebit ? 'border-rose-500' : 'border-emerald-500'} rounded-b-3xl`}>
                             <td className="py-4 px-5"></td>
                             <td
                               className="py-4 px-5 font-black text-slate-900 text-right uppercase tracking-wider text-[12px]"
@@ -909,10 +921,10 @@ export function FinancePage({
                               Closing Ledger Balance
                             </td>
                             <td className="py-4 px-5 text-right font-black text-rose-600 text-[13px]">
-                              {closingDebit > 0 ? format(closingDebit) : "-"}
+                              {closingDebitDisplay}
                             </td>
                             <td className="py-4 px-5 text-right font-black text-emerald-600 text-[13px]">
-                              {closingCredit > 0 ? format(closingCredit) : "-"}
+                              {closingCreditDisplay}
                             </td>
                             <td className="py-4 px-5"></td>
                           </tr>

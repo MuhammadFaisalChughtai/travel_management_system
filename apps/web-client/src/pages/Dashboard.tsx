@@ -32,7 +32,9 @@ import {
   Tag,
   FileText,
   Clock,
-  Banknote
+  Banknote,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BookingRefSearchModal, CustomerSearchModal, AgentSearchModal, DateRangeSearchModal, PaymentStatusSearchModal } from '../components/booking-modals/SearchModals';
@@ -378,6 +380,10 @@ export function Dashboard() {
   useEffect(() => { setBookingsPage(1); }, [filters]);
   const [activeSearchModal, setActiveSearchModal] = useState<string | null>(null);
   const userRole = localStorage.getItem('userRole') || '';
+  const [showHiddenBookings, setShowHiddenBookings] = useState(false);
+  const [hideModalOpen, setHideModalOpen] = useState(false);
+  const [targetHideBooking, setTargetHideBooking] = useState<{ id: number; ref: string; isHidden: boolean } | null>(null);
+  const [hideLoading, setHideLoading] = useState(false);
 
   const fetchBookings = async () => {
     try {
@@ -390,6 +396,9 @@ export function Dashboard() {
       });
       if (user?.role === 'AGENT') {
         params.set('agentName', user.name || '');
+      }
+      if (showHiddenBookings) {
+        params.append('includeHidden', 'true');
       }
       
       const paginatedParams = new URLSearchParams(params.toString());
@@ -420,7 +429,34 @@ export function Dashboard() {
     if (isAuthenticated) {
       fetchBookings();
     }
-  }, [isAuthenticated, filters, bookingsPage]);
+  }, [isAuthenticated, filters, bookingsPage, showHiddenBookings]);
+
+  const handleOpenHideModal = (e: React.MouseEvent, bookingId: number, ref: string, isHidden: boolean) => {
+    e.stopPropagation();
+    setTargetHideBooking({ id: bookingId, ref, isHidden });
+    setHideModalOpen(true);
+  };
+
+  const handleConfirmHideToggle = async () => {
+    if (!targetHideBooking) return;
+    try {
+      setHideLoading(true);
+      if (targetHideBooking.isHidden) {
+        await api.put(`/bookings/${targetHideBooking.id}/unhide`);
+        toast.success(`Booking ${targetHideBooking.ref} restored successfully`);
+      } else {
+        await api.put(`/bookings/${targetHideBooking.id}/hide`);
+        toast.success(`Booking ${targetHideBooking.ref} hidden successfully`);
+      }
+      setHideModalOpen(false);
+      setTargetHideBooking(null);
+      fetchBookings();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Failed to update booking status');
+    } finally {
+      setHideLoading(false);
+    }
+  };
 
   const toggleLock = async (e: React.MouseEvent, bookingId: number, currentLock: boolean) => {
     e.stopPropagation();
@@ -571,8 +607,9 @@ export function Dashboard() {
 
       const totalReceived = Math.min(clientPayments, bookingTotal) - refundsToClient;
       const totalSent = vendorPayments - refundsFromVendor;
+      const creditCardCharges = b.payments?.filter((p: any) => p.paymentType === 'Credit Card Charges').reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0) || 0;
       
-      const netProfit = (totalReceived - totalSent) + totalDiscounts;
+      const netProfit = (totalReceived - totalSent) + totalDiscounts - creditCardCharges;
       return sum + netProfit;
     }, 0);
   }, [bookings]);
@@ -1671,6 +1708,20 @@ export function Dashboard() {
                   <button onClick={() => setActiveSearchModal('payment')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${filters.paymentStatus !== 'Any' ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}>
                     <CreditCard className="w-3.5 h-3.5 inline mr-1.5" /> Status: {filters.paymentStatus.replace('_', ' ').toUpperCase()}
                   </button>
+
+                  {user?.role !== 'AGENT' && (
+                    <button 
+                      onClick={() => setShowHiddenBookings(!showHiddenBookings)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                        showHiddenBookings 
+                          ? 'bg-rose-600 border-rose-700 text-white shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
+                    >
+                      {showHiddenBookings ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      {showHiddenBookings ? 'Showing Hidden Bookings' : 'Show Hidden Bookings'}
+                    </button>
+                  )}
                   
                   {Object.entries(filters).some(([key, val]) => {
                     if (user?.role === 'AGENT' && key === 'agentName') return false;
@@ -1751,8 +1802,9 @@ export function Dashboard() {
                         const totalReceived = Math.min(clientPayments, bookingTotal) - refundsToClient;
                         const totalSent = vendorPayments - refundsFromVendor;
                         const remainingAmount = bookingTotal - clientPayments;
+                        const creditCardCharges = b.payments?.filter((p: any) => p.paymentType === 'Credit Card Charges').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
                         
-                        const netProfit = (totalReceived - totalSent) + totalDiscounts;
+                        const netProfit = (totalReceived - totalSent) + totalDiscounts - creditCardCharges;
 
                         const bookingAgent = dbAgents.find(a => a.name === b.agentName);
                         let marginPercentage = 0;
@@ -1776,7 +1828,16 @@ export function Dashboard() {
                           }}
                         >
                           <td className="py-3.5 px-5 text-center font-bold text-slate-400">{counter}</td>
-                          <td className="py-3.5 px-5 font-black text-slate-900">{b.bookingReference}</td>
+                          <td className="py-3.5 px-5 font-black text-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              <span>{b.bookingReference}</span>
+                              {(b.status === 'hidden' || b.isDeleted) && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-200 text-slate-700 uppercase tracking-wider">
+                                  HIDDEN
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-3.5 px-5 font-mono text-slate-500">{b.departureDate ? new Date(b.departureDate).toLocaleDateString() : 'N/A'}</td>
                           <td className="py-3.5 px-5 font-bold text-slate-700">{b.agentName || 'System'}</td>
                           <td className="py-3.5 px-5 text-right font-black text-slate-900">{format(b.totalPrice)}</td>
@@ -1810,15 +1871,38 @@ export function Dashboard() {
                             </span>
                           </td>
                           <td className="py-3.5 px-5 text-center" onClick={e => e.stopPropagation()}>
-                            <button 
-                              onClick={() => {
-                                setSelectedBookingId(b.id);
-                                setIsDetailsModalOpen(true);
-                              }}
-                              className="bg-primary-50 text-primary-600 hover:bg-primary-100 font-bold px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              Inspect
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button 
+                                onClick={() => {
+                                  setSelectedBookingId(b.id);
+                                  setIsDetailsModalOpen(true);
+                                }}
+                                className="bg-primary-50 text-primary-600 hover:bg-primary-100 font-bold px-3 py-1.5 rounded-lg transition-colors text-[11px]"
+                              >
+                                Inspect
+                              </button>
+                              {user?.role !== 'AGENT' && (
+                                <button
+                                  onClick={(e) => handleOpenHideModal(e, b.id, b.bookingReference, b.status === 'hidden' || b.isDeleted)}
+                                  title={b.status === 'hidden' || b.isDeleted ? "Restore Booking" : "Hide Booking (Soft Delete)"}
+                                  className={`px-2.5 py-1.5 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 ${
+                                    b.status === 'hidden' || b.isDeleted
+                                      ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                                      : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'
+                                  }`}
+                                >
+                                  {b.status === 'hidden' || b.isDeleted ? (
+                                    <>
+                                      <Eye className="w-3 h-3" /> Restore
+                                    </>
+                                  ) : (
+                                    <>
+                                      <EyeOff className="w-3 h-3" /> Hide
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -2196,6 +2280,45 @@ export function Dashboard() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Hide / Restore Confirmation Modal */}
+      {hideModalOpen && targetHideBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+              {targetHideBooking.isHidden ? <Eye className="w-6 h-6" /> : <EyeOff className="w-6 h-6" />}
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">
+              {targetHideBooking.isHidden ? 'Restore Hidden Booking?' : 'Hide Booking (Soft Delete)?'}
+            </h3>
+            <p className="text-xs text-slate-600 mb-6 leading-relaxed">
+              {targetHideBooking.isHidden
+                ? `Are you sure you want to restore booking ${targetHideBooking.ref}? It will become visible again to all agents.`
+                : `Are you sure you want to hide booking ${targetHideBooking.ref}? This performs a soft delete so only Main Admins can view or restore it.`}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setHideModalOpen(false); setTargetHideBooking(null); }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmHideToggle}
+                disabled={hideLoading}
+                className={`px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all flex items-center gap-2 ${
+                  targetHideBooking.isHidden
+                    ? 'bg-emerald-600 hover:bg-emerald-500'
+                    : 'bg-rose-600 hover:bg-rose-500'
+                }`}
+              >
+                {hideLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {targetHideBooking.isHidden ? 'Confirm Restore' : 'Confirm Hide'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Booking Details Workspace Modal */}
       <BookingDetailsModal 

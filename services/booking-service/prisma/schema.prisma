@@ -51,6 +51,7 @@ model Booking {
   status              String    @default("confirmed") @db.VarChar(50)
   paymentStatus       String    @default("unpaid") @db.VarChar(50)
   isLocked            Boolean   @default(false)
+  isDeleted           Boolean   @default(false)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -197,6 +198,8 @@ model FlightService {
   carryOnBaggage    String?   @db.VarChar(255)
   checkedBaggage    String?   @db.VarChar(255)
   flightClass       String?   @db.VarChar(100)
+  flightType        String?   @default("Direct") @db.VarChar(50)
+  isTransit         Boolean   @default(false)
   createdAt         DateTime  @default(now())
   isPaidToVendor    Boolean   @default(false)
   updatedAt         DateTime  @updatedAt

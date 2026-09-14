@@ -132,7 +132,7 @@ export function FlightServicesSection({
                               <span className="text-slate-300">→</span>
                               <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100/50">{getAirportShort(f.arrivedAt)}</span>
                             </div>
-                            <div className="text-[9.5px] text-slate-400 mt-0.5 font-medium truncate max-w-[180px]">
+                            <div className="text-[9.5px] text-slate-500 mt-0.5 font-medium truncate max-w-[240px]" title={`${getAirportName(f.departedFrom)} ➔ ${getAirportName(f.arrivedAt)}`}>
                               {getAirportName(f.departedFrom)}
                             </div>
                           </td>
@@ -177,10 +177,10 @@ export function FlightServicesSection({
                           </td>
                         </tr>
                         {transitLayover && (
-                          <tr className="bg-amber-50/60 border-y border-amber-100/60 text-[10px]">
-                            <td colSpan={7} className="py-1.5 px-4">
-                              <div className="flex items-center justify-center gap-1.5 text-amber-800 font-extrabold tracking-wide uppercase">
-                                <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                          <tr className="bg-amber-50/80 border-y border-amber-200/80 text-[10.5px]">
+                            <td colSpan={7} className="py-2 px-4">
+                              <div className="flex items-center justify-center gap-2 text-amber-900 font-extrabold tracking-wide uppercase">
+                                <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
                                 <span>Transit / Connection: {transitLayover}</span>
                               </div>
                             </td>

@@ -1863,6 +1863,10 @@ app.post(
           periodFrom: new Date(periodFrom),
           periodTo: new Date(periodTo),
           basicSalary,
+          salaryCurrency: (agent as any).salaryCurrency || null,
+          salarySymbol: (agent as any).salarySymbol || null,
+          salaryRoe: (agent as any).salaryRoe ? Number((agent as any).salaryRoe) : null,
+          rawBasicSalary: (agent as any).rawBasicSalary ? Number((agent as any).rawBasicSalary) : null,
           totalMarginEarned,
           totalPaid,
           status: "Draft",
@@ -2907,6 +2911,10 @@ app.patch(
         pcc,
         jobStatus,
         basicSalary,
+        salaryCurrency,
+        salarySymbol,
+        salaryRoe,
+        rawBasicSalary,
       } = req.body;
 
       const existing = await (prisma as any).agent.findFirst({
@@ -2935,6 +2943,24 @@ app.patch(
               basicSalary === "" || basicSalary === null
                 ? null
                 : parseFloat(basicSalary),
+          }),
+          ...(salaryCurrency !== undefined && {
+            salaryCurrency: salaryCurrency || null,
+          }),
+          ...(salarySymbol !== undefined && {
+            salarySymbol: salarySymbol || null,
+          }),
+          ...(salaryRoe !== undefined && {
+            salaryRoe:
+              salaryRoe === "" || salaryRoe === null
+                ? null
+                : parseFloat(salaryRoe),
+          }),
+          ...(rawBasicSalary !== undefined && {
+            rawBasicSalary:
+              rawBasicSalary === "" || rawBasicSalary === null
+                ? null
+                : parseFloat(rawBasicSalary),
           }),
         },
         include: { marginSegments: { orderBy: { minAmount: "asc" } } },

@@ -127,6 +127,8 @@ export interface FlightService {
   fareDetails?: string;
   sectors?: Sector[];
   isPaidToVendor?: boolean;
+  flightType?: 'Direct' | 'Transit';
+  isTransit?: boolean;
 }
 
 export interface TransportService {
@@ -209,6 +211,7 @@ export interface BookingDetail {
   cancellationCharges: string;
   remainingAmount: string;
   status: string;
+  isDeleted?: boolean;
   paymentStatus: string;
   isLocked: boolean;
   customers: Passenger[];

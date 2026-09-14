@@ -20,7 +20,8 @@ export const useCurrency = () => {
     if (value === null || value === undefined || value === '') return '';
     const num = typeof value === 'string' ? parseFloat(value) : value;
     if (isNaN(num)) return '';
-    return `${getSymbol()}${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const absStr = Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return num < 0 ? `-${getSymbol()}${absStr}` : `${getSymbol()}${absStr}`;
   };
   
   return { currency, symbol: getSymbol(), format };

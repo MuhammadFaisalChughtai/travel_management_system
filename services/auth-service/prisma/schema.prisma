@@ -112,6 +112,10 @@ model Agent {
   pcc           String?  @db.VarChar(100)
   jobStatus     String   @default("Active") @db.VarChar(50)
   basicSalary   Decimal? @db.Decimal(10, 2)
+  salaryCurrency String?  @db.VarChar(10)
+  salarySymbol   String?  @db.VarChar(10)
+  salaryRoe      Decimal? @db.Decimal(10, 6)
+  rawBasicSalary Decimal? @db.Decimal(10, 2)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -210,6 +214,10 @@ model AgentPayroll {
   periodFrom          DateTime
   periodTo            DateTime
   basicSalary         Decimal   @default(0.00) @db.Decimal(10, 2)
+  salaryCurrency      String?   @db.VarChar(10)
+  salarySymbol        String?   @db.VarChar(10)
+  salaryRoe           Decimal?  @db.Decimal(10, 6)
+  rawBasicSalary      Decimal?  @db.Decimal(10, 2)
   totalMarginEarned   Decimal   @default(0.00) @db.Decimal(10, 2)
   totalPaid           Decimal   @default(0.00) @db.Decimal(10, 2)
   status              String    @default("Draft") @db.VarChar(20)

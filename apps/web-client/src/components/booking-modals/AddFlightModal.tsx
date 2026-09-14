@@ -222,12 +222,52 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Travel Date</label>
                   <input type="date" value={form.date || ''} onChange={e => setForm({...form, date: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
                 </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">
+                    Flight Routing Type
+                  </label>
+                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, flightType: 'Direct', isTransit: false })}
+                      className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-md transition-all ${
+                        (form.flightType !== 'Transit' && !form.isTransit)
+                          ? 'bg-white text-indigo-950 shadow-sm border border-slate-200/80'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Direct Flight
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, flightType: 'Transit', isTransit: true })}
+                      className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-md transition-all ${
+                        (form.flightType === 'Transit' || form.isTransit)
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Transit Flight
+                    </button>
+                  </div>
+                </div>
                 {calculatedDuration && (
-                  <div className="col-span-4 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-600" />
-                    <span className="text-[11px] font-extrabold text-amber-900">
-                      Calculated Flight Duration / Transit: {calculatedDuration}
-                    </span>
+                  <div className="col-span-4 bg-amber-50/90 border border-amber-200 rounded-xl px-3.5 py-2 flex items-center justify-between gap-2 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="text-[11px] font-extrabold text-amber-900">
+                        Calculated Flight Duration: {calculatedDuration}
+                      </span>
+                    </div>
+                    {(form.flightType === 'Transit' || form.isTransit) ? (
+                      <span className="text-[9.5px] font-black text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-full uppercase tracking-wider border border-indigo-200">
+                        Transit Leg
+                      </span>
+                    ) : (
+                      <span className="text-[9.5px] font-black text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full uppercase tracking-wider border border-emerald-200">
+                        Direct Non-Stop
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

@@ -13,6 +13,8 @@ import {
   RefreshCcw,
   History,
   ChevronDown,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../api/axios";
@@ -921,6 +923,42 @@ export function BookingDetailsModal({
                   <FileText className="w-4 h-4" />
                 )}
                 {isGeneratingPDF ? "Generating..." : "Generate Invoice"}
+              </button>
+            )}
+            {booking && user?.role !== "AGENT" && (
+              <button
+                onClick={async () => {
+                  const isHidden = booking.status === "hidden" || booking.isDeleted;
+                  if (!confirm(`Are you sure you want to ${isHidden ? 'restore' : 'hide'} this booking?`)) return;
+                  try {
+                    if (isHidden) {
+                      await api.put(`/bookings/${booking.id}/unhide`);
+                      toast.success("Booking restored successfully");
+                    } else {
+                      await api.put(`/bookings/${booking.id}/hide`);
+                      toast.success("Booking hidden successfully");
+                    }
+                    fetchDetails();
+                    if (onUpdate) onUpdate();
+                  } catch (err: any) {
+                    toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to update booking status");
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all uppercase tracking-wide border shadow-lg ${
+                  booking.status === "hidden" || booking.isDeleted
+                    ? "bg-emerald-500/30 hover:bg-emerald-500/50 text-white border-emerald-400/30"
+                    : "bg-rose-500/30 hover:bg-rose-500/50 text-white border-rose-400/30"
+                }`}
+              >
+                {booking.status === "hidden" || booking.isDeleted ? (
+                  <>
+                    <Eye className="w-4 h-4" /> Restore
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-4 h-4" /> Hide
+                  </>
+                )}
               </button>
             )}
             <button

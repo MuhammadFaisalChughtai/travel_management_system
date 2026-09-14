@@ -95,7 +95,7 @@ function getBookingPermissionForPath(
     return "CREATE_TRANSACTION";
   }
 
-  if (cleanPath === "/search" || cleanPath === "/my-bookings") {
+  if (cleanPath === "/search" || cleanPath === "/my-bookings" || cleanPath === "/bookings/my-bookings" || cleanPath.endsWith("/my-bookings")) {
     return "READ_BOOKING";
   }
 
@@ -582,7 +582,7 @@ app.get(
 );
 
 app.get(
-  "/my-bookings",
+  ["/my-bookings", "/bookings/my-bookings"],
   requireGatewayHeaders,
   async (req: CustomRequest, res: Response) => {
     try {

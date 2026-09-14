@@ -55,11 +55,26 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(express.json());
 
+// Normalize /bookings prefix so all booking endpoints match seamlessly whether incoming requests retain /bookings prefix or not
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.url.startsWith("/bookings/")) {
+    req.url = req.url.slice("/bookings".length);
+  } else if (req.url === "/bookings" || req.url.startsWith("/bookings?")) {
+    req.url = req.url.replace(/^\/bookings/, "") || "/";
+  }
+  next();
+});
+
 function getBookingPermissionForPath(
   path: string,
   method: string,
 ): string | null {
-  const cleanPath = path.split("?")[0];
+  let cleanPath = path.split("?")[0];
+  if (cleanPath.startsWith("/bookings/")) {
+    cleanPath = cleanPath.slice("/bookings".length);
+  } else if (cleanPath === "/bookings") {
+    cleanPath = "/";
+  }
 
   if (cleanPath.startsWith("/catalog")) {
     if (method === "GET") return "READ_SERVICE";
@@ -771,7 +786,7 @@ app.get(
 
 // PUT /bookings/:id/hide -- Soft delete / Hide booking (Main Admin only)
 app.put(
-  "/bookings/:id/hide",
+  ["/:id/hide", "/bookings/:id/hide"],
   requireGatewayHeaders,
   async (req: CustomRequest, res: Response) => {
     try {
@@ -806,7 +821,7 @@ app.put(
 
 // PUT /bookings/:id/unhide -- Restore hidden booking (Main Admin only)
 app.put(
-  "/bookings/:id/unhide",
+  ["/:id/unhide", "/bookings/:id/unhide"],
   requireGatewayHeaders,
   async (req: CustomRequest, res: Response) => {
     try {
@@ -841,7 +856,7 @@ app.put(
 
 // DELETE /bookings/:id -- Soft delete booking (Main Admin only)
 app.delete(
-  "/bookings/:id",
+  ["/:id", "/bookings/:id"],
   requireGatewayHeaders,
   async (req: CustomRequest, res: Response) => {
     try {
@@ -1026,7 +1041,7 @@ app.get(
 );
 
 app.get(
-  "/:id",
+  ["/:id", "/bookings/:id"],
   requireGatewayHeaders,
   async (req: CustomRequest, res: Response) => {
     try {
@@ -1193,7 +1208,7 @@ const patchBookingSchema = z.object({
 });
 
 app.patch(
-  "/:id",
+  ["/:id", "/bookings/:id"],
   requireGatewayHeaders,
   requirePermission(Permission.UPDATE_BOOKING),
   async (req: CustomRequest, res: Response) => {

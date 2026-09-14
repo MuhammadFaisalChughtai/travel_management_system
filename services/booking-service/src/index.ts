@@ -9169,11 +9169,14 @@ app.get(
         tenantId = parseInt(req.query.tenantId as string);
       }
 
-      // Check if templates exist, and seed them lazily if count is 0
+      // Check if templates exist, and seed them lazily if count is 0 or if invoice count is 0
       const count = await prisma.documentTemplate.count({
         where: { tenantId },
       });
-      if (count === 0) {
+      const invoiceCount = await prisma.documentTemplate.count({
+        where: { tenantId, type: "INVOICE" },
+      });
+      if (count === 0 || invoiceCount === 0) {
         await seedDefaultTemplatesForTenant(tenantId);
       }
 
@@ -9640,6 +9643,23 @@ app.post(
         .digest("hex");
 
       const curSym = await getTenantCurrencySymbol(tenantId);
+
+      if (!template.structureHtml || template.structureHtml.trim().length < 20) {
+        if (template.type === "INVOICE") {
+          template.structureHtml = getDefaultTaxInvoiceHtml();
+          template.structureCss = getDefaultTaxInvoiceCss();
+        } else if (
+          template.name.toLowerCase().includes("transport") ||
+          template.name.toLowerCase().includes("transfer")
+        ) {
+          template.structureHtml = getDefaultTransportVoucherHtml();
+          template.structureCss = getDefaultTransportVoucherCss();
+        } else {
+          template.structureHtml = getDefaultHotelVoucherHtml();
+          template.structureCss = getDefaultHotelVoucherCss();
+        }
+      }
+
       const { compiledHtml, totalGross, totalSettled, balanceDue } =
         compileTemplateWithBookingData(
           template,

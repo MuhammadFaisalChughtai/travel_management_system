@@ -193,16 +193,26 @@ export function BookingDetailsModal({
         activeTemplate = templatesRes.data.templates.find((t: any) => t.type === 'INVOICE') || templatesRes.data.templates[0];
       }
 
+      let printed = false;
       if (activeTemplate) {
-        const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
-          bookingId: booking.id
-        });
-        printCompiledTemplate(
-          compileRes.data.compiledHtml,
-          compileRes.data.compiledCss,
-          `Invoice_${booking.bookingReference}.pdf`
-        );
-      } else {
+        try {
+          const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
+            bookingId: booking.id
+          });
+          if (compileRes.data?.compiledHtml && compileRes.data.compiledHtml.trim().length > 50) {
+            printCompiledTemplate(
+              compileRes.data.compiledHtml,
+              compileRes.data.compiledCss,
+              `Invoice_${booking.bookingReference}.pdf`
+            );
+            printed = true;
+          }
+        } catch (compileErr) {
+          console.warn("Failed to compile custom invoice, falling back to local template:", compileErr);
+        }
+      }
+
+      if (!printed) {
         await generateInvoicePDF(
           "invoice-template",
           `Invoice_${booking.bookingReference}.pdf`,
@@ -282,16 +292,26 @@ export function BookingDetailsModal({
             !t.name.toLowerCase().includes('transfer'),
         );
 
+      let printed = false;
       if (activeTemplate) {
-        const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
-          bookingId: booking.id
-        });
-        printCompiledTemplate(
-          compileRes.data.compiledHtml,
-          compileRes.data.compiledCss,
-          `HotelVoucher_${booking.bookingReference}.pdf`
-        );
-      } else {
+        try {
+          const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
+            bookingId: booking.id
+          });
+          if (compileRes.data?.compiledHtml && compileRes.data.compiledHtml.trim().length > 50) {
+            printCompiledTemplate(
+              compileRes.data.compiledHtml,
+              compileRes.data.compiledCss,
+              `HotelVoucher_${booking.bookingReference}.pdf`
+            );
+            printed = true;
+          }
+        } catch (compileErr) {
+          console.warn("Failed to compile custom hotel voucher, falling back to local template:", compileErr);
+        }
+      }
+
+      if (!printed) {
         await generateInvoicePDF(
           "hotel-voucher-template",
           `HotelVoucher_${booking.bookingReference}.pdf`,
@@ -338,16 +358,26 @@ export function BookingDetailsModal({
             !t.name.toLowerCase().includes('hotel'),
         );
 
+      let printed = false;
       if (activeTemplate) {
-        const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
-          bookingId: booking.id
-        });
-        printCompiledTemplate(
-          compileRes.data.compiledHtml,
-          compileRes.data.compiledCss,
-          `TransportVoucher_${booking.bookingReference}.pdf`
-        );
-      } else {
+        try {
+          const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
+            bookingId: booking.id
+          });
+          if (compileRes.data?.compiledHtml && compileRes.data.compiledHtml.trim().length > 50) {
+            printCompiledTemplate(
+              compileRes.data.compiledHtml,
+              compileRes.data.compiledCss,
+              `TransportVoucher_${booking.bookingReference}.pdf`
+            );
+            printed = true;
+          }
+        } catch (compileErr) {
+          console.warn("Failed to compile custom transport voucher, falling back to local template:", compileErr);
+        }
+      }
+
+      if (!printed) {
         await generateInvoicePDF(
           "transport-voucher-template",
           `TransportVoucher_${booking.bookingReference}.pdf`,
@@ -1469,11 +1499,16 @@ export function BookingDetailsModal({
       {/* Hidden Templates for PDF Generation */}
       {booking && (
         <div
+          id="document-templates-print-store"
           style={{
-            position: "absolute",
-            top: "-9999px",
-            left: "-9999px",
-            opacity: 0,
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "1000px",
+            height: "0px",
+            overflow: "hidden",
+            zIndex: -9999,
+            opacity: 0.01,
             pointerEvents: "none",
           }}
         >

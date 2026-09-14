@@ -429,6 +429,7 @@ export function SuperAdminDashboard() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [settingGlobalInvoice, setSettingGlobalInvoice] = useState(false);
+  const [settingGlobalVouchers, setSettingGlobalVouchers] = useState(false);
 
   // Tenant Branding Context States
   const [tenantProfile, setTenantProfile] = useState({
@@ -642,6 +643,25 @@ export function SuperAdminDashboard() {
       toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to set default invoice template globally');
     } finally {
       setSettingGlobalInvoice(false);
+    }
+  };
+
+  const handleSetGlobalDefaultVouchers = async () => {
+    if (!window.confirm('Are you sure you want to set the official Hotel & Transport Vouchers as default for ALL registered companies?')) {
+      return;
+    }
+    setSettingGlobalVouchers(true);
+    try {
+      const res = await api.post('/finance/templates/set-global-default-vouchers');
+      toast.success(res.data.message || 'Hotel and Transport voucher templates set as default for all companies.');
+      if (selectedTenantId) {
+        fetchTenantTemplates(selectedTenantId);
+      }
+    } catch (err: any) {
+      console.error('Failed to set global default vouchers:', err);
+      toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to set default vouchers globally');
+    } finally {
+      setSettingGlobalVouchers(false);
     }
   };
 
@@ -1664,7 +1684,18 @@ export function SuperAdminDashboard() {
                     title="Set the clean 3-page Tax Invoice template as default for all registered companies"
                   >
                     <FileText className={`w-4 h-4 ${settingGlobalInvoice ? 'animate-spin' : ''}`} />
-                    {settingGlobalInvoice ? 'Applying Globally...' : 'Set Tax Invoice as Default for All Companies'}
+                    {settingGlobalInvoice ? 'Applying Invoice...' : 'Set Tax Invoice Default'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={settingGlobalVouchers}
+                    onClick={handleSetGlobalDefaultVouchers}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-sm transition disabled:opacity-50"
+                    title="Set the official Hotel & Transport Vouchers as default for all registered companies"
+                  >
+                    <FileText className={`w-4 h-4 ${settingGlobalVouchers ? 'animate-spin' : ''}`} />
+                    {settingGlobalVouchers ? 'Applying Vouchers...' : 'Set Hotel & Transport Vouchers Default'}
                   </button>
 
                   <select

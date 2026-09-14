@@ -7268,6 +7268,499 @@ body {
 }`;
 }
 
+function getDefaultHotelVoucherHtml(): string {
+  return `<div class="voucher-document hotel-voucher" style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; line-height: 1.4; background: #ffffff;">
+  <div class="voucher-page" style="padding: 24px 28px; box-sizing: border-box;">
+    <!-- Top Header -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px;">
+      <tr>
+        <td style="width: 60%; vertical-align: top;">
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            <div style="flex-shrink: 0; margin-top: 2px;">
+              {{company.logoPrimary}}
+            </div>
+            <div>
+              <div style="font-size: 16px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: -0.3px;">{{company.name}}</div>
+              <div style="font-size: 9.5px; color: #475569; font-weight: 600; margin-top: 2px;">Headquarters: {{company.address}}</div>
+              <div style="font-size: 9px; color: #64748b; margin-top: 1px;">Support: {{company.phone}} | Email: {{company.email}}</div>
+              <div style="font-size: 9px; color: #64748b; margin-top: 1px;">Web: {{company.website}}</div>
+            </div>
+          </div>
+        </td>
+        <td style="width: 40%; vertical-align: top; text-align: right;">
+          <div style="font-size: 22px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">HOTEL VOUCHER</div>
+          <div style="display: inline-block; background: #ecfdf5; border: 1px solid #10b981; border-radius: 4px; padding: 2px 8px; font-size: 9px; font-weight: 800; color: #047857; text-transform: uppercase; margin-bottom: 6px;">
+            Status: Confirmed & Guaranteed
+          </div>
+          <table style="margin-left: auto; text-align: right; font-size: 9.5px; color: #334155; border-collapse: collapse;">
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Voucher No:</td><td style="font-weight: 800; font-family: monospace; color: #091E42;">{{voucher.hotelNumber}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Booking Ref:</td><td style="font-weight: 800; font-family: monospace; color: #091E42;">{{booking.reference}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Issue Date:</td><td style="font-weight: 700;">{{document.date}}</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Regulatory Ribbon -->
+    <div style="background: #091E42; color: #ffffff; border-radius: 6px; padding: 6px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 700; margin-bottom: 16px; letter-spacing: 0.3px;">
+      <span>ATOL PROTECTED (REG. NO {{company.atolNumber}})</span>
+      <span>• OFFICIAL ACCOMMODATION CONFIRMATION VOUCHER •</span>
+      <span>IATA MEMBER AGENCY ({{company.iataNumber}})</span>
+    </div>
+
+    <!-- 2-Column Overview Cards -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+      <tr>
+        <td style="width: 50%; vertical-align: top; padding: 10px 14px; border-right: 1px solid #e2e8f0;">
+          <div style="font-size: 10px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            PRIMARY GUEST DETAILS
+          </div>
+          <div style="font-size: 9.5px; color: #334155; line-height: 1.6;">
+            <div><span style="color: #64748b; font-weight: 600;">Lead Guest:</span> <strong style="color: #0f172a;">{{customer.fullName}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Total Guests:</span> <strong style="color: #0f172a;">{{booking.totalPassengers}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Mobile Contact:</span> {{customer.phone}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Email Address:</span> {{customer.email}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Nationality:</span> {{customer.nationality}}</div>
+          </div>
+        </td>
+        <td style="width: 50%; vertical-align: top; padding: 10px 14px;">
+          <div style="font-size: 10px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            STAY & PROPERTY OVERVIEW
+          </div>
+          <div style="font-size: 9.5px; color: #334155; line-height: 1.6;">
+            <div><span style="color: #64748b; font-weight: 600;">Destination:</span> <strong style="color: #0f172a;">{{hotel.primaryCity}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Check-in Date:</span> <strong style="color: #0f172a;">{{hotel.checkIn}}</strong> (From 14:00)</div>
+            <div><span style="color: #64748b; font-weight: 600;">Check-out Date:</span> <strong style="color: #0f172a;">{{hotel.checkOut}}</strong> (Before 12:00)</div>
+            <div><span style="color: #64748b; font-weight: 600;">Duration of Stay:</span> <strong style="color: #0f172a;">{{hotel.nights}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Fulfillment Guarantee:</span> Pre-paid by {{company.name}}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Table 1: Accommodation & Room Allocation -->
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 10.5px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        ACCOMMODATION & ROOM ALLOCATION
+      </div>
+      {{tables.hotelAllocation}}
+    </div>
+
+    <!-- Table 2: Registered Guest Manifest -->
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 10.5px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        REGISTERED GUEST MANIFEST
+      </div>
+      {{tables.guestManifest}}
+    </div>
+
+    <!-- Check-In Policies & Guest Notices Box -->
+    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px;">
+      <div style="font-size: 10px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px;">
+        IMPORTANT CHECK-IN POLICIES & GUEST NOTICES
+      </div>
+      <ol style="margin: 0; padding-left: 16px; font-size: 8.8px; color: #334155; line-height: 1.5;">
+        <li style="margin-bottom: 3px;">
+          <strong>Standard Check-in / Check-out Times:</strong> Standard hotel check-in time is from 14:00 hrs onwards, and check-out is strictly before 12:00 noon. Early check-in or late check-out is subject to room availability and discretionary hotel charges.
+        </li>
+        <li style="margin-bottom: 3px;">
+          <strong>Mandatory Identification:</strong> All guests must present valid government photo identification (original Passport & valid Umrah/Tourist Visa) upon arrival at reception.
+        </li>
+        <li style="margin-bottom: 3px;">
+          <strong>Incidental Expenses:</strong> This voucher covers the room accommodation and board basis specified above. All incidental charges (telephone, laundry, room service, mini-bar, or property damages) must be settled directly with the hotel prior to departure.
+        </li>
+        <li style="margin-bottom: 3px;">
+          <strong>Pre-paid Guarantee:</strong> This accommodation voucher is pre-paid and guaranteed by {{company.name}}. Front desk reception must NOT demand room charges from the registered guest. For urgent assistance, contact our 24/7 hotline at {{company.phone}}.
+        </li>
+      </ol>
+    </div>
+
+    <!-- Footer -->
+    <div style="border-top: 1px solid #e2e8f0; padding-top: 10px; text-align: center; font-size: 8.5px; color: #64748b;">
+      <strong>{{company.name}}</strong> | {{company.address}} | Tel: {{company.phone}} | Email: {{company.email}} | Web: {{company.website}}
+    </div>
+  </div>
+</div>`;
+}
+
+function getDefaultHotelVoucherCss(): string {
+  return `/* Hotel Voucher Clean Layout */
+@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f1f5f9;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1e293b;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.voucher-document {
+  max-width: 820px;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.voucher-page {
+  box-sizing: border-box;
+  background: #ffffff;
+  position: relative;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .voucher-document {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .voucher-page {
+    padding: 8mm !important;
+    margin: 0 !important;
+  }
+}`;
+}
+
+function getDefaultTransportVoucherHtml(): string {
+  return `<div class="voucher-document transport-voucher" style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; line-height: 1.4; background: #ffffff;">
+  <div class="voucher-page" style="padding: 24px 28px; box-sizing: border-box;">
+    <!-- Top Header -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px;">
+      <tr>
+        <td style="width: 60%; vertical-align: top;">
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            <div style="flex-shrink: 0; margin-top: 2px;">
+              {{company.logoPrimary}}
+            </div>
+            <div>
+              <div style="font-size: 16px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: -0.3px;">{{company.name}}</div>
+              <div style="font-size: 9.5px; color: #475569; font-weight: 600; margin-top: 2px;">Headquarters: {{company.address}}</div>
+              <div style="font-size: 9px; color: #64748b; margin-top: 1px;">Support: {{company.phone}} | Email: {{company.email}}</div>
+              <div style="font-size: 9px; color: #64748b; margin-top: 1px;">Web: {{company.website}}</div>
+            </div>
+          </div>
+        </td>
+        <td style="width: 40%; vertical-align: top; text-align: right;">
+          <div style="font-size: 22px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">TRANSPORT VOUCHER</div>
+          <div style="display: inline-block; background: #ecfdf5; border: 1px solid #10b981; border-radius: 4px; padding: 2px 8px; font-size: 9px; font-weight: 800; color: #047857; text-transform: uppercase; margin-bottom: 6px;">
+            Status: Confirmed & Dispatched
+          </div>
+          <table style="margin-left: auto; text-align: right; font-size: 9.5px; color: #334155; border-collapse: collapse;">
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Voucher No:</td><td style="font-weight: 800; font-family: monospace; color: #091E42;">{{voucher.transportNumber}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Booking Ref:</td><td style="font-weight: 800; font-family: monospace; color: #091E42;">{{booking.reference}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Issue Date:</td><td style="font-weight: 700;">{{document.date}}</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Regulatory Ribbon -->
+    <div style="background: #091E42; color: #ffffff; border-radius: 6px; padding: 6px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 700; margin-bottom: 16px; letter-spacing: 0.3px;">
+      <span>ATOL PROTECTED (REG. NO {{company.atolNumber}})</span>
+      <span>• GROUND LOGISTICS & TRANSFERS VOUCHER •</span>
+      <span>IATA MEMBER AGENCY ({{company.iataNumber}})</span>
+    </div>
+
+    <!-- 2-Column Overview Cards -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+      <tr>
+        <td style="width: 50%; vertical-align: top; padding: 10px 14px; border-right: 1px solid #e2e8f0;">
+          <div style="font-size: 10px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            PRIMARY TRAVELER DETAILS
+          </div>
+          <div style="font-size: 9.5px; color: #334155; line-height: 1.6;">
+            <div><span style="color: #64748b; font-weight: 600;">Lead Passenger:</span> <strong style="color: #0f172a;">{{customer.fullName}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Total Travelers:</span> <strong style="color: #0f172a;">{{booking.totalPassengers}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Mobile Contact:</span> {{customer.phone}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Email Address:</span> {{customer.email}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Nationality:</span> {{customer.nationality}}</div>
+          </div>
+        </td>
+        <td style="width: 50%; vertical-align: top; padding: 10px 14px;">
+          <div style="font-size: 10px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            FULFILLMENT PARTNER & DISPATCH
+          </div>
+          <div style="font-size: 9.5px; color: #334155; line-height: 1.6;">
+            <div><span style="color: #64748b; font-weight: 600;">Fleet Partner:</span> <strong style="color: #0f172a;">{{transport.vendorName}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">24/7 Operations Desk:</span> <strong style="color: #0f172a;">{{transport.vendorPhone}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Dispatch Support:</span> {{transport.vendorEmail}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Vehicle Allocation:</span> Private Air-Conditioned Fleet</div>
+            <div><span style="color: #64748b; font-weight: 600;">Payment Status:</span> Pre-paid by {{company.name}}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Table 1: Scheduled Route & Transfer Legs -->
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 10.5px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        SCHEDULED TRANSFER ROUTE & LEGS
+      </div>
+      {{tables.transportLegs}}
+    </div>
+
+    <!-- Table 2: Passenger Manifest -->
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 10.5px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        PASSENGER MANIFEST
+      </div>
+      {{tables.transportPassengerManifest}}
+    </div>
+
+    <!-- 5-Point Operational Transfer Guidelines & Protocols Box -->
+    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px;">
+      <div style="font-size: 10px; font-weight: 900; color: #091E42; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px;">
+        5-POINT OPERATIONAL TRANSFER GUIDELINES & PROTOCOLS
+      </div>
+      <ol style="margin: 0; padding-left: 16px; font-size: 8.8px; color: #334155; line-height: 1.5;">
+        <li style="margin-bottom: 3px;">
+          <strong>Meeting Point & Driver Meet-and-Greet:</strong> For airport arrivals, the driver will await guests outside the terminal customs arrival hall holding a name paging board. For hotel departures, the driver will report to the main lobby entrance.
+        </li>
+        <li style="margin-bottom: 3px;">
+          <strong>Punctuality & Lobby Readiness:</strong> Passengers must be waiting in the hotel reception lobby with all luggage ready 15 minutes prior to the scheduled pickup time. Intercity and flight departure transfers operate strictly to schedule.
+        </li>
+        <li style="margin-bottom: 3px;">
+          <strong>Flight Tracking & Schedule Revisions:</strong> Airport transfers are coordinated against designated flight numbers. In the event of flight delays, cancelations, or gate reassignments, notify our dispatch desk immediately via phone or WhatsApp.
+        </li>
+        <li style="margin-bottom: 3px;">
+          <strong>Luggage Allowance Compliance:</strong> Baggage is strictly limited to standard allowances (1 suitcase + 1 hand luggage per passenger). Excessive baggage exceeding vehicle trunk capacity may necessitate a supplemental transfer at the guest's expense.
+        </li>
+        <li style="margin-bottom: 3px;">
+          <strong>Pre-paid Transfer Notice:</strong> This transfer service has been fully pre-paid and contracted by {{company.name}}. No cash payment, tolls, or driver tips should be paid by the guest. For operational queries, call dispatch at {{company.phone}}.
+        </li>
+      </ol>
+    </div>
+
+    <!-- Footer -->
+    <div style="border-top: 1px solid #e2e8f0; padding-top: 10px; text-align: center; font-size: 8.5px; color: #64748b;">
+      <strong>{{company.name}}</strong> | {{company.address}} | Tel: {{company.phone}} | Email: {{company.email}} | Web: {{company.website}}
+    </div>
+  </div>
+</div>`;
+}
+
+function getDefaultTransportVoucherCss(): string {
+  return `/* Transport Voucher Clean Layout */
+@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f1f5f9;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1e293b;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.voucher-document {
+  max-width: 820px;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.voucher-page {
+  box-sizing: border-box;
+  background: #ffffff;
+  position: relative;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .voucher-document {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .voucher-page {
+    padding: 8mm !important;
+    margin: 0 !important;
+  }
+}`;
+}
+
+function buildHotelAllocationTable(booking: any): string {
+  const accommodations = booking.accommodations || booking.accommodationServices || [];
+  if (accommodations.length === 0) {
+    return `<div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; color: #64748b; font-size: 10px;">No hotel accommodations assigned.</div>`;
+  }
+  const formatDate = (d: any) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+  const computeNights = (cin: any, cout: any) => {
+    if (!cin || !cout) return 1;
+    const diff = new Date(cout).getTime() - new Date(cin).getTime();
+    return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+  };
+
+  const rows = accommodations.map((h: any, idx: number) => {
+    const cIn = formatDate(h.checkInDate);
+    const cOut = formatDate(h.checkOutDate);
+    const nights = computeNights(h.checkInDate, h.checkOutDate);
+    const confNo = h.hotelConfirmationNumber || h.reservationNumber || `CNF-${booking.bookingReference}-${idx + 1}`;
+    const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    return `
+      <tr style="border-bottom: 1px solid #e2e8f0; background: ${bg};">
+        <td style="padding: 8px 10px; vertical-align: top;">
+          <strong style="color: #091E42; display: block; font-size: 10px;">${h.hotelName}</strong>
+          <div style="color: #64748b; font-size: 8.5px; margin-top: 2px;">${h.hotelAddress || (h.city ? `${h.city}, Saudi Arabia` : 'Haram Vicinity')}</div>
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; font-family: monospace; font-weight: 800; color: #1e3a8a;">
+          ${confNo}
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top;">
+          <strong style="color: #0f172a;">${h.roomType || 'Standard Room'}</strong>
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; color: #334155;">
+          ${h.mealType || 'Room Only'}
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; text-align: center; font-weight: 700;">
+          ${h.qty || 1}
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; font-size: 9px;">
+          <div>${cIn} to</div>
+          <div>${cOut}</div>
+          <div style="color: #64748b; font-size: 8.5px; font-weight: 600;">(${nights} Nights)</div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; border: 1px solid #cbd5e1;">
+      <thead>
+        <tr style="background: #091E42; color: #ffffff; text-align: left;">
+          <th style="padding: 6px 10px; font-weight: 800; width: 32%;">Property Details</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 18%;">Confirmation #</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 16%;">Room Type</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 14%;">Board Basis</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 8%; text-align: center;">Qty</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 12%;">Stay Dates</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildGuestManifestTable(booking: any): string {
+  const customers = booking.customers || [];
+  if (customers.length === 0) {
+    return `<div style="padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; color: #64748b; font-size: 9.5px;">Lead Guest: Walk-in Client (1 Pax)</div>`;
+  }
+  const rows = customers.map((c: any, idx: number) => {
+    const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    return `
+      <tr style="border-bottom: 1px solid #e2e8f0; background: ${bg};">
+        <td style="padding: 6px 10px; text-align: center; font-weight: 700; color: #64748b;">${idx + 1}</td>
+        <td style="padding: 6px 10px; font-weight: 700; color: #0f172a;">${c.title ? c.title + ' ' : ''}${c.firstName} ${c.lastName}</td>
+        <td style="padding: 6px 10px; color: #334155;">${c.ageCategory || 'Adult'}</td>
+        <td style="padding: 6px 10px; color: #334155;">${c.nationality || 'British Citizen'}</td>
+        <td style="padding: 6px 10px; font-family: monospace; color: #334155;">${c.passportNumber || '-'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; border: 1px solid #cbd5e1;">
+      <thead>
+        <tr style="background: #091E42; color: #ffffff; text-align: left;">
+          <th style="padding: 6px 10px; font-weight: 800; width: 6%; text-align: center;">No.</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 36%;">Full Guest Name</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 18%;">Age Category</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 20%;">Nationality</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 20%;">Passport No.</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildTransportLegsTable(booking: any): string {
+  const transports = booking.transportServices || [];
+  if (transports.length === 0) {
+    return `<div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; color: #64748b; font-size: 10px;">Private circuit transfers included as per confirmed itinerary.</div>`;
+  }
+  const formatDate = (d: any) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+
+  const rows = transports.map((t: any, idx: number) => {
+    const dateStr = t.date ? formatDate(t.date) : 'Scheduled Date TBA';
+    const timeStr = t.time || 'TBA';
+    const pickup = t.departureDestination || t.pickUpLocation || 'Jeddah Airport (JED) / Hotel Lobby';
+    const dropoff = t.arrivalDestination || t.dropOffLocation || 'Hotel Accommodation';
+    const vehicle = t.vehicleType || 'Private AC Vehicle';
+    const notes = t.notes || t.flightNo || 'Confirmed Transfer';
+    const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+
+    return `
+      <tr style="border-bottom: 1px solid #e2e8f0; background: ${bg};">
+        <td style="padding: 7px 10px; text-align: center; font-weight: 800; color: #091E42;">${idx + 1}</td>
+        <td style="padding: 7px 10px; vertical-align: top;">
+          <strong style="color: #0f172a;">${dateStr}</strong>
+          <div style="color: #64748b; font-size: 8.5px; margin-top: 1px;">${timeStr}</div>
+        </td>
+        <td style="padding: 7px 10px; vertical-align: top; color: #334155;">
+          <strong style="color: #0f172a;">${pickup}</strong>
+        </td>
+        <td style="padding: 7px 10px; vertical-align: top; color: #334155;">
+          <strong style="color: #0f172a;">${dropoff}</strong>
+        </td>
+        <td style="padding: 7px 10px; vertical-align: top; font-weight: 700; color: #1e3a8a;">
+          ${vehicle}
+        </td>
+        <td style="padding: 7px 10px; vertical-align: top; color: #64748b; font-size: 9px;">
+          ${notes}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; border: 1px solid #cbd5e1;">
+      <thead>
+        <tr style="background: #091E42; color: #ffffff; text-align: left;">
+          <th style="padding: 6px 10px; font-weight: 800; width: 6%; text-align: center;">Leg #</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 16%;">Date & Time</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 24%;">Pick-up Location</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 24%;">Drop-off Destination</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 15%;">Vehicle Type</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 15%;">Flight / Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
+
 function buildFlightScheduleTable(booking: any): string {
   const flights = booking.flightServices || [];
   if (flights.length === 0) {
@@ -7564,7 +8057,7 @@ function buildTermsAndConditions(companyName: string): string {
 }
 
 const compileTemplateWithBookingData = (
-  template: { type: string; structureHtml: string; structureCss: string },
+  template: { name?: string; type: string; structureHtml: string; structureCss: string },
   companyContext: any,
   booking: any,
   signature: string,
@@ -8059,6 +8552,28 @@ const compileTemplateWithBookingData = (
     "tables.packageInclusions": buildPackageInclusionsTable(booking, currencySymbol),
     "tables.financialSettlement": buildFinancialSettlementTable(booking, currencySymbol, totalGross, totalSettled, balanceDue),
     "tables.termsAndConditions": buildTermsAndConditions(companyContext.companyName),
+    "voucher.number": template.name?.toLowerCase().includes("transport")
+      ? `VCH-TRN-${booking.bookingReference}`
+      : `VCH-HTL-${booking.bookingReference}`,
+    "voucher.hotelNumber": `VCH-HTL-${booking.bookingReference}`,
+    "voucher.transportNumber": `VCH-TRN-${booking.bookingReference}`,
+    "hotel.primaryCity": booking.accommodations?.[0]?.city || "Makkah / Madinah",
+    "hotel.checkIn": booking.accommodations?.[0]?.checkInDate
+      ? new Date(booking.accommodations[0].checkInDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+      : "TBA",
+    "hotel.checkOut": booking.accommodations?.[0]?.checkOutDate
+      ? new Date(booking.accommodations[0].checkOutDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+      : "TBA",
+    "hotel.nights": totalNights > 0 ? `${totalNights} Night(s)` : "Standard Stay",
+    "transport.vendorName": booking.transportServices?.[0]?.vendorName || "Basma Transport / Ground Fleet",
+    "transport.vendorPhone": companyContext.landlineFormat || "+44 20 7946 0958",
+    "transport.vendorEmail": companyContext.emailSender || "operations@toobatravels.co.uk",
+    "company.atolNumber": "11492",
+    "company.iataNumber": "9127845",
+    "tables.hotelAllocation": buildHotelAllocationTable(booking),
+    "tables.guestManifest": buildGuestManifestTable(booking),
+    "tables.transportLegs": buildTransportLegsTable(booking),
+    "tables.transportPassengerManifest": buildGuestManifestTable(booking),
     "booking.amountGross":
       template.type === "VOUCHER" ? "" : Number(totalGross).toFixed(2),
     "booking.amountSettled":
@@ -8438,41 +8953,44 @@ function generateTemplateFromVisualConfig(config: VisualConfig, _type: string) {
 }
 
 async function seedDefaultTemplatesForTenant(tenantId: number) {
-  const types = ["INVOICE", "VOUCHER"];
-  for (const type of types) {
-    let structureHtml: string;
-    let structureCss: string;
-    let name: string;
+  const templatesToSeed = [
+    {
+      name: "Default Tax Invoice Template",
+      type: "INVOICE",
+      html: getDefaultTaxInvoiceHtml(),
+      css: getDefaultTaxInvoiceCss(),
+    },
+    {
+      name: "Default Hotel Booking Voucher",
+      type: "VOUCHER",
+      html: getDefaultHotelVoucherHtml(),
+      css: getDefaultHotelVoucherCss(),
+    },
+    {
+      name: "Default Transport Transfer Voucher",
+      type: "VOUCHER",
+      html: getDefaultTransportVoucherHtml(),
+      css: getDefaultTransportVoucherCss(),
+    },
+  ];
 
-    if (type === "INVOICE") {
-      name = "Default Tax Invoice Template";
-      structureHtml = getDefaultTaxInvoiceHtml();
-      structureCss = getDefaultTaxInvoiceCss();
-    } else {
-      const config = defaultVisualConfig(type);
-      const generated = generateTemplateFromVisualConfig(config, type);
-      structureHtml =
-        generated.html + `\n<!-- VISUAL_CONFIG: ${JSON.stringify(config)} -->`;
-      structureCss = generated.css;
-      name = "Default Voucher Template";
-    }
-
+  for (const item of templatesToSeed) {
     const template = await prisma.documentTemplate.create({
       data: {
         tenantId,
-        name,
-        type,
+        name: item.name,
+        type: item.type,
         version: 1,
         status: "Active",
-        structureHtml,
-        structureCss,
+        structureHtml: item.html,
+        structureCss: item.css,
       },
     });
 
     const tokenRegex = /\{\{([^{}]+)\}\}/g;
     const detectedTokens = new Set<string>();
     let match;
-    while ((match = tokenRegex.exec(structureHtml)) !== null) {
+    while ((match = tokenRegex.exec(item.html)) !== null) {
       detectedTokens.add(match[1].trim());
     }
 
@@ -9298,6 +9816,158 @@ app.post(
       });
     } catch (error) {
       console.error("Set Global Default Invoice Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
+);
+
+// POST /finance/templates/set-global-default-vouchers
+app.post(
+  "/finance/templates/set-global-default-vouchers",
+  requireGatewayHeaders,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      if (!req.isPlatformAdmin && req.userRole !== "SUPER_ADMIN") {
+        return res.status(403).json({ error: "Access denied. Super Admin only." });
+      }
+
+      const authUrl = process.env.AUTH_SERVICE_URL || "http://auth-service:4001";
+      let tenantIds: number[] = [];
+      try {
+        const tenantRes = await fetch(`${authUrl}/tenants`, {
+          headers: {
+            "x-user-id": String(req.userId || "1"),
+            "x-role": "SUPER_ADMIN",
+          },
+        });
+        if (tenantRes.ok) {
+          const tdata: any = await tenantRes.json();
+          if (Array.isArray(tdata.tenants)) {
+            tenantIds = tdata.tenants.map((t: any) => Number(t.id));
+          } else if (Array.isArray(tdata)) {
+            tenantIds = tdata.map((t: any) => Number(t.id));
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch tenants list from auth-service, falling back to DB tenant IDs", e);
+      }
+
+      const dbTemplates = await prisma.documentTemplate.findMany({ select: { tenantId: true }, distinct: ["tenantId"] });
+      const dbContexts = await prisma.companyContext.findMany({ select: { tenantId: true } });
+      const dbBookings = await prisma.booking.findMany({ select: { tenantId: true }, distinct: ["tenantId"] });
+
+      const allTenantIds = Array.from(
+        new Set([
+          ...tenantIds,
+          ...dbTemplates.map((t) => t.tenantId),
+          ...dbContexts.map((c) => c.tenantId),
+          ...dbBookings.map((b) => b.tenantId),
+        ]),
+      ).filter((id) => typeof id === "number" && !isNaN(id) && id > 0);
+
+      const voucherBlueprints = [
+        {
+          name: "Default Hotel Booking Voucher",
+          html: getDefaultHotelVoucherHtml(),
+          css: getDefaultHotelVoucherCss(),
+          keyword: "hotel",
+        },
+        {
+          name: "Default Transport Transfer Voucher",
+          html: getDefaultTransportVoucherHtml(),
+          css: getDefaultTransportVoucherCss(),
+          keyword: "transport",
+        },
+      ];
+
+      let totalUpdated = 0;
+      let totalCreated = 0;
+
+      for (const tId of allTenantIds) {
+        for (const bp of voucherBlueprints) {
+          const existing = await prisma.documentTemplate.findFirst({
+            where: {
+              tenantId: tId,
+              type: "VOUCHER",
+              OR: [
+                { name: { contains: bp.name } },
+                { name: { contains: bp.keyword, mode: "insensitive" } },
+              ],
+            },
+            orderBy: { updatedAt: "desc" },
+          });
+
+          let targetTemplateId: number;
+
+          if (existing) {
+            const updated = await prisma.documentTemplate.update({
+              where: { id: existing.id },
+              data: {
+                name: bp.name,
+                status: "Active",
+                structureHtml: bp.html,
+                structureCss: bp.css,
+                version: existing.version + 1,
+              },
+            });
+            targetTemplateId = updated.id;
+            totalUpdated++;
+          } else {
+            const created = await prisma.documentTemplate.create({
+              data: {
+                tenantId: tId,
+                name: bp.name,
+                type: "VOUCHER",
+                version: 1,
+                status: "Active",
+                structureHtml: bp.html,
+                structureCss: bp.css,
+              },
+            });
+            targetTemplateId = created.id;
+            totalCreated++;
+          }
+
+          // Re-create template variables
+          await prisma.templateVariable.deleteMany({
+            where: { templateId: targetTemplateId },
+          }).catch(() => {});
+
+          const tokenRegex = /\{\{([^{}]+)\}\}/g;
+          const detectedTokens = new Set<string>();
+          let match;
+          while ((match = tokenRegex.exec(bp.html)) !== null) {
+            detectedTokens.add(match[1].trim());
+          }
+
+          for (const token of detectedTokens) {
+            let pathInRecord = token;
+            if (token.startsWith("booking.")) {
+              pathInRecord = token.replace("booking.", "");
+            }
+            await prisma.templateVariable
+              .create({
+                data: {
+                  templateId: targetTemplateId,
+                  token,
+                  description: `Substitute value of ${token}`,
+                  pathInRecord,
+                },
+              })
+              .catch(() => {});
+          }
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        message: `Hotel & Transport vouchers set as default across ${allTenantIds.length} companies (${totalUpdated} updated, ${totalCreated} created).`,
+        tenantsProcessed: allTenantIds.length,
+        totalUpdated,
+        totalCreated,
+      });
+    } catch (error) {
+      console.error("Set Global Default Vouchers Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
     }
   },

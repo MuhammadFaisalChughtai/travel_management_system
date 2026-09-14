@@ -266,9 +266,21 @@ export function BookingDetailsModal({
     setIsGeneratingHotelVoucher(true);
     try {
       const templatesRes = await api.get('/finance/templates');
-      const activeTemplate = templatesRes.data.templates?.find(
-        (t: any) => t.type === 'VOUCHER' && t.status === 'Active'
-      );
+      const templates = templatesRes.data.templates || [];
+      const activeTemplate =
+        templates.find(
+          (t: any) =>
+            t.type === 'VOUCHER' &&
+            t.status === 'Active' &&
+            t.name.toLowerCase().includes('hotel'),
+        ) ||
+        templates.find(
+          (t: any) =>
+            t.type === 'VOUCHER' &&
+            t.status === 'Active' &&
+            !t.name.toLowerCase().includes('transport') &&
+            !t.name.toLowerCase().includes('transfer'),
+        );
 
       if (activeTemplate) {
         const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
@@ -310,9 +322,21 @@ export function BookingDetailsModal({
     setIsGeneratingTransportVoucher(true);
     try {
       const templatesRes = await api.get('/finance/templates');
-      const activeTemplate = templatesRes.data.templates?.find(
-        (t: any) => t.type === 'VOUCHER' && t.status === 'Active'
-      );
+      const templates = templatesRes.data.templates || [];
+      const activeTemplate =
+        templates.find(
+          (t: any) =>
+            t.type === 'VOUCHER' &&
+            t.status === 'Active' &&
+            (t.name.toLowerCase().includes('transport') ||
+              t.name.toLowerCase().includes('transfer')),
+        ) ||
+        templates.find(
+          (t: any) =>
+            t.type === 'VOUCHER' &&
+            t.status === 'Active' &&
+            !t.name.toLowerCase().includes('hotel'),
+        );
 
       if (activeTemplate) {
         const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
@@ -1472,9 +1496,14 @@ export function BookingDetailsModal({
                 booking={booking}
                 type="hotel"
                 companyInfo={{
-                  name: "TravelBooker Workspace",
-                  phone: "+44 20 7946 0958",
-                  email: "operations@travelbooker.co.uk",
+                  name: companyInfo?.companyName || user?.name || "Tooba Travels Ltd",
+                  location: companyInfo?.officeAddress || "63 Buxton Road, London, E17 7EH",
+                  phone: companyInfo?.landlineFormat || "+44 20 7946 0958",
+                  email: companyInfo?.emailSender || user?.email || "operations@toobatravels.co.uk",
+                  logo: companyInfo?.logoPrimary || null,
+                  website: companyInfo?.website || "www.toobatravels.co.uk",
+                  atolNumber: (companyInfo as any)?.atolNumber || "11492",
+                  iataNumber: (companyInfo as any)?.iataNumber || "9127845",
                 }}
               />
             </div>
@@ -1486,9 +1515,14 @@ export function BookingDetailsModal({
                   booking={booking}
                   type="transport"
                   companyInfo={{
-                    name: "TravelBooker Workspace",
-                    phone: "+44 20 7946 0958",
-                    email: "operations@travelbooker.co.uk",
+                    name: companyInfo?.companyName || user?.name || "Tooba Travels Ltd",
+                    location: companyInfo?.officeAddress || "63 Buxton Road, London, E17 7EH",
+                    phone: companyInfo?.landlineFormat || "+44 20 7946 0958",
+                    email: companyInfo?.emailSender || user?.email || "operations@toobatravels.co.uk",
+                    logo: companyInfo?.logoPrimary || null,
+                    website: companyInfo?.website || "www.toobatravels.co.uk",
+                    atolNumber: (companyInfo as any)?.atolNumber || "11492",
+                    iataNumber: (companyInfo as any)?.iataNumber || "9127845",
                   }}
                 />
               </div>

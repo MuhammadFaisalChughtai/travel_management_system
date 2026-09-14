@@ -1755,7 +1755,7 @@ export function Dashboard() {
               <div className="p-8">
                 <LoadingState message="Loading bookings..." />
               </div>
-            ) : bookings.length === 0 ? (
+            ) : tableBookings.length === 0 ? (
               <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
                 <EmptyState
                   icon={Search}

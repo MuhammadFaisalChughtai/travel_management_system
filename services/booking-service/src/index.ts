@@ -625,7 +625,14 @@ app.get(
       if (status && status !== "Any") {
         whereClause.status = status as string;
       } else if (req.query.includeHidden !== "true") {
-        whereClause.status = { not: "hidden" };
+        whereClause.AND = whereClause.AND || [];
+        whereClause.AND.push({
+          status: { not: "hidden" },
+          OR: [
+            { isDeleted: false },
+            { isDeleted: null }
+          ]
+        });
       }
       if (isLocked !== undefined && isLocked !== "Any") {
         whereClause.isLocked = isLocked === "true";

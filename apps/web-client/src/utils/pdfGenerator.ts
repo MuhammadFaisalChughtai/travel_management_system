@@ -103,14 +103,18 @@ export const printCompiledTemplate = (html: string, css: string, filename: strin
           left: 0 !important;
           top: 0 !important;
           margin: 0 !important;
-          padding: 10mm !important;
+          padding: 0 !important;
           width: 100% !important;
           z-index: 999999 !important;
           opacity: 1 !important;
         }
         @page {
-          margin: 0;
+          margin: 6mm;
           size: A4 portrait;
+        }
+        .page-break {
+          page-break-after: always !important;
+          break-after: page !important;
         }
       }
     `;

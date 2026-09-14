@@ -67,6 +67,7 @@ export function BookingDetailsModal({
 
   const { symbol } = useCurrency();
   const { user } = useAuthStore();
+  const [companyInfo, setCompanyInfo] = useState<any>(null);
 
   const hasPermission = (permission: string) => {
     if (!user) return false;
@@ -185,9 +186,12 @@ export function BookingDetailsModal({
     setIsGeneratingPDF(true);
     try {
       const templatesRes = await api.get('/finance/templates');
-      const activeTemplate = templatesRes.data.templates?.find(
+      let activeTemplate = templatesRes.data.templates?.find(
         (t: any) => t.type === 'INVOICE' && t.status === 'Active'
       );
+      if (!activeTemplate && templatesRes.data.templates?.length > 0) {
+        activeTemplate = templatesRes.data.templates.find((t: any) => t.type === 'INVOICE') || templatesRes.data.templates[0];
+      }
 
       if (activeTemplate) {
         const compileRes = await api.post(`/finance/templates/${activeTemplate.id}/compile`, {
@@ -781,6 +785,13 @@ export function BookingDetailsModal({
     if (isOpen && bookingId) {
       fetchDetails();
       fetchVoucherTemplates();
+      api.get('/finance/company-context')
+        .then((res) => {
+          if (res.data?.companyContext) {
+            setCompanyInfo(res.data.companyContext);
+          }
+        })
+        .catch(() => {});
     } else {
       setBooking(null);
       setVoucherTemplates([]);
@@ -922,7 +933,7 @@ export function BookingDetailsModal({
                 ) : (
                   <FileText className="w-4 h-4" />
                 )}
-                {isGeneratingPDF ? "Generating..." : "Generate Invoice"}
+                {isGeneratingPDF ? "Generating..." : "Print Invoice"}
               </button>
             )}
             {booking && user?.role !== "AGENT" && (
@@ -1446,10 +1457,12 @@ export function BookingDetailsModal({
             <InvoiceTemplate
               booking={booking}
               companyInfo={{
-                name: "TravelBooker Workspace",
-                location: "London, UK",
-                phone: "+44 20 7946 0958",
-                email: "operations@travelbooker.co.uk",
+                name: companyInfo?.companyName || user?.name || "Tooba Travels Ltd",
+                location: companyInfo?.officeAddress || "63 Buxton Road, London, E17 7EH",
+                phone: companyInfo?.landlineFormat || "+44 20 7946 0958",
+                email: companyInfo?.emailSender || user?.email || "operations@toobatravels.co.uk",
+                logo: companyInfo?.logoPrimary || null,
+                website: companyInfo?.website || "www.toobatravels.co.uk",
               }}
             />
           </div>

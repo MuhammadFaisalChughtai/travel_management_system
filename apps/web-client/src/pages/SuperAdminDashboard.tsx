@@ -428,6 +428,7 @@ export function SuperAdminDashboard() {
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [settingGlobalInvoice, setSettingGlobalInvoice] = useState(false);
 
   // Tenant Branding Context States
   const [tenantProfile, setTenantProfile] = useState({
@@ -622,6 +623,25 @@ export function SuperAdminDashboard() {
       toast.error('Failed to load company templates');
     } finally {
       setTemplatesLoading(false);
+    }
+  };
+
+  const handleSetGlobalDefaultInvoice = async () => {
+    if (!window.confirm('Are you sure you want to set the official 3-Page Tax Invoice as the active default invoice template for ALL registered companies?')) {
+      return;
+    }
+    setSettingGlobalInvoice(true);
+    try {
+      const res = await api.post('/finance/templates/set-global-default-invoice');
+      toast.success(res.data.message || 'Tax Invoice template set as default for all companies.');
+      if (selectedTenantId) {
+        fetchTenantTemplates(selectedTenantId);
+      }
+    } catch (err: any) {
+      console.error('Failed to set global default invoice:', err);
+      toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to set default invoice template globally');
+    } finally {
+      setSettingGlobalInvoice(false);
     }
   };
 
@@ -1635,23 +1655,36 @@ export function SuperAdminDashboard() {
                     <p className="text-xs text-slate-500">Pick a registered company to configure their invoicing, vouchers, and branding assets.</p>
                   </div>
                 </div>
-                <select
-                  value={selectedTenantId || ''}
-                  onChange={(e) => {
-                    const tId = e.target.value ? parseInt(e.target.value) : null;
-                    setSelectedTenantId(tId);
-                    if (tId) {
-                      fetchTenantTemplates(tId);
-                      fetchTenantProfile(tId);
-                    }
-                  }}
-                  className="w-full sm:w-64 px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
-                >
-                  <option value="">-- Choose Company --</option>
-                  {tenants.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.domain || 'no-domain'})</option>
-                  ))}
-                </select>
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    disabled={settingGlobalInvoice}
+                    onClick={handleSetGlobalDefaultInvoice}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-sm transition disabled:opacity-50"
+                    title="Set the clean 3-page Tax Invoice template as default for all registered companies"
+                  >
+                    <FileText className={`w-4 h-4 ${settingGlobalInvoice ? 'animate-spin' : ''}`} />
+                    {settingGlobalInvoice ? 'Applying Globally...' : 'Set Tax Invoice as Default for All Companies'}
+                  </button>
+
+                  <select
+                    value={selectedTenantId || ''}
+                    onChange={(e) => {
+                      const tId = e.target.value ? parseInt(e.target.value) : null;
+                      setSelectedTenantId(tId);
+                      if (tId) {
+                        fetchTenantTemplates(tId);
+                        fetchTenantProfile(tId);
+                      }
+                    }}
+                    className="w-full sm:w-64 px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                  >
+                    <option value="">-- Choose Company --</option>
+                    {tenants.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.domain || 'no-domain'})</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {selectedTenantId ? (

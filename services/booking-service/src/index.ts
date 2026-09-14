@@ -76,6 +76,8 @@ function getBookingPermissionForPath(
   }
 
   if (cleanPath.startsWith("/finance/templates")) {
+    if (cleanPath.includes("/compile")) return "READ_BOOKING";
+    if (cleanPath.includes("/set-global-default-invoice")) return null;
     if (method === "GET") return "READ_TEMPLATE";
     if (method === "POST") return "CREATE_TEMPLATE";
     if (method === "PUT" || method === "PATCH") return "UPDATE_TEMPLATE";
@@ -7003,7 +7005,14 @@ const MOCK_PREVIEW_DATA = {
 
 async function fetchTenantProfile(
   tenantId: number,
-): Promise<{ name: string; logo: string | null } | null> {
+): Promise<{
+  name: string;
+  logo: string | null;
+  location?: string;
+  phone?: string;
+  email?: string;
+  domain?: string;
+} | null> {
   const authUrl = process.env.AUTH_SERVICE_URL || "http://auth-service:4001";
   try {
     const res = await fetch(`${authUrl}/tenants/profile`, {
@@ -7018,6 +7027,10 @@ async function fetchTenantProfile(
         return {
           name: data.tenant.name || "",
           logo: data.tenant.logo || null,
+          location: data.tenant.location || "",
+          phone: data.tenant.phone || "",
+          email: data.tenant.email || "",
+          domain: data.tenant.domain || "",
         };
       }
     }
@@ -7025,6 +7038,514 @@ async function fetchTenantProfile(
     console.error("fetchTenantProfile error:", error);
   }
   return null;
+}
+
+function getDefaultTaxInvoiceHtml(): string {
+  return `<div class="tax-invoice-document" style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; line-height: 1.4; background: #ffffff;">
+  <!-- PAGE 1: ITINERARY, ACCOMMODATION & BILLING BREAKDOWN -->
+  <div class="invoice-page page-1" style="padding: 24px 28px; box-sizing: border-box;">
+    <!-- Top Header: Logo & Company Info on Left | Tax Invoice Metadata on Right -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 22px;">
+      <tr>
+        <td style="width: 60%; vertical-align: top;">
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            <div style="flex-shrink: 0; margin-top: 2px;">
+              {{company.logoPrimary}}
+            </div>
+            <div>
+              <div style="font-size: 17px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.3px;">{{company.name}}</div>
+              <div style="font-size: 10px; color: #475569; font-weight: 600; margin-top: 3px;">Headquarters: {{company.address}}</div>
+              <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">Support: {{company.phone}} | Email: {{company.email}}</div>
+              <div style="font-size: 9.5px; color: #64748b; margin-top: 1px;">Web: {{company.website}}</div>
+            </div>
+          </div>
+        </td>
+        <td style="width: 40%; vertical-align: top; text-align: right;">
+          <div style="font-size: 26px; font-weight: 900; color: #c53030; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">TAX INVOICE</div>
+          <table style="margin-left: auto; text-align: right; font-size: 10px; color: #334155; line-height: 1.45; border-collapse: collapse;">
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Invoice No:</td><td style="font-weight: 800; font-family: monospace;">{{invoice.number}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Booking Ref:</td><td style="font-weight: 800; font-family: monospace;">{{booking.reference}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Invoice Date:</td><td style="font-weight: 700;">{{invoice.date}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Quotation Date:</td><td style="font-weight: 700;">{{booking.date}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Package Type:</td><td style="font-weight: 700;">{{booking.packageType}}</td></tr>
+            <tr><td style="font-weight: 600; color: #64748b; padding-right: 8px;">Payment Status:</td><td>{{booking.paymentStatusBadge}}</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Customer Details & Package Reservation Summary (2-Column Card) -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+      <tr>
+        <td style="width: 50%; vertical-align: top; padding: 12px 16px; border-right: 1px solid #e2e8f0;">
+          <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            CUSTOMER / BILL TO DETAILS
+          </div>
+          <div style="font-size: 10px; color: #334155; line-height: 1.6;">
+            <div><span style="color: #64748b; font-weight: 600;">Lead Passenger:</span> <strong style="color: #0f172a;">{{customer.fullName}}</strong></div>
+            {{customer.additionalPassengers}}
+            <div><span style="color: #64748b; font-weight: 600;">Passports / Nationality:</span> {{customer.nationality}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Contact Phone:</span> {{customer.phone}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Email Address:</span> {{customer.email}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Billing Address:</span> {{customer.address}}</div>
+          </div>
+        </td>
+        <td style="width: 50%; vertical-align: top; padding: 12px 16px;">
+          <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            PACKAGE & RESERVATION SUMMARY
+          </div>
+          <div style="font-size: 10px; color: #334155; line-height: 1.6;">
+            <div><span style="color: #64748b; font-weight: 600;">Package Route:</span> <strong style="color: #0f172a;">{{package.route}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Travel Dates:</span> <strong style="color: #0f172a;">{{package.travelDates}}</strong></div>
+            <div><span style="color: #64748b; font-weight: 600;">Total Passengers:</span> {{booking.totalPassengers}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Airline Carrier:</span> {{flight.carrierSummary}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Visa Authorization:</span> {{visa.authorizationSummary}}</div>
+            <div><span style="color: #64748b; font-weight: 600;">Booking Status:</span> {{booking.statusSummary}}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- 1. FLIGHT ITINERARY SCHEDULE -->
+    <div style="margin-bottom: 18px;">
+      <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        1. FLIGHT ITINERARY SCHEDULE ({{flight.carrierSummary}})
+      </div>
+      {{tables.flightSchedule}}
+    </div>
+
+    <!-- 2. HOTEL ACCOMMODATIONS & GROUND LOGISTICS -->
+    <div style="margin-bottom: 18px;">
+      <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        2. HOTEL ACCOMMODATIONS & GROUND LOGISTICS ({{hotel.durationSummary}})
+      </div>
+      {{tables.hotelLogistics}}
+    </div>
+
+    <!-- 3. BILLING & PACKAGE FARE BREAKDOWN -->
+    <div style="margin-bottom: 8px;">
+      <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        3. BILLING & PACKAGE FARE BREAKDOWN
+      </div>
+      {{tables.packageInclusions}}
+    </div>
+  </div>
+
+  <!-- PAGE 2: FINANCIAL SETTLEMENT, PAYMENT INSTRUCTIONS & ACCEPTANCE SIGNATURE -->
+  <div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>
+  <div class="invoice-page page-2" style="padding: 24px 28px; box-sizing: border-box;">
+    {{tables.financialSettlement}}
+
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-size: 10px; color: #334155; line-height: 1.55;">
+      <strong style="color: #0f172a;">Payment Methods & Instructions:</strong> Bank: {{company.bankName}} | Account Name: {{company.accountName}} | Sort Code: {{company.sortCode}} | Account No: {{company.accountNumber}} | Payment Ref: <strong style="font-family: monospace;">{{booking.reference}}</strong> | Cards Accepted: Visa / MasterCard / Amex
+    </div>
+
+    <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-bottom: 24px; background: #ffffff;">
+      <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+        CUSTOMER ACCEPTANCE & SIGNATURE
+      </div>
+      <p style="font-size: 10px; color: #475569; line-height: 1.55; font-style: italic; margin: 0 0 20px 0;">
+        I hereby confirm that all passenger names, flight schedules, hotel categories, ground transport circuits, and total package costs shown above are agreed and approved. I acknowledge and explicitly agree to be legally bound by all {{company.name}} Terms & Conditions listed below.
+      </p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
+        <tr>
+          <td style="width: 50%; vertical-align: top; padding-right: 24px;">
+            <div style="color: #475569; font-weight: 700; margin-bottom: 30px;">Customer Authorized Signature:</div>
+            <div style="border-bottom: 1px solid #0f172a; width: 90%; height: 26px; font-weight: bold; color: #64748b;">X</div>
+          </td>
+          <td style="width: 50%; vertical-align: top; padding-left: 24px;">
+            <div style="color: #475569; font-weight: 700; margin-bottom: 4px;">Lead Passenger Name (Printed):</div>
+            <div style="font-weight: 800; color: #0f172a; border-bottom: 1px solid #94a3b8; width: 90%; padding-bottom: 4px; margin-bottom: 20px;">
+              {{customer.fullName}}
+            </div>
+            <div style="color: #475569; font-weight: 700; margin-bottom: 4px;">Date of Acceptance:</div>
+            <div style="font-weight: 800; color: #0f172a; border-bottom: 1px solid #94a3b8; width: 90%; padding-bottom: 4px;">
+              {{document.date}}
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- PAGE 3: TERMS & CONDITIONS -->
+  <div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>
+  <div class="invoice-page page-3" style="padding: 24px 28px; box-sizing: border-box;">
+    <div style="font-size: 14px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+      TERMS & CONDITIONS
+    </div>
+    <div style="font-size: 10.5px; font-weight: 800; color: #b91c1c; text-transform: uppercase; margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">
+      {{company.name}} - BOOKING TERMS, CONDITIONS & LEGAL DISCLAIMERS
+    </div>
+
+    <div style="font-size: 8.8px; color: #334155; line-height: 1.6;">
+      {{tables.termsAndConditions}}
+    </div>
+
+    <div style="margin-top: 28px; padding-top: 14px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 9.5px; color: #64748b;">
+      <strong>{{company.name}}</strong> | Headquarters: {{company.address}} | Support: {{company.phone}} | Email: {{company.email}} | Web: {{company.website}}
+    </div>
+  </div>
+</div>`;
+}
+
+function getDefaultTaxInvoiceCss(): string {
+  return `/* Tax Invoice 3-Page Clean Layout */
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f1f5f9;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1e293b;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.tax-invoice-document {
+  max-width: 820px;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.invoice-page {
+  box-sizing: border-box;
+  background: #ffffff;
+  position: relative;
+}
+
+.page-break {
+  page-break-after: always;
+  break-after: page;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .tax-invoice-document {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .invoice-page {
+    padding: 10mm !important;
+    margin: 0 !important;
+  }
+  .page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}`;
+}
+
+function buildFlightScheduleTable(booking: any): string {
+  const flights = booking.flightServices || [];
+  if (flights.length === 0) {
+    return `<div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; color: #64748b; font-size: 10px;">No scheduled flight segments registered.</div>`;
+  }
+
+  const outboundFlights = flights.slice(0, Math.max(1, Math.ceil(flights.length / 2)));
+  const inboundFlights = flights.length > 1 ? flights.slice(Math.max(1, Math.ceil(flights.length / 2))) : [];
+
+  const renderSectorRow = (sectorName: string, sectorFlights: any[]) => {
+    if (!sectorFlights || sectorFlights.length === 0) return '';
+    const f1 = sectorFlights[0];
+    const fLast = sectorFlights[sectorFlights.length - 1];
+    const route = `${f1.departedFrom || 'LHR'} to ${fLast.arrivedAt || 'JED'}`;
+    const flightNos = sectorFlights.map((f: any) => f.flightNo).filter(Boolean).join(' / ') || f1.flightNo || 'TBA';
+    const dateStr = f1.date ? new Date(f1.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : (f1.departureDate ? new Date(f1.departureDate).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : '-');
+
+    const depDetails = `
+      <strong style="color: #0f172a; display: block;">${f1.departedFromAirportName || f1.departedFrom || 'Departure Airport'}</strong>
+      <div style="color: #334155; margin-top: 1px;">Dep: ${f1.departTime || 'TBA'}</div>
+      <div style="color: #64748b; font-size: 9px;">${f1.flightNo || ''} - ${f1.aircraft || 'Boeing 787'}</div>
+      ${sectorFlights.length > 1 ? `<div style="color: #334155; font-size: 9px; margin-top: 1px;">Arr ${f1.arrivedAt || 'Transit'}: ${f1.arrivalTime || 'TBA'}</div>` : ''}
+    `;
+
+    const arrDetails = `
+      <strong style="color: #0f172a; display: block;">${fLast.arrivedAtAirportName || fLast.arrivedAt || 'Arrival Airport'}</strong>
+      ${sectorFlights.length > 1 ? `<div style="color: #334155; margin-top: 1px;">Dep ${fLast.departedFrom || 'Transit'}: ${fLast.departTime || 'TBA'}</div>` : ''}
+      <div style="color: #64748b; font-size: 9px;">${fLast.flightNo || ''} - ${fLast.aircraft || 'Boeing 787'}</div>
+      <div style="color: #0f172a; font-weight: 700; margin-top: 2px;">Final Arr: ${fLast.arrivalTime || 'TBA'}</div>
+    `;
+
+    const transitText = sectorFlights.length > 1 
+      ? `<div style="color: #334155; font-weight: 600;">Transit in ${f1.arrivedAt || 'AMM'}:</div><div style="color: #b45309; font-weight: bold; font-size: 9px;">1 hr 30 mins</div>`
+      : `<div style="color: #10b981; font-weight: 600;">Direct Flight</div>`;
+
+    const baggageText = f1.checkedBaggage || f1.baggage || '1x 23kg Hold Luggage';
+    const cabinText = f1.carryOnBaggage || '+ 1x Cabin Bag (pp)';
+
+    return `
+      <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff;">
+        <td style="padding: 8px 10px; vertical-align: top;">
+          <strong style="color: #0f172a; display: block; font-size: 10px;">${sectorName}</strong>
+          <span style="font-weight: 700; color: #1e3a8a; font-size: 9.5px;">${route}</span>
+          <div style="font-family: monospace; color: #64748b; font-size: 9px; margin-top: 2px;">${flightNos}</div>
+          <div style="color: #64748b; font-size: 9px;">${dateStr}</div>
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">${depDetails}</td>
+        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">${arrDetails}</td>
+        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">
+          ${transitText}
+          <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Aircraft: ${f1.aircraft || 'Boeing 787'}</div>
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">
+          <strong style="color: #0f172a; display: block;">${f1.flightClass || 'Economy Class'}</strong>
+          <div style="color: #64748b; font-size: 9px;">${baggageText}</div>
+          <div style="color: #64748b; font-size: 9px;">${cabinText}</div>
+        </td>
+      </tr>
+    `;
+  };
+
+  return `
+    <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #cbd5e1;">
+      <thead>
+        <tr style="background: #091E42; color: #ffffff; text-align: left;">
+          <th style="padding: 6px 10px; font-weight: 800; width: 18%;">Sector / Flight</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 25%;">Departure Details</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 25%;">Arrival Details</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 17%;">Transit / Aircraft</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 15%;">Cabin & Baggage</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${renderSectorRow('OUTBOUND', outboundFlights)}
+        ${inboundFlights.length > 0 ? renderSectorRow('INBOUND', inboundFlights) : ''}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildHotelLogisticsCards(booking: any): string {
+  const accommodations = booking.accommodations || [];
+  const transports = booking.transportServices || [];
+  const visas = booking.visaServices || [];
+
+  const h1 = accommodations[0] || null;
+  const h2 = accommodations[1] || null;
+
+  const formatDateShort = (d: any) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '-';
+
+  const computeNights = (cin: any, cout: any) => {
+    if (!cin || !cout) return 0;
+    const diff = new Date(cout).getTime() - new Date(cin).getTime();
+    return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+  };
+
+  const renderHotelCard = (h: any, fallbackTitle: string, defaultCity: string) => {
+    if (!h) {
+      return `
+        <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 135px; box-sizing: border-box;">
+          <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">${fallbackTitle}</div>
+          <div style="color: #94a3b8; font-size: 9.5px; font-style: italic; margin-top: 10px;">Not included in this package.</div>
+        </div>
+      `;
+    }
+    const nights = computeNights(h.checkInDate, h.checkOutDate);
+    const dateRange = h.checkInDate && h.checkOutDate ? `${formatDateShort(h.checkInDate)} - ${formatDateShort(h.checkOutDate)}` : 'Dates TBA';
+    const title = h.city ? `${h.city.toUpperCase()} ACCOMMODATION` : fallbackTitle;
+    const stars = h.hotelName?.includes('5-Star') ? '' : ' (4-Star)';
+
+    return `
+      <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 135px; box-sizing: border-box;">
+        <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">${title}</div>
+        <div style="font-weight: 800; color: #1e3a8a; font-size: 10.5px; margin-bottom: 4px;">${h.hotelName}${stars}</div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.45;">
+          <div><strong style="color: #334155;">Location:</strong> ${h.city || defaultCity}</div>
+          <div><strong style="color: #334155;">Duration:</strong> ${nights > 0 ? `${nights} Nights (${dateRange})` : dateRange}</div>
+          <div><strong style="color: #334155;">Room:</strong> ${h.roomType || 'Standard Room'}</div>
+          <div><strong style="color: #334155;">Board:</strong> ${h.mealType || 'Room Only'}</div>
+          <div><strong style="color: #334155;">Feature:</strong> ${h.notes || 'Haram Shuttle / Walking Distance'}</div>
+        </div>
+      </div>
+    `;
+  };
+
+  let transportList = '';
+  if (transports.length > 0) {
+    transportList = transports.map((t: any, idx: number) => {
+      const from = t.departureDestination || t.pickUpLocation || 'Pickup';
+      const to = t.arrivalDestination || t.dropOffLocation || 'Dropoff';
+      return `<div>• Sector ${idx + 1}: ${from} to ${to}</div>`;
+    }).join('');
+  } else {
+    transportList = `<div>• Private AC Vehicle Circuit Included</div>`;
+  }
+
+  let visaList = '';
+  if (visas.length > 0) {
+    visaList = visas.map((v: any) => `<div>• ${v.visaType || 'Saudi Tourist / Umrah Visa'} (${v.country || 'Saudi Arabia'})</div>`).join('');
+  } else {
+    visaList = `<div>• Saudi ETA Visa (2-Year Multiple Entry)</div>`;
+  }
+
+  return `
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr>
+        <td style="width: 33.33%; vertical-align: top; padding-right: 6px;">
+          ${renderHotelCard(h1, 'MAKKAH ACCOMMODATION', 'Makkah Al-Mukarramah')}
+        </td>
+        <td style="width: 33.33%; vertical-align: top; padding: 0 3px;">
+          ${renderHotelCard(h2, 'MADINAH ACCOMMODATION', 'Madinah Al-Munawwarah')}
+        </td>
+        <td style="width: 33.33%; vertical-align: top; padding-left: 6px;">
+          <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 135px; box-sizing: border-box;">
+            <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">TRANSFERS & VISA SERVICES</div>
+            <div style="font-weight: 800; color: #1e3a8a; font-size: 10.5px; margin-bottom: 4px;">Private Transport + Visas</div>
+            <div style="font-size: 9px; color: #475569; line-height: 1.45;">
+              ${transportList}
+              ${visaList}
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  `;
+}
+
+function buildPackageInclusionsTable(booking: any, currencySymbol: string): string {
+  const totalGross = Number(booking.totalPrice || 0);
+  const paxQty = booking.customers?.length || 1;
+  const ratePerPerson = (totalGross / paxQty).toFixed(2);
+  const totalGrossFormatted = totalGross.toFixed(2);
+
+  const bullets: string[] = [];
+
+  if (booking.flightServices && booking.flightServices.length > 0) {
+    const f1 = booking.flightServices[0];
+    const carrier = f1.vendorName || f1.airlineCarrier || 'Royal Jordanian';
+    const routes = booking.flightServices.map((f: any) => `${f.departedFrom} to ${f.arrivedAt}`).join(' | ');
+    bullets.push(`Return Flights with ${carrier}: ${routes}`);
+  }
+
+  if (booking.accommodations && booking.accommodations.length > 0) {
+    booking.accommodations.forEach((h: any) => {
+      bullets.push(`${h.qty || 1}x Stay at ${h.hotelName} (${h.roomType || 'Standard Room'}, ${h.mealType || 'Room Only'})`);
+    });
+  }
+
+  if (booking.transportServices && booking.transportServices.length > 0) {
+    bullets.push(`Full Private AC Ground Transfer Circuit`);
+  }
+
+  if (booking.visaServices && booking.visaServices.length > 0) {
+    bullets.push(`${booking.visaServices.length}x Saudi Visa Authorisations (ETA / Entry Visas)`);
+  }
+
+  bullets.push(`Airline Checked Baggage (23 kg) + Cabin Baggage + All Taxes & Airport Surcharges`);
+
+  const bulletsHtml = bullets.map(b => `<li style="margin-bottom: 2px;">${b}</li>`).join('');
+
+  let addonRows = '';
+  if (booking.additionalServices && booking.additionalServices.length > 0) {
+    addonRows = booking.additionalServices.map((s: any) => `
+      <tr style="border-top: 1px solid #f1f5f9; background: #ffffff;">
+        <td style="padding: 6px 10px; font-size: 9.5px; color: #334155;"><strong>Extra Service:</strong> ${s.serviceName} (${s.notes || ''})</td>
+        <td style="padding: 6px 10px; text-align: center; font-size: 9.5px; font-weight: 600;">1</td>
+        <td style="padding: 6px 10px; text-align: right; font-size: 9.5px; font-weight: 600;">${currencySymbol}${Number(s.charges || s.price || 0).toFixed(2)}</td>
+        <td style="padding: 6px 10px; text-align: right; font-size: 9.5px; font-weight: 700;">${currencySymbol}${Number(s.charges || s.price || 0).toFixed(2)}</td>
+      </tr>
+    `).join('');
+  }
+
+  if (booking.discounts && booking.discounts.length > 0) {
+    addonRows += booking.discounts.map((d: any) => `
+      <tr style="border-top: 1px solid #f1f5f9; background: #ffffff;">
+        <td style="padding: 6px 10px; font-size: 9.5px; color: #ef4444;"><strong>Promotional Discount:</strong> ${d.notes || d.description || 'Special Discount'}</td>
+        <td style="padding: 6px 10px; text-align: center; font-size: 9.5px; font-weight: 600;">-</td>
+        <td style="padding: 6px 10px; text-align: right; font-size: 9.5px; font-weight: 600;">-${currencySymbol}${Number(d.amount).toFixed(2)}</td>
+        <td style="padding: 6px 10px; text-align: right; font-size: 9.5px; font-weight: 700; color: #ef4444;">-${currencySymbol}${Number(d.amount).toFixed(2)}</td>
+      </tr>
+    `).join('');
+  }
+
+  return `
+    <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #cbd5e1;">
+      <thead>
+        <tr style="background: #091E42; color: #ffffff; text-align: left;">
+          <th style="padding: 6px 10px; font-weight: 800; width: 60%;">Package Description & Service Inclusions</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 12%; text-align: center;">Pax Qty</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 14%; text-align: right;">Rate per Person</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 14%; text-align: right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background: #ffffff;">
+          <td style="padding: 8px 10px; vertical-align: top;">
+            <strong style="color: #0f172a; font-size: 10.5px; display: block; margin-bottom: 4px;">Tailored Package Spiritual Journey</strong>
+            <ul style="margin: 0; padding-left: 14px; font-size: 9px; color: #475569; line-height: 1.45;">
+              ${bulletsHtml}
+            </ul>
+          </td>
+          <td style="padding: 8px 10px; vertical-align: middle; text-align: center; font-weight: 700; color: #0f172a;">${paxQty}</td>
+          <td style="padding: 8px 10px; vertical-align: middle; text-align: right; font-weight: 700; color: #0f172a;">${currencySymbol}${ratePerPerson}</td>
+          <td style="padding: 8px 10px; vertical-align: middle; text-align: right; font-weight: 900; color: #0f172a; font-size: 11px;">${currencySymbol}${totalGrossFormatted}</td>
+        </tr>
+        ${addonRows}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildFinancialSettlementTable(booking: any, currencySymbol: string, totalGross: number, totalSettled: number, balanceDue: number): string {
+  const depositDue = totalGross * 0.7;
+
+  return `
+    <table style="width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 20px;">
+      <tr>
+        <td style="width: 70%; text-align: right; padding: 6px 14px; font-weight: 700; color: #475569;">Package Subtotal:</td>
+        <td style="width: 30%; text-align: right; padding: 6px 14px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #f1f5f9;">${currencySymbol}${totalGross.toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td style="width: 70%; text-align: right; padding: 6px 14px; font-weight: 700; color: #475569;">Taxes, APD & Visas:</td>
+        <td style="width: 30%; text-align: right; padding: 6px 14px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #f1f5f9;">Included</td>
+      </tr>
+      <tr>
+        <td style="width: 70%; text-align: right; padding: 6px 14px; font-weight: 700; color: #475569;">Deposit Due (70%):</td>
+        <td style="width: 30%; text-align: right; padding: 6px 14px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #f1f5f9;">${currencySymbol}${depositDue.toFixed(2)}</td>
+      </tr>
+      <tr style="background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 2px solid #e2e8f0;">
+        <td style="width: 70%; text-align: right; padding: 10px 14px; font-weight: 900; color: #b91c1c; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">TOTAL AMOUNT DUE:</td>
+        <td style="width: 30%; text-align: right; padding: 10px 14px; font-weight: 900; color: #b91c1c; font-size: 14px;">${currencySymbol}${balanceDue.toFixed(2)}</td>
+      </tr>
+    </table>
+  `;
+}
+
+function buildTermsAndConditions(companyName: string): string {
+  const name = companyName || 'Tooba Travels Ltd';
+  return `
+    <div style="margin-bottom: 6px;"><strong>1. Legally Binding Agreement:</strong> By submitting payment, the client explicitly agrees to be legally bound by all terms. Failure to digitally sign within 48 hours constitutes irrevocable acceptance. All issued tickets and packages are strictly non-changeable and non-refundable.</div>
+    <div style="margin-bottom: 6px;"><strong>2. Payment & Taxation:</strong> A deposit strictly secures a seat, not a locked fare. 70% of the total balance must be cleared within 72 hours of confirmation. The client bears absolute sole responsibility for any supplementary resort fees, city taxes, or mandatory hotel surcharges.</div>
+    <div style="margin-bottom: 6px;"><strong>3. Strict Cancellation Policy:</strong> Cancellations incur strict penalty charges. Credit for future reservations from initial deposits is entirely at the agency's sole discretion. ${name} assumes zero liability for issuing full refunds once services are booked and issued.</div>
+    <div style="margin-bottom: 6px;"><strong>4. Force Majeure:</strong> In unforeseen disruptions (e.g., COVID-19, Saudi Ministry mandates, closures), clients may carry forward or reschedule. Should the client decline to reschedule under Force Majeure conditions, standard cancellation penalties will be strictly enforced.</div>
+    <div style="margin-bottom: 6px;"><strong>5. Flight Obligations:</strong> Clients bear absolute responsibility for exact name matches on passports (minimum 6-8 months validity required). ${name} accepts zero liability for boarding denials. Group fares and block-booked seats are unequivocally non-refundable once issued.</div>
+    <div style="margin-bottom: 6px;"><strong>6. Visa & Immigration:</strong> Visa eligibility and issuance are strictly at the absolute discretion of the Saudi Ministry or relevant consulate. Customers bear sole responsibility for verifying their individual visa eligibility based on their nationality and residency, providing mandatory documentation (e.g., valid BRP, proof of address), and ensuring passports possess 6-8 months validity. We assume zero liability and will issue no refunds for flights, hotels, or transport in the event of visa rejections, processing delays, or non-issuance.</div>
+    <div style="margin-bottom: 6px;"><strong>7. Accommodation & Transfers:</strong> We reserve the absolute right to alter hotels to equivalent properties without prior notice during peak seasons or full bookings. Clients must purchase a local SIM immediately upon arrival. We hold no liability for traffic delays or logistical congestion.</div>
+    <div style="margin-bottom: 6px;"><strong>8. Hajj & Umrah Specific Disclaimers:</strong> ${name} operates solely as a booking agent, not a Hajj Organizer, and disclaims all liability for last-minute itinerary changes by primary organizers. Hajj cancellations incur a mandatory minimum penalty of £250 per person.</div>
+    <div style="margin-bottom: 6px;"><strong>9. Transport & Ground Services:</strong> Passengers must purchase a local SIM upon arrival for driver contact. We accept no liability for traffic delays. Ziyarats are strictly limited to 2-3 hours. Drivers are strictly prohibited from accompanying passengers to locations requiring physical climbing (e.g., Cave of Hira).</div>
+    <div style="margin-bottom: 6px;"><strong>10. Third-Party Liability & Insurance:</strong> All services are subject to the terms of the relevant supplier. We shall not be liable for delays, cancellations, or matters arising from actions of third-party suppliers. We strongly recommend purchasing comprehensive travel insurance for cancellations, emergencies, and missed departures.</div>
+    <div style="margin-bottom: 6px;"><strong>11. Chargebacks & Payment Disputes:</strong> The customer agrees not to initiate any credit card chargebacks or dispute legitimate charges for non-refundable services. In the event of a grievance, the customer must contact ${name} first to seek resolution. Initiating an unwarranted chargeback constitutes a material breach of this agreement and will result in the immediate cancellation of all active travel components without refund. ${name} reserves the right to recover the full disputed amount, plus all associated bank fees, administrative costs, and legal expenses, through a debt collection agency or legal action.</div>
+    <div style="margin-bottom: 6px;"><strong>12. Hotel Check-In & Check-Out Times:</strong> The customer is strictly responsible for verifying all specific hotel check-in and check-out times prior to signing this invoice. Standard global policies typically mandate afternoon check-in and morning check-out, which may not align perfectly with your flight arrival or departure schedules. ${name} accepts absolute zero responsibility or liability for early arrivals, late departures, or any extra charges incurred, and we will not cover or arrange early check-in or late check-out under any circumstances.</div>
+    <div style="margin-bottom: 6px;"><strong>13. Visa On Arrival & Travel Disruptions:</strong> Customers opting for a Visa on Arrival must double-check all entry requirements prior to departure by confirming directly with the Ministry of Interior (MOI) or Ministry of Foreign Affairs (MOFA) of the representative country. ${name} accepts zero liability and takes no responsibility for any travel disruptions, delays, or denials of entry caused by the airline and/or airport.</div>
+  `;
 }
 
 const compileTemplateWithBookingData = (
@@ -7057,6 +7578,128 @@ const compileTemplateWithBookingData = (
 
   const totalSettled = totalPaid - totalRefunded;
   const balanceDue = totalGross - totalSettled;
+  const depositDue = totalGross * 0.7;
+
+  // Lead passenger details
+  const leadCustomer = booking.customers?.[0] || null;
+  const customerFullName = leadCustomer
+    ? `${leadCustomer.firstName} ${leadCustomer.lastName}`
+    : "Walk-in Client";
+  const customerNationality =
+    leadCustomer?.nationality || "British Citizens (Valid >6 Months)";
+  const customerPhone =
+    leadCustomer?.phoneNumber ||
+    companyContext.landlineFormat ||
+    "+44 [Customer Mobile Number]";
+  const customerEmail =
+    leadCustomer?.email || companyContext.emailSender || "client@example.com";
+  const customerAddress =
+    leadCustomer?.address ||
+    companyContext.officeAddress ||
+    "London, United Kingdom";
+
+  const customerAdditionalPassengers =
+    booking.customers && booking.customers.length > 1
+      ? booking.customers
+          .slice(1)
+          .map(
+            (c: any, idx: number) =>
+              `<div><span style="color: #64748b; font-weight: 600;">Passenger ${idx + 2}:</span> ${c.firstName} ${c.lastName} (${c.ageCategory || "Adult"})</div>`,
+          )
+          .join("")
+      : "";
+
+  // Date and duration calculations
+  let totalNights = 0;
+  let travelDatesText = "Dates TBA";
+  if (booking.accommodations && booking.accommodations.length > 0) {
+    const validDates = booking.accommodations.filter(
+      (a: any) => a.checkInDate && a.checkOutDate,
+    );
+    if (validDates.length > 0) {
+      const earliest = new Date(
+        Math.min(
+          ...validDates.map((a: any) => new Date(a.checkInDate).getTime()),
+        ),
+      );
+      const latest = new Date(
+        Math.max(
+          ...validDates.map((a: any) => new Date(a.checkOutDate).getTime()),
+        ),
+      );
+      totalNights = Math.max(
+        1,
+        Math.round(
+          (latest.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24),
+        ),
+      );
+      travelDatesText = `${earliest.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${latest.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${totalNights + 1} Days / ${totalNights} Nights)`;
+    }
+  } else if (booking.flightServices && booking.flightServices.length > 0) {
+    const f1 = booking.flightServices[0];
+    const fLast = booking.flightServices[booking.flightServices.length - 1];
+    if (f1.date && fLast.date) {
+      const d1 = new Date(f1.date);
+      const d2 = new Date(fLast.date);
+      totalNights = Math.max(
+        1,
+        Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      travelDatesText = `${d1.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${d2.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${totalNights + 1} Days / ${totalNights} Nights)`;
+    }
+  }
+
+  // Package Route
+  let packageRoute = "London Heathrow (LHR) to Jeddah / Madinah (Return)";
+  if (booking.flightServices && booking.flightServices.length > 0) {
+    const f1 = booking.flightServices[0];
+    const fLast = booking.flightServices[booking.flightServices.length - 1];
+    packageRoute = `${f1.departedFrom || "LHR"} to ${fLast.arrivedAt || "JED"} (Return)`;
+  } else if (booking.accommodations && booking.accommodations.length > 0) {
+    const cities = Array.from(
+      new Set(
+        booking.accommodations.map((a: any) => a.city).filter(Boolean),
+      ),
+    );
+    packageRoute =
+      cities.length > 0
+        ? `${cities.join(" & ")} Package`
+        : "Tailored Travel Package";
+  }
+
+  const carrierName =
+    booking.flightServices?.[0]?.vendorName ||
+    booking.flightServices?.[0]?.airlineCarrier ||
+    "Royal Jordanian";
+  const flightClassName =
+    booking.flightServices?.[0]?.flightClass || "Economy Class";
+  const carrierSummary = `${carrierName} (${flightClassName})`;
+  const visaAuthSummary = booking.visaServices?.[0]?.visaType
+    ? `${booking.visaServices[0].visaType} (${booking.visaServices[0].country || "Saudi Arabia"})`
+    : "Saudi Electronic Travel Authorisation (ETA)";
+  const bookingStatusSummary =
+    booking.status === "confirmed"
+      ? "Confirmed / Awaiting Payment"
+      : booking.status
+        ? booking.status.charAt(0).toUpperCase() + booking.status.slice(1)
+        : "Confirmed";
+
+  const paymentStatus =
+    balanceDue <= 0
+      ? "PAID"
+      : totalSettled > 0
+        ? "PARTIALLY PAID"
+        : "PENDING";
+  const paymentStatusBadge =
+    balanceDue <= 0
+      ? '<span style="color: #10b981; font-weight: 800;">PAID</span>'
+      : totalSettled > 0
+        ? '<span style="color: #f59e0b; font-weight: 800;">PARTIALLY PAID</span>'
+        : '<span style="color: #dc2626; font-weight: 800;">PENDING</span>';
+
+  const durationSummaryText =
+    totalNights > 0 ? `${totalNights} NIGHTS` : "GROUND LOGISTICS";
+  const packageTypeLabel = `${totalNights > 0 ? `${totalNights + 1}D/${totalNights}N ` : ""}${booking.tripType || "Umrah"} Tailored Package`;
 
   const passengerRows =
     booking.customers
@@ -7354,21 +7997,53 @@ const compileTemplateWithBookingData = (
   const tokens: Record<string, string> = {
     "company.name": companyContext.companyName || "Travel Agency Ltd",
     "company.logoPrimary": companyContext.logoPrimary
-      ? `<img src="${companyContext.logoPrimary}" style="max-height: 50px; object-fit: contain;" />`
-      : "",
+      ? `<img src="${companyContext.logoPrimary}" alt="${companyContext.companyName || 'Company'}" style="max-height: 52px; max-width: 180px; object-fit: contain; vertical-align: middle;" />`
+      : `<div style="width: 44px; height: 44px; border-radius: 8px; background: #0f172a; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px;">${(companyContext.companyName || "T").charAt(0)}</div>`,
     "company.logoSecondary": companyContext.logoSecondary
       ? `<img src="${companyContext.logoSecondary}" style="max-height: 50px; object-fit: contain;" />`
       : "",
-    "company.address": companyContext.officeAddress || "",
-    "company.email": companyContext.emailSender || "",
-    "company.phone": companyContext.landlineFormat || "",
+    "company.address": companyContext.officeAddress || "London, United Kingdom",
+    "company.email": companyContext.emailSender || "operations@travelagency.com",
+    "company.phone": companyContext.landlineFormat || "+44 20 7946 0958",
+    "company.website": companyContext.website || "www.toobatravels.co.uk",
     "company.whatsapp": companyContext.whatsappWebhook
       ? `<a href="${companyContext.whatsappWebhook}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>`
       : "",
+    "company.bankName": companyContext.bankName || "Barclays Bank UK",
+    "company.accountName": companyContext.accountName || companyContext.companyName || "Tooba Travels Ltd",
+    "company.sortCode": companyContext.sortCode || "20-00-00",
+    "company.accountNumber": companyContext.accountNumber || "12345678",
+    "invoice.number": `INV-${booking.bookingReference}`,
+    "invoice.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+    "document.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
     "booking.reference": booking.bookingReference,
-    "booking.date": new Date(booking.createdAt).toLocaleDateString("en-GB"),
+    "booking.date": new Date(booking.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
     "booking.agent": booking.agentName || "Agent Assignment",
     "booking.currencySymbol": currencySymbol,
+    "booking.packageType": packageTypeLabel,
+    "booking.paymentStatus": paymentStatus,
+    "booking.paymentStatusBadge": paymentStatusBadge,
+    "booking.depositDue": depositDue.toFixed(2),
+    "customer.fullName": customerFullName,
+    "customer.additionalPassengers": customerAdditionalPassengers,
+    "customer.nationality": customerNationality,
+    "customer.phone": customerPhone,
+    "customer.email": customerEmail,
+    "customer.address": customerAddress,
+    "package.route": packageRoute,
+    "package.travelDates": travelDatesText,
+    "booking.totalPassengers": `${booking.customers?.length || 1} Adult${(booking.customers?.length || 1) > 1 ? "s" : ""} (Passport Holders)`,
+    "flight.carrierSummary": carrierSummary,
+    "flight.airline": carrierName,
+    "flight.class": flightClassName,
+    "visa.authorizationSummary": visaAuthSummary,
+    "booking.statusSummary": bookingStatusSummary,
+    "hotel.durationSummary": durationSummaryText,
+    "tables.flightSchedule": buildFlightScheduleTable(booking),
+    "tables.hotelLogistics": buildHotelLogisticsCards(booking),
+    "tables.packageInclusions": buildPackageInclusionsTable(booking, currencySymbol),
+    "tables.financialSettlement": buildFinancialSettlementTable(booking, currencySymbol, totalGross, totalSettled, balanceDue),
+    "tables.termsAndConditions": buildTermsAndConditions(companyContext.companyName),
     "booking.amountGross":
       template.type === "VOUCHER" ? "" : Number(totalGross).toFixed(2),
     "booking.amountSettled":
@@ -7750,15 +8425,22 @@ function generateTemplateFromVisualConfig(config: VisualConfig, _type: string) {
 async function seedDefaultTemplatesForTenant(tenantId: number) {
   const types = ["INVOICE", "VOUCHER"];
   for (const type of types) {
-    const config = defaultVisualConfig(type);
-    const generated = generateTemplateFromVisualConfig(config, type);
-    const structureHtml =
-      generated.html + `\n<!-- VISUAL_CONFIG: ${JSON.stringify(config)} -->`;
-    const structureCss = generated.css;
-    const name =
-      type === "INVOICE"
-        ? "Default Invoice Template"
-        : "Default Voucher Template";
+    let structureHtml: string;
+    let structureCss: string;
+    let name: string;
+
+    if (type === "INVOICE") {
+      name = "Default Tax Invoice Template";
+      structureHtml = getDefaultTaxInvoiceHtml();
+      structureCss = getDefaultTaxInvoiceCss();
+    } else {
+      const config = defaultVisualConfig(type);
+      const generated = generateTemplateFromVisualConfig(config, type);
+      structureHtml =
+        generated.html + `\n<!-- VISUAL_CONFIG: ${JSON.stringify(config)} -->`;
+      structureCss = generated.css;
+      name = "Default Voucher Template";
+    }
 
     const template = await prisma.documentTemplate.create({
       data: {
@@ -8034,10 +8716,78 @@ app.get(
         "company.whatsapp": whatsapp
           ? `<a href="${whatsapp}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>`
           : "",
+        "company.website": (tenantProfile as any)?.domain ? `www.${(tenantProfile as any).domain}` : (companyContext?.website || "www.toobatravels.co.uk"),
+        "company.bankName": "Barclays Bank UK",
+        "company.accountName": companyName,
+        "company.sortCode": "20-00-00",
+        "company.accountNumber": "12345678",
+        "invoice.number": "INV-TT-UMR-950",
+        "invoice.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+        "document.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
         "booking.reference": MOCK_PREVIEW_DATA.booking.reference,
         "booking.date": MOCK_PREVIEW_DATA.booking.date,
         "booking.agent": MOCK_PREVIEW_DATA.booking.agent,
         "booking.currencySymbol": curSym,
+        "booking.packageType": "11D/10N Umrah Tailored Package",
+        "booking.paymentStatus": "PARTIALLY PAID",
+        "booking.paymentStatusBadge": '<span style="color: #f59e0b; font-weight: 800;">PARTIALLY PAID</span>',
+        "booking.depositDue": "1000.00",
+        "customer.fullName": "Mr. Mohammed Faisal",
+        "customer.additionalPassengers": "Mrs. Aisha Faisal, Master Zaid Faisal",
+        "customer.nationality": "British",
+        "customer.phone": "+44 7700 900123",
+        "customer.email": "mohammed.faisal@example.com",
+        "customer.address": "14 Kensington Road, London, W8 4EP",
+        "package.route": "London Heathrow (LHR) to Jeddah / Madinah (Return)",
+        "package.travelDates": "07 Feb 2025 to 17 Feb 2025 (11 Days / 10 Nights)",
+        "booking.totalPassengers": "3 Adults (Passport Holders)",
+        "flight.carrierSummary": "Royal Jordanian (Economy Class)",
+        "flight.airline": "Royal Jordanian",
+        "flight.class": "Economy Class",
+        "visa.authorizationSummary": "Saudi Electronic Travel Authorisation (ETA)",
+        "booking.statusSummary": "Confirmed / Partial Deposit Received",
+        "hotel.durationSummary": "10 NIGHTS",
+        "tables.flightSchedule": buildFlightScheduleTable({
+          flightServices: [
+            { departedFrom: "LHR", arrivedAt: "AMM", flightNo: "RJ 112", date: "2025-02-07", departTime: "14:45", arrivalTime: "21:40", aircraft: "Boeing 787", flightClass: "Economy Class", baggage: "1x 23kg Hold Luggage", carryOnBaggage: "+ 1x Cabin Bag (pp)" },
+            { departedFrom: "AMM", arrivedAt: "JED", flightNo: "RJ 704", date: "2025-02-07", departTime: "23:10", arrivalTime: "01:25 (+1)", aircraft: "Airbus A320", flightClass: "Economy Class", baggage: "1x 23kg Hold Luggage", carryOnBaggage: "+ 1x Cabin Bag (pp)" },
+            { departedFrom: "MED", arrivedAt: "AMM", flightNo: "RJ 707", date: "2025-02-17", departTime: "06:00", arrivalTime: "07:45", aircraft: "Airbus A320", flightClass: "Economy Class", baggage: "1x 23kg Hold Luggage", carryOnBaggage: "+ 1x Cabin Bag (pp)" },
+            { departedFrom: "AMM", arrivedAt: "LHR", flightNo: "RJ 111", date: "2025-02-17", departTime: "09:30", arrivalTime: "13:30", aircraft: "Boeing 787", flightClass: "Economy Class", baggage: "1x 23kg Hold Luggage", carryOnBaggage: "+ 1x Cabin Bag (pp)" }
+          ]
+        }),
+        "tables.hotelLogistics": buildHotelLogisticsCards({
+          accommodations: [
+            { hotelName: "Swissôtel Al Maqam Makkah", city: "Makkah Al-Mukarramah", checkInDate: "2025-02-07", checkOutDate: "2025-02-12", roomType: "Classic Triple Room", mealType: "Bed & Breakfast", notes: "Abraj Al Bait Clock Tower (Haram View)" },
+            { hotelName: "The Oberoi Madinah", city: "Madinah Al-Munawwarah", checkInDate: "2025-02-12", checkOutDate: "2025-02-17", roomType: "Executive Triple Room", mealType: "Bed & Breakfast", notes: "Direct Access to Prophet's Mosque Courtyard" }
+          ],
+          transportServices: [
+            { departureDestination: "Jeddah Airport (JED)", arrivalDestination: "Swissôtel Makkah" },
+            { departureDestination: "Swissôtel Makkah", arrivalDestination: "Oberoi Madinah" },
+            { departureDestination: "Oberoi Madinah", arrivalDestination: "Madinah Airport (MED)" }
+          ],
+          visaServices: [
+            { visaType: "Saudi ETA Visa (Multiple Entry)", country: "Saudi Arabia" }
+          ]
+        }),
+        "tables.packageInclusions": buildPackageInclusionsTable({
+          totalPrice: 3200,
+          customers: [{ id: 1 }, { id: 2 }, { id: 3 }],
+          flightServices: [{ vendorName: "Royal Jordanian", departedFrom: "LHR", arrivedAt: "JED" }, { departedFrom: "MED", arrivedAt: "LHR" }],
+          accommodations: [
+            { hotelName: "Swissôtel Al Maqam Makkah", roomType: "Classic Triple", mealType: "Bed & Breakfast", qty: 1 },
+            { hotelName: "The Oberoi Madinah", roomType: "Executive Triple", mealType: "Bed & Breakfast", qty: 1 }
+          ],
+          transportServices: [{ id: 1 }],
+          visaServices: [{ id: 1 }, { id: 2 }, { id: 3 }]
+        }, curSym),
+        "tables.financialSettlement": buildFinancialSettlementTable({
+          totalPrice: 3200,
+          depositRequired: 1000,
+          payments: [
+            { createdAt: "2025-01-15", paymentMethod: "Bank Transfer", amount: 1000, reference: "TXN-982103", status: "COMPLETED" }
+          ]
+        }, curSym, 3200, 1000, 2200),
+        "tables.termsAndConditions": buildTermsAndConditions(companyName),
         "booking.amountGross": MOCK_PREVIEW_DATA.booking.amountGross,
         "booking.amountSettled": MOCK_PREVIEW_DATA.booking.amountSettled,
         "booking.amountDue": MOCK_PREVIEW_DATA.booking.amountDue,
@@ -8322,14 +9072,31 @@ app.post(
         logoPrimary: tenantProfile?.logo || companyContext?.logoPrimary || null,
         logoSecondary: companyContext?.logoSecondary || "",
         officeAddress:
+          (tenantProfile as any)?.location ||
           companyContext?.officeAddress ||
           "Registered Office: 123 Travel Tower, London, UK",
         emailSender:
-          companyContext?.emailSender || "operations@toobatravels.co.uk",
-        landlineFormat: companyContext?.landlineFormat || "+44 20 7946 0958",
+          (tenantProfile as any)?.email ||
+          companyContext?.emailSender ||
+          "operations@toobatravels.co.uk",
+        landlineFormat:
+          (tenantProfile as any)?.phone ||
+          companyContext?.landlineFormat ||
+          "+44 20 7946 0958",
+        website:
+          (tenantProfile as any)?.domain
+            ? ((tenantProfile as any).domain.startsWith("http") ? (tenantProfile as any).domain : `www.${(tenantProfile as any).domain}`)
+            : (companyContext?.website || "www.toobatravels.co.uk"),
         whatsappWebhook:
           companyContext?.whatsappWebhook ||
-          "https://api.whatsapp.com/send?phone=442079460958",
+          `https://api.whatsapp.com/send?phone=${((tenantProfile as any)?.phone || companyContext?.landlineFormat || "442079460958").replace(/[^0-9+]/g, "")}`,
+        bankName: "Barclays Bank UK",
+        accountName:
+          tenantProfile?.name ||
+          companyContext?.companyName ||
+          "Tooba Travels Ltd",
+        sortCode: "20-00-00",
+        accountNumber: "12345678",
       };
 
       const secret = process.env.JWT_SECRET || "travel-secret";
@@ -8385,6 +9152,137 @@ app.post(
       });
     } catch (error) {
       console.error("Compile Document Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
+);
+
+// POST /finance/templates/set-global-default-invoice
+app.post(
+  "/finance/templates/set-global-default-invoice",
+  requireGatewayHeaders,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      if (!req.isPlatformAdmin && req.userRole !== "SUPER_ADMIN") {
+        return res.status(403).json({ error: "Access denied. Super Admin only." });
+      }
+
+      const authUrl = process.env.AUTH_SERVICE_URL || "http://auth-service:4001";
+      let tenantIds: number[] = [];
+      try {
+        const tenantRes = await fetch(`${authUrl}/tenants`, {
+          headers: {
+            "x-user-id": String(req.userId || "1"),
+            "x-role": "SUPER_ADMIN",
+          },
+        });
+        if (tenantRes.ok) {
+          const tdata: any = await tenantRes.json();
+          if (Array.isArray(tdata.tenants)) {
+            tenantIds = tdata.tenants.map((t: any) => Number(t.id));
+          } else if (Array.isArray(tdata)) {
+            tenantIds = tdata.map((t: any) => Number(t.id));
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch tenants list from auth-service, falling back to DB tenant IDs", e);
+      }
+
+      const dbTemplates = await prisma.documentTemplate.findMany({ select: { tenantId: true }, distinct: ["tenantId"] });
+      const dbContexts = await prisma.companyContext.findMany({ select: { tenantId: true } });
+      const dbBookings = await prisma.booking.findMany({ select: { tenantId: true }, distinct: ["tenantId"] });
+
+      const allTenantIds = Array.from(
+        new Set([
+          ...tenantIds,
+          ...dbTemplates.map((t) => t.tenantId),
+          ...dbContexts.map((c) => c.tenantId),
+          ...dbBookings.map((b) => b.tenantId),
+        ]),
+      ).filter((id) => typeof id === "number" && !isNaN(id) && id > 0);
+
+      const html = getDefaultTaxInvoiceHtml();
+      const css = getDefaultTaxInvoiceCss();
+
+      let updatedCount = 0;
+      let createdCount = 0;
+
+      for (const tId of allTenantIds) {
+        const existingInvoice = await prisma.documentTemplate.findFirst({
+          where: { tenantId: tId, type: "INVOICE" },
+          orderBy: { updatedAt: "desc" },
+        });
+
+        let targetTemplateId: number;
+
+        if (existingInvoice) {
+          const updated = await prisma.documentTemplate.update({
+            where: { id: existingInvoice.id },
+            data: {
+              name: "Default Tax Invoice Template",
+              status: "Active",
+              structureHtml: html,
+              structureCss: css,
+              version: existingInvoice.version + 1,
+            },
+          });
+          targetTemplateId = updated.id;
+          updatedCount++;
+        } else {
+          const created = await prisma.documentTemplate.create({
+            data: {
+              tenantId: tId,
+              name: "Default Tax Invoice Template",
+              type: "INVOICE",
+              version: 1,
+              status: "Active",
+              structureHtml: html,
+              structureCss: css,
+            },
+          });
+          targetTemplateId = created.id;
+          createdCount++;
+        }
+
+        // Delete old variables and re-create all detected variables cleanly
+        await prisma.templateVariable.deleteMany({
+          where: { templateId: targetTemplateId },
+        }).catch(() => {});
+
+        const tokenRegex = /\{\{([^{}]+)\}\}/g;
+        const detectedTokens = new Set<string>();
+        let match;
+        while ((match = tokenRegex.exec(html)) !== null) {
+          detectedTokens.add(match[1].trim());
+        }
+
+        for (const token of detectedTokens) {
+          let pathInRecord = token;
+          if (token.startsWith("booking.")) {
+            pathInRecord = token.replace("booking.", "");
+          }
+          await prisma.templateVariable
+            .create({
+              data: {
+                templateId: targetTemplateId,
+                token,
+                description: `Substitute value of ${token}`,
+                pathInRecord,
+              },
+            })
+            .catch(() => {});
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        message: `Tax Invoice template successfully set as default across ${allTenantIds.length} companies (${updatedCount} updated, ${createdCount} created).`,
+        tenantsProcessed: allTenantIds.length,
+        updatedCount,
+        createdCount,
+      });
+    } catch (error) {
+      console.error("Set Global Default Invoice Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
     }
   },

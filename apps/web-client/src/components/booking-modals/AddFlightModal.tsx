@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plane, RefreshCw } from 'lucide-react';
+import { X, Plane, RefreshCw, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { FlightService } from '../../types/booking';
 import { VendorSelect } from '../shared/VendorSelect';
@@ -7,6 +7,7 @@ import { api as axios } from '../../api/axios';
 import { PnrConverterModal } from './PnrConverterModal';
 import { useCurrency } from '../../utils/currency';
 import { useAuthStore } from '../../store/authStore';
+import { getAirlineName, getAirportName, calculateTransitTime } from '../../utils/flightUtils';
 
 interface AddFlightModalProps {
   isOpen: boolean;
@@ -39,6 +40,24 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
   });
   
   const [showPnrModal, setShowPnrModal] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [selectedCatalogId, setSelectedCatalogId] = useState<string>('custom');
+
+  // Auto-detect Airline from Flight Number if airline not manually selected
+  const handleFlightNoChange = (val: string) => {
+    const updatedNo = val.toUpperCase();
+    const detectedAirline = getAirlineName(updatedNo);
+    const updates: Partial<FlightService> = { flightNo: updatedNo };
+    if (detectedAirline && detectedAirline !== updatedNo) {
+      updates.airline = detectedAirline;
+      if (!form.vendorName) {
+        updates.vendorName = detectedAirline;
+      }
+    }
+    setForm(prev => ({ ...prev, ...updates }));
+  };
+
+  const calculatedDuration = calculateTransitTime(form.date, form.departTime, form.date, form.arrivalTime);
 
   const handlePnrData = (extracted: any) => {
     let formattedDate: string | undefined = undefined;
@@ -101,9 +120,6 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
   }, [isOpen, initialData]);
 
   if (!isOpen) return null;
-
-  const [catalogItems, setCatalogItems] = useState<any[]>([]);
-  const [selectedCatalogId, setSelectedCatalogId] = useState<string>('custom');
 
   useEffect(() => {
     if (isOpen) {
@@ -172,18 +188,27 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
                 <div className="col-span-2">
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Airline / Provider</label>
                   <VendorSelect category="airline" value={form.airline || form.vendorName || ''} onChange={val => setForm({...form, airline: val, vendorName: val})} />
+                  {form.airline && (
+                    <p className="text-[9px] text-indigo-600 font-bold mt-1">Detected Airline: {form.airline}</p>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Flight Number</label>
-                  <input type="text" value={form.flightNo || ''} onChange={e => setForm({...form, flightNo: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" />
+                  <input type="text" value={form.flightNo || ''} onChange={e => handleFlightNoChange(e.target.value)} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" placeholder="e.g. DL5935, RJ112" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Departure (Code)</label>
-                  <input type="text" value={form.departedFrom || ''} onChange={e => setForm({...form, departedFrom: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
+                  <input type="text" value={form.departedFrom || ''} onChange={e => setForm({...form, departedFrom: e.target.value.toUpperCase()})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} placeholder="LHR" />
+                  {form.departedFrom && (
+                    <p className="text-[9px] text-slate-500 font-semibold mt-1 truncate">{getAirportName(form.departedFrom)}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Arrival (Code)</label>
-                  <input type="text" value={form.arrivedAt || ''} onChange={e => setForm({...form, arrivedAt: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} />
+                  <input type="text" value={form.arrivedAt || ''} onChange={e => setForm({...form, arrivedAt: e.target.value.toUpperCase()})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700 uppercase" maxLength={3} placeholder="YYZ" />
+                  {form.arrivedAt && (
+                    <p className="text-[9px] text-slate-500 font-semibold mt-1 truncate">{getAirportName(form.arrivedAt)}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Dep. Time</label>
@@ -197,6 +222,14 @@ export function AddFlightModal({ isOpen, onClose, onSubmit, initialData }: AddFl
                   <label className="block text-[10px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wide">Travel Date</label>
                   <input type="date" value={form.date || ''} onChange={e => setForm({...form, date: e.target.value})} className="w-full border border-slate-200 bg-white/70 rounded-lg px-3 py-2 text-[11px] outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all font-semibold text-slate-700" />
                 </div>
+                {calculatedDuration && (
+                  <div className="col-span-4 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                    <span className="text-[11px] font-extrabold text-amber-900">
+                      Calculated Flight Duration / Transit: {calculatedDuration}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getAirlineName } from '../../utils/flightUtils';
 
 interface PnrConverterModalProps {
   isOpen: boolean;
@@ -22,8 +23,11 @@ export function PnrConverterModal({ isOpen, onClose, onSave }: PnrConverterModal
     const timeMatch = pnrText.match(/\b(\d{4})\s+(\d{4})\b/);
     const fallbackDateMatch = !routeMatch ? pnrText.match(/(\d{2}[A-Z]{3})/i) : null;
 
+    const rawCode = flightNoMatch ? flightNoMatch[1].toUpperCase() : undefined;
+    const detectedAirline = getAirlineName(rawCode);
+
     const extracted = {
-      airline: flightNoMatch ? flightNoMatch[1].toUpperCase() : undefined,
+      airline: detectedAirline || rawCode,
       flightNo: flightNoMatch ? `${flightNoMatch[1].toUpperCase()}${flightNoMatch[2]}` : undefined,
       date: routeMatch ? routeMatch[1] : (fallbackDateMatch ? fallbackDateMatch[1] : undefined),
       departedFrom: routeMatch ? routeMatch[2].substring(0, 3).toUpperCase() : (fallbackRouteMatch ? fallbackRouteMatch[1].toUpperCase() : undefined),

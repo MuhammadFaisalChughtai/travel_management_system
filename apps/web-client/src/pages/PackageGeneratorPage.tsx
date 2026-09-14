@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/authStore';
 import { toast } from 'react-hot-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { getAirlineName, getAirportName, calculateTransitTime } from '../utils/flightUtils';
 
 interface HotelItem {
   name: string;
@@ -361,14 +362,27 @@ export function PackageGeneratorPage() {
 
       if (matches.length > 0) {
         if (matches[0]) {
+          const detectedAirline = getAirlineName(matches[0][1]);
+          if (detectedAirline) {
+            setAirlineCarrier(detectedAirline);
+          }
           setOutboundLeg1No(`${matches[0][1]} ${matches[0][2]}`);
           setOutboundLeg1Dep(`${matches[0][6].slice(0,2)}:${matches[0][6].slice(2)} ${matches[0][4]}`);
           setOutboundLeg1Arr(`${matches[0][7].slice(0,2)}:${matches[0][7].slice(2)} ${matches[0][5]}`);
+          setDepartureAirport(getAirportName(matches[0][4]));
         }
         if (matches[1]) {
           setOutboundLeg2No(`${matches[1][1]} ${matches[1][2]}`);
           setOutboundLeg2Dep(`${matches[1][6].slice(0,2)}:${matches[1][6].slice(2)} ${matches[1][4]}`);
           setOutboundLeg2Arr(`${matches[1][7].slice(0,2)}:${matches[1][7].slice(2)} ${matches[1][5]}`);
+          
+          // Auto-calculate Outbound Transit Layover
+          const arrTime = `${matches[0][7].slice(0,2)}:${matches[0][7].slice(2)}`;
+          const depTime = `${matches[1][6].slice(0,2)}:${matches[1][6].slice(2)}`;
+          const transit = calculateTransitTime(null, arrTime, null, depTime);
+          if (transit) {
+            setOutboundTransitText(`${transit} Layover at ${matches[0][5]}`);
+          }
         }
         if (matches[2]) {
           setInboundLeg1No(`${matches[2][1]} ${matches[2][2]}`);
@@ -379,6 +393,14 @@ export function PackageGeneratorPage() {
           setInboundLeg2No(`${matches[3][1]} ${matches[3][2]}`);
           setInboundLeg2Dep(`${matches[3][6].slice(0,2)}:${matches[3][6].slice(2)} ${matches[3][4]}`);
           setInboundLeg2Arr(`${matches[3][7].slice(0,2)}:${matches[3][7].slice(2)} ${matches[3][5]}`);
+
+          // Auto-calculate Inbound Transit Layover
+          const arrTime = `${matches[2][7].slice(0,2)}:${matches[2][7].slice(2)}`;
+          const depTime = `${matches[3][6].slice(0,2)}:${matches[3][6].slice(2)}`;
+          const transit = calculateTransitTime(null, arrTime, null, depTime);
+          if (transit) {
+            setInboundTransitText(`${transit} Layover at ${matches[2][5]}`);
+          }
         }
         toast.success(`Successfully parsed ${matches.length} flight legs from PNR text!`);
         setShowPnrModal(false);

@@ -2170,26 +2170,22 @@ export function PackageGeneratorPage() {
 
   // Render Document PDF Live Preview Component
   const renderQuotationPreview = () => (
-    <div className="w-full flex justify-center">
+    <div className="w-full flex justify-center print:block print:w-full">
       <style>{`
         @media print {
           nav, aside, header, footer, .print\\:hidden, button, form {
             display: none !important;
           }
-          html, body, #root, main, div {
+          html, body, #root, main {
             background: #ffffff !important;
             color: #000000 !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: visible !important;
             height: auto !important;
-            min-height: 0 !important;
-            max-height: none !important;
             width: 100% !important;
             max-width: none !important;
             position: static !important;
-            box-shadow: none !important;
-            border: none !important;
           }
           #printable-quotation-document {
             display: block !important;
@@ -2197,10 +2193,11 @@ export function PackageGeneratorPage() {
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 auto !important;
-            padding: 10mm !important;
+            padding: 8mm !important;
             box-shadow: none !important;
             border: none !important;
             background: #ffffff !important;
+            box-sizing: border-box !important;
           }
           @page {
             size: A4 portrait;
@@ -2530,7 +2527,7 @@ export function PackageGeneratorPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 p-3 sm:p-6 font-sans">
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-6 font-sans print:p-0 print:m-0 print:bg-white">
       {/* Top Header Controls (Hide on print) */}
       <div className="print:hidden max-w-7xl mx-auto mb-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -2684,7 +2681,7 @@ export function PackageGeneratorPage() {
 
       {/* SPLIT VIEW TAB (55% Editor / 45% Live Preview) */}
       {activeTab === 'split' && (
-        <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start print:block print:w-full print:max-w-none print:p-0 print:m-0">
           {/* Left Column (55%): Collapsible Accordion Editor */}
           <div className="lg:col-span-6 space-y-4 print:hidden">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
@@ -2699,7 +2696,7 @@ export function PackageGeneratorPage() {
           </div>
 
           {/* Right Column (45%): Sticky Live PDF Preview */}
-          <div className="lg:col-span-6 sticky top-6">
+          <div className="lg:col-span-6 sticky top-6 print:block print:w-full print:static print:p-0 print:m-0">
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-3 flex justify-between items-center print:hidden">
               <span className="text-xs font-black text-slate-800 flex items-center gap-2 uppercase tracking-wide">
                 <FileText className="w-4 h-4 text-blue-600" /> Live Quotation PDF Document Preview

@@ -896,7 +896,7 @@ export function Dashboard() {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6">
+      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6 print:p-0 print:m-0 print:max-w-none print:w-full print:overflow-visible print:block">
         
         {sidebarTab === 'agents' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">

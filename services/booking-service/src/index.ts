@@ -459,6 +459,7 @@ const parseDateWithCurrentTime = (dateInput: any): Date => {
 const createBookingSchema = z.object({
   bookingReference: z.string().min(5),
   date: z.string(),
+  departureDate: z.string().optional(),
   totalPrice: z.number().positive(),
   customers: z.array(z.number()).optional().default([]),
   agentName: z.string().optional(),
@@ -492,6 +493,7 @@ app.post(
           tenantId: tenantIdNumeric,
           bookingReference: finalBookingReference,
           date: new Date(parsedData.date),
+          ...(parsedData.departureDate ? { departureDate: new Date(parsedData.departureDate) } : {}),
           totalPrice: parsedData.totalPrice,
           status: "confirmed",
           agentName: parsedData.agentName || null,
@@ -2043,29 +2045,39 @@ app.post(
 
         // 2. Separate Transaction for Credit Card Charges (Debit Customer Receivable)
         if (parsedData.cardCharges && parsedData.cardCharges > 0) {
-          const feeTx = await prisma.ledgerTransaction.create({
-            data: {
+          const existingFeeTx = await prisma.ledgerTransaction.findFirst({
+            where: {
               tenantId: tenantIdNumeric,
-              transactionDate: parseDateWithCurrentTime(parsedData.paidOn),
-              referenceNumber: booking.bookingReference,
-              description: `Credit Card Processing Fee`,
               type: "FEE",
+              referenceNumber: booking.bookingReference,
             },
           });
 
-          await prisma.ledgerEntry.create({
-            data: {
-              transactionId: feeTx.id,
-              accountId: customerAccount.id,
-              debitAmount: parsedData.cardCharges,
-              creditAmount: 0,
-            },
-          });
+          if (!existingFeeTx) {
+            const feeTx = await prisma.ledgerTransaction.create({
+              data: {
+                tenantId: tenantIdNumeric,
+                transactionDate: parseDateWithCurrentTime(parsedData.paidOn),
+                referenceNumber: booking.bookingReference,
+                description: `Credit Card Gateway Processing Fee for ${booking.bookingReference}`,
+                type: "FEE",
+              },
+            });
 
-          await prisma.ledgerAccount.update({
-            where: { id: customerAccount.id },
-            data: { balance: { increment: parsedData.cardCharges } },
-          });
+            await prisma.ledgerEntry.create({
+              data: {
+                transactionId: feeTx.id,
+                accountId: customerAccount.id,
+                debitAmount: parsedData.cardCharges,
+                creditAmount: 0,
+              },
+            });
+
+            await prisma.ledgerAccount.update({
+              where: { id: customerAccount.id },
+              data: { balance: { increment: parsedData.cardCharges } },
+            });
+          }
         }
       }
       // --------------------------------------------
@@ -4908,7 +4920,12 @@ app.post(
   },
 );
 
+const activeFeeSyncs = new Set<number>();
+
 async function syncCreditCardFeeRecords(tenantId: number) {
+  if (activeFeeSyncs.has(tenantId)) return;
+  activeFeeSyncs.add(tenantId);
+
   try {
     const ccPayments = await prisma.bookingPayment.findMany({
       where: {
@@ -4936,15 +4953,22 @@ async function syncCreditCardFeeRecords(tenantId: number) {
 
       const bookingRef = payment.booking?.bookingReference || `BKG-${payment.bookingId}`;
 
-      // 1. Ensure Credit Card Charges payment record exists
-      const existingFeePayment = await prisma.bookingPayment.findFirst({
+      // 1. Ensure only ONE Credit Card Charges payment record exists
+      const feePayments = await prisma.bookingPayment.findMany({
         where: {
           bookingId: payment.bookingId,
           paymentType: "Credit Card Charges",
         },
+        orderBy: { id: "asc" },
       });
 
-      if (!existingFeePayment) {
+      if (feePayments.length > 1) {
+        // Remove duplicate credit card charges payments if present
+        const extraFeePayments = feePayments.slice(1);
+        for (const extra of extraFeePayments) {
+          await prisma.bookingPayment.delete({ where: { id: extra.id } }).catch(() => {});
+        }
+      } else if (feePayments.length === 0) {
         await prisma.bookingPayment.create({
           data: {
             tenantId,
@@ -4960,16 +4984,41 @@ async function syncCreditCardFeeRecords(tenantId: number) {
         });
       }
 
-      // 2. Ensure FEE Ledger Transaction exists
-      const existingFeeTx = await prisma.ledgerTransaction.findFirst({
+      // 2. Ensure ONLY ONE FEE Ledger Transaction exists per booking reference
+      const existingFeeTxs = await prisma.ledgerTransaction.findMany({
         where: {
           tenantId,
           type: "FEE",
           referenceNumber: bookingRef,
         },
+        orderBy: { id: "asc" },
       });
 
-      if (!existingFeeTx) {
+      if (existingFeeTxs.length > 1) {
+        // CLEANUP: If duplicate FEE transactions exist, delete extra ones and adjust ledger balances
+        const duplicateTxs = existingFeeTxs.slice(1);
+        for (const dupTx of duplicateTxs) {
+          const entries = await prisma.ledgerEntry.findMany({
+            where: { transactionId: dupTx.id },
+          });
+
+          for (const entry of entries) {
+            if (Number(entry.debitAmount) > 0) {
+              await prisma.ledgerAccount.update({
+                where: { id: entry.accountId },
+                data: { balance: { decrement: Number(entry.debitAmount) } },
+              }).catch(() => {});
+            }
+          }
+
+          await prisma.ledgerEntry.deleteMany({
+            where: { transactionId: dupTx.id },
+          });
+          await prisma.ledgerTransaction.delete({
+            where: { id: dupTx.id },
+          });
+        }
+      } else if (existingFeeTxs.length === 0) {
         let customerAccount = await prisma.ledgerAccount.findFirst({
           where: {
             tenantId,
@@ -5014,6 +5063,8 @@ async function syncCreditCardFeeRecords(tenantId: number) {
     }
   } catch (err) {
     console.error("Error in syncCreditCardFeeRecords:", err);
+  } finally {
+    activeFeeSyncs.delete(tenantId);
   }
 }
 
@@ -6624,29 +6675,39 @@ app.post(
 
           // Credit card charges handling
           if (payment.cardCharges && Number(payment.cardCharges) > 0) {
-            const feeTx = await prisma.ledgerTransaction.create({
-              data: {
+            const existingFeeTx = await prisma.ledgerTransaction.findFirst({
+              where: {
                 tenantId: tenantIdNumeric,
-                transactionDate: payment.paidOn,
-                referenceNumber: booking.bookingReference,
-                description: `Credit Card Processing Fee`,
                 type: "FEE",
+                referenceNumber: booking.bookingReference,
               },
             });
 
-            await prisma.ledgerEntry.create({
-              data: {
-                transactionId: feeTx.id,
-                accountId: customerAccount.id,
-                debitAmount: payment.cardCharges,
-                creditAmount: 0,
-              },
-            });
+            if (!existingFeeTx) {
+              const feeTx = await prisma.ledgerTransaction.create({
+                data: {
+                  tenantId: tenantIdNumeric,
+                  transactionDate: payment.paidOn,
+                  referenceNumber: booking.bookingReference,
+                  description: `Credit Card Gateway Processing Fee for ${booking.bookingReference}`,
+                  type: "FEE",
+                },
+              });
 
-            await prisma.ledgerAccount.update({
-              where: { id: customerAccount.id },
-              data: { balance: { increment: payment.cardCharges } },
-            });
+              await prisma.ledgerEntry.create({
+                data: {
+                  transactionId: feeTx.id,
+                  accountId: customerAccount.id,
+                  debitAmount: payment.cardCharges,
+                  creditAmount: 0,
+                },
+              });
+
+              await prisma.ledgerAccount.update({
+                where: { id: customerAccount.id },
+                data: { balance: { increment: payment.cardCharges } },
+              });
+            }
           }
         }
       }
@@ -7743,6 +7804,11 @@ app.get(
           emailSender: "operations@toobatravels.co.uk",
           landlineFormat: "+44 20 7946 0958",
           whatsappWebhook: "https://api.whatsapp.com/send?phone=442079460958",
+          website: "https://www.toobatravels.co.uk",
+          registrationNumber: "12345678",
+          vatNumber: "GB123456789",
+          licenceNumber: "ATOL 11234 / IATA 96-0 1234",
+          defaultTerms: "Rates and flight availability are subject to re-confirmation at the time of final booking and payment. British passport validity must be at least 6 months from the departure date. Hotel standard check-in is 16:00 and check-out is 12:00. Non-refundable package terms apply upon ticket issuance.",
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -7775,6 +7841,11 @@ app.put(
         emailSender,
         landlineFormat,
         whatsappWebhook,
+        website,
+        registrationNumber,
+        vatNumber,
+        licenceNumber,
+        defaultTerms,
       } = req.body;
 
       if (!companyName) {
@@ -7794,6 +7865,11 @@ app.put(
           emailSender: emailSender || null,
           landlineFormat: landlineFormat || null,
           whatsappWebhook: whatsappWebhook || null,
+          website: website || null,
+          registrationNumber: registrationNumber || null,
+          vatNumber: vatNumber || null,
+          licenceNumber: licenceNumber || null,
+          defaultTerms: defaultTerms || null,
         },
         create: {
           tenantId,
@@ -7804,6 +7880,11 @@ app.put(
           emailSender: emailSender || null,
           landlineFormat: landlineFormat || null,
           whatsappWebhook: whatsappWebhook || null,
+          website: website || null,
+          registrationNumber: registrationNumber || null,
+          vatNumber: vatNumber || null,
+          licenceNumber: licenceNumber || null,
+          defaultTerms: defaultTerms || null,
         },
       });
 
@@ -9052,16 +9133,24 @@ app.post(
         subtitle,
         preparedFor,
         passengerBadge,
+        passengerCount,
+        packageType,
         departureAirport,
         travelDates,
         totalDuration,
         airlineCarrier,
         flightClass,
+        flightsEnabled,
+        hotelsEnabled,
+        transfersEnabled,
+        visaEnabled,
         flightOutboundJson,
         flightInboundJson,
         hotelsJson,
         transfersJson,
         visaJson,
+        inclusionsJson,
+        exclusionsJson,
         pricePerPerson,
         totalPackagePrice,
         priceIncludes,
@@ -9069,8 +9158,12 @@ app.post(
         agentName,
         companyName,
         companyLogo,
+        companyAddress,
         companyPhone,
         companyEmail,
+        companyWebsite,
+        companyReg,
+        companyLicence,
       } = req.body;
 
       const newPkg = await prisma.packageQuotation.create({
@@ -9081,16 +9174,24 @@ app.post(
           subtitle: subtitle || null,
           preparedFor: preparedFor || null,
           passengerBadge: passengerBadge || null,
+          passengerCount: passengerCount ? parseInt(passengerCount) : 2,
+          packageType: packageType || null,
           departureAirport: departureAirport || null,
           travelDates: travelDates || null,
           totalDuration: totalDuration || null,
           airlineCarrier: airlineCarrier || null,
           flightClass: flightClass || null,
+          flightsEnabled: flightsEnabled !== undefined ? Boolean(flightsEnabled) : true,
+          hotelsEnabled: hotelsEnabled !== undefined ? Boolean(hotelsEnabled) : true,
+          transfersEnabled: transfersEnabled !== undefined ? Boolean(transfersEnabled) : true,
+          visaEnabled: visaEnabled !== undefined ? Boolean(visaEnabled) : true,
           flightOutboundJson: typeof flightOutboundJson === "object" ? JSON.stringify(flightOutboundJson) : (flightOutboundJson || null),
           flightInboundJson: typeof flightInboundJson === "object" ? JSON.stringify(flightInboundJson) : (flightInboundJson || null),
           hotelsJson: typeof hotelsJson === "object" ? JSON.stringify(hotelsJson) : (hotelsJson || null),
           transfersJson: typeof transfersJson === "object" ? JSON.stringify(transfersJson) : (transfersJson || null),
           visaJson: typeof visaJson === "object" ? JSON.stringify(visaJson) : (visaJson || null),
+          inclusionsJson: typeof inclusionsJson === "object" ? JSON.stringify(inclusionsJson) : (inclusionsJson || null),
+          exclusionsJson: typeof exclusionsJson === "object" ? JSON.stringify(exclusionsJson) : (exclusionsJson || null),
           pricePerPerson: pricePerPerson ? parseFloat(pricePerPerson) : null,
           totalPackagePrice: totalPackagePrice ? parseFloat(totalPackagePrice) : null,
           priceIncludes: priceIncludes || null,
@@ -9098,8 +9199,12 @@ app.post(
           agentName: agentName || null,
           companyName: companyName || null,
           companyLogo: companyLogo || null,
+          companyAddress: companyAddress || null,
           companyPhone: companyPhone || null,
           companyEmail: companyEmail || null,
+          companyWebsite: companyWebsite || null,
+          companyReg: companyReg || null,
+          companyLicence: companyLicence || null,
         }
       });
 
@@ -9133,16 +9238,24 @@ app.put(
         subtitle,
         preparedFor,
         passengerBadge,
+        passengerCount,
+        packageType,
         departureAirport,
         travelDates,
         totalDuration,
         airlineCarrier,
         flightClass,
+        flightsEnabled,
+        hotelsEnabled,
+        transfersEnabled,
+        visaEnabled,
         flightOutboundJson,
         flightInboundJson,
         hotelsJson,
         transfersJson,
         visaJson,
+        inclusionsJson,
+        exclusionsJson,
         pricePerPerson,
         totalPackagePrice,
         priceIncludes,
@@ -9150,8 +9263,12 @@ app.put(
         agentName,
         companyName,
         companyLogo,
+        companyAddress,
         companyPhone,
         companyEmail,
+        companyWebsite,
+        companyReg,
+        companyLicence,
       } = req.body;
 
       const updatedPkg = await prisma.packageQuotation.update({
@@ -9162,16 +9279,24 @@ app.put(
           subtitle: subtitle ?? existing.subtitle,
           preparedFor: preparedFor ?? existing.preparedFor,
           passengerBadge: passengerBadge ?? existing.passengerBadge,
+          passengerCount: passengerCount !== undefined ? parseInt(passengerCount) : existing.passengerCount,
+          packageType: packageType ?? existing.packageType,
           departureAirport: departureAirport ?? existing.departureAirport,
           travelDates: travelDates ?? existing.travelDates,
           totalDuration: totalDuration ?? existing.totalDuration,
           airlineCarrier: airlineCarrier ?? existing.airlineCarrier,
           flightClass: flightClass ?? existing.flightClass,
+          flightsEnabled: flightsEnabled !== undefined ? Boolean(flightsEnabled) : existing.flightsEnabled,
+          hotelsEnabled: hotelsEnabled !== undefined ? Boolean(hotelsEnabled) : existing.hotelsEnabled,
+          transfersEnabled: transfersEnabled !== undefined ? Boolean(transfersEnabled) : existing.transfersEnabled,
+          visaEnabled: visaEnabled !== undefined ? Boolean(visaEnabled) : existing.visaEnabled,
           flightOutboundJson: typeof flightOutboundJson === "object" ? JSON.stringify(flightOutboundJson) : (flightOutboundJson ?? existing.flightOutboundJson),
           flightInboundJson: typeof flightInboundJson === "object" ? JSON.stringify(flightInboundJson) : (flightInboundJson ?? existing.flightInboundJson),
           hotelsJson: typeof hotelsJson === "object" ? JSON.stringify(hotelsJson) : (hotelsJson ?? existing.hotelsJson),
           transfersJson: typeof transfersJson === "object" ? JSON.stringify(transfersJson) : (transfersJson ?? existing.transfersJson),
           visaJson: typeof visaJson === "object" ? JSON.stringify(visaJson) : (visaJson ?? existing.visaJson),
+          inclusionsJson: typeof inclusionsJson === "object" ? JSON.stringify(inclusionsJson) : (inclusionsJson ?? existing.inclusionsJson),
+          exclusionsJson: typeof exclusionsJson === "object" ? JSON.stringify(exclusionsJson) : (exclusionsJson ?? existing.exclusionsJson),
           pricePerPerson: pricePerPerson !== undefined ? (pricePerPerson ? parseFloat(pricePerPerson) : null) : existing.pricePerPerson,
           totalPackagePrice: totalPackagePrice !== undefined ? (totalPackagePrice ? parseFloat(totalPackagePrice) : null) : existing.totalPackagePrice,
           priceIncludes: priceIncludes ?? existing.priceIncludes,
@@ -9179,8 +9304,12 @@ app.put(
           agentName: agentName ?? existing.agentName,
           companyName: companyName ?? existing.companyName,
           companyLogo: companyLogo ?? existing.companyLogo,
+          companyAddress: companyAddress ?? existing.companyAddress,
           companyPhone: companyPhone ?? existing.companyPhone,
           companyEmail: companyEmail ?? existing.companyEmail,
+          companyWebsite: companyWebsite ?? existing.companyWebsite,
+          companyReg: companyReg ?? existing.companyReg,
+          companyLicence: companyLicence ?? existing.companyLicence,
         }
       });
 

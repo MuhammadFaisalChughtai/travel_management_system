@@ -215,6 +215,7 @@ export function Dashboard() {
   const [newRef, setNewRef] = useState('');
   const [newPrice, setNewPrice] = useState('1500');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newDepartureDate, setNewDepartureDate] = useState(new Date().toISOString().split('T')[0]);
   const [newAgent, setNewAgent] = useState('Sarah Jenkins');
   const [createLoading, setCreateLoading] = useState(false);
   const [dbAgents, setDbAgents] = useState<{ id: number; name: string }[]>([]);
@@ -495,6 +496,8 @@ export function Dashboard() {
     const prefix = companyInfo.name.substring(0, 2).toUpperCase();
     const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
     setNewRef(`${prefix}${randomStr}`);
+    setNewDate(new Date().toISOString().split('T')[0]);
+    setNewDepartureDate(new Date().toISOString().split('T')[0]);
     setShowCreateModal(true);
   };
 
@@ -506,6 +509,7 @@ export function Dashboard() {
         bookingReference: newRef,
         totalPrice: parseFloat(newPrice) || 0,
         date: new Date(newDate).toISOString(),
+        departureDate: newDepartureDate ? new Date(newDepartureDate).toISOString() : undefined,
         customers: [],
         agentName: newAgent
       });
@@ -2208,9 +2212,11 @@ export function Dashboard() {
                   <input 
                     type="text" 
                     required 
+                    disabled
+                    readOnly
                     value={newRef}
                     onChange={e => setNewRef(e.target.value)}
-                    className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] uppercase font-bold outline-none transition-all"
+                    className="w-full bg-slate-100 text-slate-500 cursor-not-allowed border border-slate-200 rounded-xl px-3 py-2 text-[13px] uppercase font-bold outline-none transition-all select-none"
                     placeholder="E.G. GX4HS6"
                   />
                 </div>
@@ -2222,6 +2228,17 @@ export function Dashboard() {
                     required 
                     value={newDate}
                     onChange={e => setNewDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-medium outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Departure Date</label>
+                  <input 
+                    type="date" 
+                    required 
+                    value={newDepartureDate}
+                    onChange={e => setNewDepartureDate(e.target.value)}
                     className="w-full bg-white border border-slate-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 rounded-xl px-3 py-2 text-slate-800 text-[13px] font-medium outline-none transition-all"
                   />
                 </div>

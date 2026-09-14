@@ -118,7 +118,7 @@ routes.forEach(route => {
     target: route.target,
     changeOrigin: true,
     pathRewrite: {
-      [`^${route.path}`]: route.path === '/api/agents' ? '/agents' : route.path === '/api/vendors' ? '/vendors' : route.path === '/api/catalog' ? '/catalog' : route.path === '/api/ledger' ? '/ledger' : route.path === '/api/finance' ? '/finance' : route.path === '/api/public' ? '/public' : route.path === '/api/packages' ? '/packages' : '',
+      [`^${route.path}`]: route.path === '/api/auth' ? '' : route.path.replace('/api', ''),
     },
     onProxyReq: (proxyReq, req, res) => {
       // Forward the injected SaaS headers downstream explicitly

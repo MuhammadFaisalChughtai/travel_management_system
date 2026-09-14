@@ -394,17 +394,22 @@ model BookingPriceLog {
 }
 
 model CompanyContext {
-  id              Int      @id @default(autoincrement())
-  tenantId        Int      @unique
-  companyName     String   @db.VarChar(255)
-  logoPrimary     String?  @db.Text
-  logoSecondary   String?  @db.Text
-  officeAddress   String?  @db.Text
-  emailSender     String?  @db.VarChar(255)
-  landlineFormat  String?  @db.VarChar(100)
-  whatsappWebhook String?  @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                  Int      @id @default(autoincrement())
+  tenantId            Int      @unique
+  companyName         String   @db.VarChar(255)
+  logoPrimary         String?  @db.Text
+  logoSecondary       String?  @db.Text
+  officeAddress       String?  @db.Text
+  emailSender         String?  @db.VarChar(255)
+  landlineFormat      String?  @db.VarChar(100)
+  whatsappWebhook     String?  @db.Text
+  website             String?  @db.VarChar(255)
+  registrationNumber  String?  @db.VarChar(100)
+  vatNumber           String?  @db.VarChar(100)
+  licenceNumber       String?  @db.VarChar(100)
+  defaultTerms        String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model DocumentTemplate {
@@ -490,18 +495,27 @@ model PackageQuotation {
   subtitle           String?  @db.VarChar(255)
   preparedFor        String?  @db.VarChar(255)
   passengerBadge     String?  @db.VarChar(255)
-  departureAirport    String?  @db.VarChar(255)
+  passengerCount     Int?     @default(2)
+  packageType        String?  @db.VarChar(100)
+  departureAirport   String?  @db.VarChar(255)
   travelDates        String?  @db.VarChar(255)
   totalDuration      String?  @db.VarChar(255)
   airlineCarrier     String?  @db.VarChar(255)
   flightClass        String?  @db.VarChar(255)
   
+  flightsEnabled     Boolean  @default(true)
+  hotelsEnabled      Boolean  @default(true)
+  transfersEnabled   Boolean  @default(true)
+  visaEnabled        Boolean  @default(true)
+
   flightOutboundJson String?  @db.Text
   flightInboundJson  String?  @db.Text
   hotelsJson         String?  @db.Text
   transfersJson      String?  @db.Text
   visaJson           String?  @db.Text
-  
+  inclusionsJson     String?  @db.Text
+  exclusionsJson     String?  @db.Text
+
   pricePerPerson     Decimal? @db.Decimal(10, 2)
   totalPackagePrice  Decimal? @db.Decimal(10, 2)
   priceIncludes      String?  @db.Text
@@ -509,9 +523,13 @@ model PackageQuotation {
   
   agentName          String?  @db.VarChar(255)
   companyName        String?  @db.VarChar(255)
-  companyLogo        String?  @db.VarChar(550)
+  companyLogo        String?  @db.Text
+  companyAddress     String?  @db.Text
   companyPhone       String?  @db.VarChar(100)
   companyEmail       String?  @db.VarChar(255)
+  companyWebsite     String?  @db.VarChar(255)
+  companyReg         String?  @db.VarChar(100)
+  companyLicence     String?  @db.VarChar(100)
   
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

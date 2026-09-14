@@ -640,13 +640,26 @@ app.get(
         if (dateEnd) whereClause.date.lte = new Date(dateEnd as string);
       }
       if (departureDateStart || departureDateEnd) {
-        whereClause.departureDate = {};
-        if (departureDateStart)
-          whereClause.departureDate.gte = new Date(
-            departureDateStart as string,
-          );
-        if (departureDateEnd)
-          whereClause.departureDate.lte = new Date(departureDateEnd as string);
+        const depGte = departureDateStart ? new Date(departureDateStart as string) : undefined;
+        const depLte = departureDateEnd ? new Date(departureDateEnd as string) : undefined;
+        whereClause.AND = whereClause.AND || [];
+        whereClause.AND.push({
+          OR: [
+            {
+              departureDate: {
+                ...(depGte && { gte: depGte }),
+                ...(depLte && { lte: depLte }),
+              },
+            },
+            {
+              departureDate: null,
+              date: {
+                ...(depGte && { gte: depGte }),
+                ...(depLte && { lte: depLte }),
+              },
+            },
+          ],
+        });
       }
       if (createdAtStart || createdAtEnd) {
         whereClause.createdAt = {};

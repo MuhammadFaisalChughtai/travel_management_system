@@ -530,12 +530,13 @@ app.get(
         return res.status(200).json({ bookings: [] });
       }
 
-      const tenantId = parseInt(req.tenantId!);
       const limit = 10;
+      const isSuper = req.isPlatformAdmin || req.userRole === "SUPER_ADMIN";
+      const targetTenantId = req.query.tenantId ? parseInt(req.query.tenantId as string) : (isSuper ? undefined : parseInt(req.tenantId!));
 
       const bookings = await prisma.booking.findMany({
         where: {
-          tenantId,
+          ...(targetTenantId ? { tenantId: targetTenantId } : {}),
           OR: [
             { bookingReference: { contains: q, mode: "insensitive" } },
             {
@@ -616,7 +617,10 @@ app.get(
         };
       }
       if (agentName && agentName !== "Any") {
-        whereClause.agentName = agentName as string;
+        whereClause.agentName = {
+          contains: (agentName as string).trim(),
+          mode: "insensitive",
+        };
       }
       if (status && status !== "Any") {
         whereClause.status = status as string;
@@ -685,7 +689,7 @@ app.get(
         whereClause.customers = { some: customerFilter };
       }
 
-      if (req.isPlatformAdmin) {
+      if (req.isPlatformAdmin || req.userRole === "SUPER_ADMIN") {
         const targetTenantId = tenantId
           ? parseInt(tenantId as string)
           : undefined;

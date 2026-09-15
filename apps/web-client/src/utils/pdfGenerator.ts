@@ -46,6 +46,20 @@ export const printHtmlViaIframe = (
 
     const cleanTitle = filename.replace(/\.pdf$/i, '');
 
+    // Collect all stylesheets and style elements from parent document
+    let parentStyles = '';
+    const styleNodes = document.querySelectorAll('style, link[rel="stylesheet"]');
+    styleNodes.forEach((node) => {
+      if (node.tagName === 'STYLE') {
+        parentStyles += node.innerHTML + '\n';
+      } else if (node.tagName === 'LINK') {
+        const link = node as HTMLLinkElement;
+        if (link.href) {
+          parentStyles += `@import url("${link.href}");\n`;
+        }
+      }
+    });
+
     doc.open();
     doc.write(`<!DOCTYPE html>
 <html lang="en">
@@ -56,7 +70,9 @@ export const printHtmlViaIframe = (
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    ${parentStyles}
     *, *::before, *::after {
       box-sizing: border-box;
       -webkit-print-color-adjust: exact !important;

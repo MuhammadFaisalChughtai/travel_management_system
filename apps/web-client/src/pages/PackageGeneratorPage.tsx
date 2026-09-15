@@ -12,7 +12,6 @@ import { toast } from 'react-hot-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { getAirlineName, getAirportName, getAirportShort, calculateTransitTime } from '../utils/flightUtils';
-import { printHtmlViaIframe } from '../utils/pdfGenerator';
 
 export interface FlightSegment {
   id: string;
@@ -1134,19 +1133,7 @@ export function PackageGeneratorPage() {
   };
 
   const handlePrint = () => {
-    if (printRef.current) {
-      printHtmlViaIframe(
-        printRef.current.outerHTML,
-        `
-          @page { size: A4 portrait; margin: 6mm; }
-          body { background: #ffffff !important; padding: 0 !important; margin: 0 !important; font-family: 'Inter', -apple-system, sans-serif; }
-          #printable-quotation-document { border: none !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-        `,
-        `${refNumber.replace(/[^a-zA-Z0-9-]/g, '_')}_Quotation.pdf`
-      );
-    } else {
-      window.print();
-    }
+    window.print();
   };
 
   // Flight Leg Management Handlers

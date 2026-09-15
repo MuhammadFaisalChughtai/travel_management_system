@@ -307,11 +307,17 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
     inclusions.push("Ground transportation circuits and airport transfers");
   }
   if (hasVisas) {
-    inclusions.push("Saudi tourist / Umrah visa processing and issuing");
+    inclusions.push("Saudi entrance / tourist visa processing and issuing");
   }
   if (inclusions.length === 0) {
     inclusions.push("Arranged travel management services as contracted");
   }
+
+  const isSpiritualOrUmrah = !booking.tripType || booking.tripType.toLowerCase().includes("umrah") || booking.tripType.toLowerCase().includes("spiritual");
+  const cleanTripType = isSpiritualOrUmrah
+    ? (sortedFlights.length > 0 && !hasAccommodations ? "Flight Travel" : "Tailored Travel")
+    : booking.tripType;
+  const packageTypeDisplay = `${totalNights > 0 ? `${totalNights + 1}D/${totalNights}N ` : ""}${cleanTripType} Package`;
 
   return (
     <div className="tax-invoice-root bg-white text-slate-800 text-[11px] font-sans leading-tight">
@@ -388,7 +394,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
               <p className="font-bold text-slate-900 text-[11px]">{packageRoute}</p>
               <p className="text-[9px] text-slate-600"><span className="font-semibold">Travel Dates:</span> {travelDatesText}</p>
               <p className="text-[9px] text-slate-600"><span className="font-semibold">Manifest:</span> {booking.customers?.length || 1} Passenger(s)</p>
-              <p className="text-[9px] text-slate-600"><span className="font-semibold">Package Type:</span> {booking.tripType || "Umrah"} Tailored Package</p>
+              <p className="text-[9px] text-slate-600"><span className="font-semibold">Package Type:</span> {packageTypeDisplay}</p>
             </div>
           </div>
 
@@ -511,7 +517,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
                   <p className="font-bold text-blue-900 text-[10px]">Official Travel Authorization</p>
                   <div className="text-[8.5px] text-slate-600 mt-1 space-y-0.5">
                     {visas.slice(0, 3).map((v: any, idx: number) => (
-                      <div key={idx}>• {v.visaType || 'Saudi Tourist / Umrah Visa'} - {v.country || 'Saudi Arabia'} ({v.visaStatus || 'Confirmed'})</div>
+                      <div key={idx}>• {v.visaType || 'Saudi Tourist / Entry Visa'} - {v.country || 'Saudi Arabia'} ({v.visaStatus || 'Confirmed'})</div>
                     ))}
                   </div>
                 </div>
@@ -521,14 +527,25 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
 
           {/* Official Bank Remittance & Financial Settlement Summary */}
           <div className="grid grid-cols-2 gap-3 mb-2">
-            <div className="border border-slate-200 rounded p-2.5 bg-slate-50 text-[9.5px]">
-              <p className="font-black text-slate-900 uppercase text-[9px] mb-1">Official Bank Remittance Details</p>
-              <p><span className="font-semibold text-slate-700">Bank:</span> <strong>{bankName}</strong></p>
-              <p><span className="font-semibold text-slate-700">Account Name:</span> <strong>{accountName}</strong></p>
-              <p><span className="font-semibold text-slate-700">Sort Code:</span> <strong>{sortCode}</strong></p>
-              <p><span className="font-semibold text-slate-700">Account No:</span> <strong>{accountNumber}</strong></p>
-              <p><span className="font-semibold text-slate-700">Billing Address:</span> <strong>{billingAddress}</strong></p>
-              <p className="text-[8.5px] text-slate-500 mt-1">Payment Reference: <strong className="text-slate-800">{booking.bookingReference}</strong></p>
+            <div className="border-2 border-sky-400 rounded-lg p-2.5 bg-gradient-to-br from-sky-50 to-blue-50 text-[9.5px] shadow-sm">
+              <div className="flex justify-between items-center border-b border-sky-200 pb-1 mb-1.5">
+                <p className="font-black text-sky-950 uppercase text-[9px] tracking-wide">Official Bank Remittance Details</p>
+                <span className="text-[8px] font-bold bg-sky-600 text-white px-1.5 py-0.5 rounded uppercase">Direct Settlement</span>
+              </div>
+              <p><span className="font-semibold text-slate-600">Bank:</span> <strong className="text-slate-900">{bankName}</strong></p>
+              <p><span className="font-semibold text-slate-600">Account Name:</span> <strong className="text-slate-900">{accountName}</strong></p>
+              <div className="flex items-center gap-2 my-1">
+                <div>
+                  <span className="font-semibold text-slate-600 text-[8.5px] block">Sort Code:</span>
+                  <span className="inline-block bg-yellow-200 text-yellow-950 border border-yellow-400 font-mono font-black px-1.5 py-0.5 rounded text-[11px]">{sortCode}</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-600 text-[8.5px] block">Account Number:</span>
+                  <span className="inline-block bg-yellow-200 text-yellow-950 border border-yellow-400 font-mono font-black px-1.5 py-0.5 rounded text-[11px]">{accountNumber}</span>
+                </div>
+              </div>
+              <p className="text-[8.5px]"><span className="font-semibold text-slate-600">Billing Address:</span> {billingAddress}</p>
+              <p className="text-[8.5px] text-slate-500 mt-0.5">Payment Reference: <strong className="font-mono text-rose-700 font-bold">{booking.bookingReference}</strong></p>
             </div>
 
             <div className="border border-slate-200 rounded p-2.5 bg-white text-[10px] space-y-1">
@@ -584,7 +601,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
               <tbody className="divide-y divide-slate-100">
                 <tr>
                   <td className="p-2">
-                    <strong className="text-slate-900 block font-bold text-[10px]">{booking.tripType || "Umrah"} Tailored Package Provision</strong>
+                    <strong className="text-slate-900 block font-bold text-[10px]">{cleanTripType} Package Provision</strong>
                     <ul className="list-disc pl-4 text-[9px] text-slate-600 mt-1 space-y-0.5">
                       {inclusions.map((inc, i) => (
                         <li key={i}>{inc}</li>
@@ -652,40 +669,18 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
               </tbody>
             </table>
           </div>
-
-          {/* Client Acceptance and Signatures */}
-          <div className="border border-slate-300 rounded p-4 bg-slate-50 mt-6">
-            <h3 className="text-[10px] font-black text-slate-900 uppercase mb-2">Legal Acceptance & Booking Confirmation Signatures</h3>
-            <p className="text-[8.5px] text-slate-600 mb-4 leading-relaxed">
-              By signing below, the lead passenger accepts these arrangements on behalf of all persons listed in this booking. The signer certifies that they have read, understood, and agreed to all 13 terms and conditions outlined on Page 3 of this document.
-            </p>
-
-            <div className="grid grid-cols-2 gap-8 pt-4">
-              <div className="border-t-2 border-slate-400 pt-2">
-                <p className="font-bold text-slate-900 text-[10px]">Lead Passenger Signature</p>
-                <p className="text-[9px] text-slate-500">Name: <span className="font-semibold text-slate-800">{customerFullName}</span></p>
-                <p className="text-[9px] text-slate-500">Date: __________________________</p>
-              </div>
-
-              <div className="border-t-2 border-slate-400 pt-2">
-                <p className="font-bold text-slate-900 text-[10px]">Authorized Agency Signatory</p>
-                <p className="text-[9px] text-slate-500">For & On Behalf of: <span className="font-semibold text-slate-800">{companyName}</span></p>
-                <p className="text-[9px] text-slate-500">Date: {new Date().toLocaleDateString('en-GB')}</p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Page 2 Footer */}
         <div className="border-t border-slate-200 pt-2 flex justify-between text-[8.5px] text-slate-400">
           <span>{companyName} • Registered Travel & Logistics Provider</span>
-          <span>Page 2 of 3 (Billing Ledger & Contractual Signatures)</span>
+          <span>Page 2 of 3 (Billing & Settlement Ledger)</span>
         </div>
       </div>
 
       <div className="page-break" />
 
-      {/* PAGE 3: 13 COMPREHENSIVE TERMS & CONDITIONS */}
+      {/* PAGE 3: 13 COMPREHENSIVE TERMS & CONDITIONS & CLIENT ACCEPTANCE */}
       <div className="tax-invoice-page p-6 min-h-[1050px] flex flex-col justify-between">
         <div>
           {/* Header */}
@@ -698,8 +693,8 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
           </div>
 
           {/* 13 Clauses in 2 columns */}
-          <div className="grid grid-cols-2 gap-4 text-[8.5px] text-slate-600 leading-relaxed text-justify">
-            <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-4 text-[8.5px] text-slate-600 leading-relaxed text-justify mb-4">
+            <div className="space-y-2.5">
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">1. CONTRACT FORMATION & PARTIES</strong>
                 This contract is concluded between {companyName} ("the Company") and the lead client named overleaf ("the Client"). The Client confirms they have authority to accept and do accept these booking conditions on behalf of all persons in the party.
@@ -707,17 +702,17 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">2. PAYMENT SCHEDULE & PRICE GUARANTEE</strong>
-                A non-refundable deposit is required at booking. Full payment must be cleared no later than 30 days prior to departure. We reserve the right to cancel bookings where balances remain unpaid past the due date with forfeiture of deposits.
+                A non-refundable deposit is required at booking. Full payment must be cleared prior to ticket issuance. We reserve the right to cancel bookings where balances remain unpaid past the due date with forfeiture of deposits.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">3. CANCELLATION BY CLIENT & REFUND POLICY</strong>
-                Any cancellation by the Client must be made in writing. Once flights and visas are issued, airline tickets and visa fees are strictly non-refundable and non-transferable under all circumstances. Hotel cancellation penalties apply per supplier terms.
+                Any cancellation by the Client must be made in writing. Once flights and services are issued, airline tickets and fees are strictly non-refundable and non-transferable under all circumstances.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">4. PASSPORT, VISA & HEALTH REGULATIONS</strong>
-                All travellers must possess a machine-readable biometric passport with at least 6 months validity from return date. Clients are solely responsible for ensuring compliance with all Saudi entrance requirements, vaccination rules, and visa protocols.
+                All travellers must possess a machine-readable biometric passport with at least 6 months validity from return date. Clients are solely responsible for ensuring compliance with all entrance requirements, vaccination rules, and visa protocols.
               </div>
 
               <div>
@@ -727,44 +722,66 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">6. BAGGAGE ALLOWANCE & RESTRICTIONS</strong>
-                Hold and cabin baggage limits are set strictly by the operating airline. The Company accepts no liability for excess baggage charges or damages/delays to luggage during transit. Zamzam water transport rules depend entirely on airline policy.
+                Hold and cabin baggage limits are set strictly by the operating airline. The Company accepts no liability for excess baggage charges or damages/delays to luggage during transit.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">7. ACCOMMODATION STANDARDS & CHECK-IN / CHECK-OUT</strong>
-                Standard check-in time in Saudi Arabia is 16:00 and check-out is 12:00 noon. Early check-in or late check-out is strictly subject to hotel availability and surcharges. Star ratings correspond to local Ministry of Tourism standards.
+                Standard check-in time is afternoon and check-out is noon. Early check-in or late check-out is strictly subject to hotel availability and surcharges. Star ratings correspond to local standards.
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">8. GROUND TRANSPORTATION & TRANSFERS</strong>
-                Transfer timings are synchronized with flight arrivals. In cases of flight delay exceeding 90 minutes, passengers must notify our local ground dispatch team. Missed transfers due to unreported delays will require private re-booking at passenger expense.
+                Transfer timings are synchronized with flight arrivals. In cases of flight delay exceeding 90 minutes, passengers must notify our dispatch team. Missed transfers due to unreported delays will require private re-booking.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">9. PACKAGE ALTERATIONS & ITINERARY VARIATIONS</strong>
-                While the Company makes every effort to execute arrangements as contracted, operational or regulatory circumstances may necessitate alterations in hotels, routes, or dates. Comparable or superior alternative arrangements will always be provided.
+                While the Company makes every effort to execute arrangements as contracted, operational or regulatory circumstances may necessitate alterations in hotels, routes, or dates.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">10. TRAVEL INSURANCE MANDATE</strong>
-                Comprehensive travel, health, and cancellation insurance is strongly advised for all passengers. The Company shall not be held liable for medical treatment expenses, lost property, or emergency repatriation costs during the journey.
+                Comprehensive travel, health, and cancellation insurance is strongly advised for all passengers. The Company shall not be held liable for medical expenses or emergency repatriation costs.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">11. COMPLAINTS PROCEDURE & DISPUTE RESOLUTION</strong>
-                Any issues arising during travel must be reported immediately to our local representative or 24/7 operations line. Written claims must be submitted to the Company headquarters within 28 days of return from the journey.
+                Any issues arising during travel must be reported immediately to our local representative or 24/7 operations line. Written claims must be submitted to the Company within 28 days of return.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">12. FORCE MAJEURE & LIMITATION OF LIABILITY</strong>
-                The Company shall not be liable for non-performance or delays caused by war, natural disasters, epidemics, border closures, weather conditions, or governmental regulations beyond our reasonable operational control.
+                The Company shall not be liable for non-performance or delays caused by natural disasters, epidemics, border closures, weather conditions, or governmental regulations beyond our reasonable control.
               </div>
 
               <div>
                 <strong className="text-slate-900 block font-bold text-[9px]">13. GOVERNING LAW & JURISDICTION</strong>
-                This contract is governed by and construed in accordance with English Law. Both parties agree to submit to the exclusive jurisdiction of the Courts of England and Wales in the event of any contractual dispute.
+                This contract is governed by and construed in accordance with English Law. Both parties agree to submit to the exclusive jurisdiction of the Courts of England and Wales in the event of any dispute.
+              </div>
+            </div>
+          </div>
+
+          {/* Client Acceptance and Signatures (Placed Beneath Terms & Conditions) */}
+          <div className="border border-slate-300 rounded p-3.5 bg-slate-50 mt-2">
+            <h3 className="text-[10px] font-black text-slate-900 uppercase mb-1.5">Legal Acceptance & Booking Confirmation Signatures</h3>
+            <p className="text-[8.5px] text-slate-600 mb-3 leading-relaxed">
+              By signing below, the lead passenger accepts these arrangements on behalf of all persons listed in this booking. The signer certifies that they have read, understood, and agreed to all 13 terms and conditions listed above.
+            </p>
+
+            <div className="grid grid-cols-2 gap-8 pt-2">
+              <div className="border-t-2 border-slate-400 pt-1.5">
+                <p className="font-bold text-slate-900 text-[10px]">Lead Passenger Signature</p>
+                <p className="text-[9px] text-slate-500">Name: <span className="font-semibold text-slate-800">{customerFullName}</span></p>
+                <p className="text-[9px] text-slate-500">Date: __________________________</p>
+              </div>
+
+              <div className="border-t-2 border-slate-400 pt-1.5">
+                <p className="font-bold text-slate-900 text-[10px]">Authorized Agency Signatory</p>
+                <p className="text-[9px] text-slate-500">For & On Behalf of: <span className="font-semibold text-slate-800">{companyName}</span></p>
+                <p className="text-[9px] text-slate-500">Date: {new Date().toLocaleDateString('en-GB')}</p>
               </div>
             </div>
           </div>
@@ -773,7 +790,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
         {/* Page 3 Footer */}
         <div className="border-t border-slate-200 pt-2 flex justify-between text-[8.5px] text-slate-400">
           <span>{companyName} • Regulated Tourism & Booking Agreement</span>
-          <span>Page 3 of 3 (Contractual Terms & Conditions)</span>
+          <span>Page 3 of 3 (Contractual Terms & Acceptance Signatures)</span>
         </div>
       </div>
     </div>

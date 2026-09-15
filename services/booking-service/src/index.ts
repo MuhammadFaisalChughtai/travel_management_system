@@ -7146,58 +7146,113 @@ function getDefaultTaxInvoiceHtml(): string {
     </div>
   </div>
 
-  <!-- PAGE 2: FINANCIAL SETTLEMENT, PAYMENT INSTRUCTIONS & ACCEPTANCE SIGNATURE -->
+  <!-- PAGE 2: FINANCIAL SETTLEMENT & PAYMENT INSTRUCTIONS -->
   <div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>
   <div class="invoice-page page-2" style="padding: 24px 28px; box-sizing: border-box;">
+    <div style="font-size: 13px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+      FINANCIAL SETTLEMENT & PAYMENT SCHEDULE
+    </div>
     {{tables.financialSettlement}}
 
-    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-size: 10px; color: #334155; line-height: 1.55;">
-      <strong style="color: #0f172a;">Official Bank Remittance Details:</strong> Bank: <strong>{{company.bankName}}</strong> | Account Name: <strong>{{company.accountName}}</strong> | Sort Code: <strong>{{company.sortCode}}</strong> | Account No: <strong>{{company.accountNumber}}</strong> | Billing Address: <strong>{{company.billingAddress}}</strong> | Payment Ref: <strong style="font-family: monospace;">{{booking.reference}}</strong>
+    <!-- HIGHLIGHTED OFFICIAL BANK REMITTANCE DETAILS -->
+    <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 2px solid #0284c7; border-radius: 10px; padding: 18px 22px; margin-top: 18px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #bae6fd; padding-bottom: 10px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 10px; height: 10px; background: #0284c7; border-radius: 50%;"></div>
+          <span style="font-size: 12px; font-weight: 900; color: #0369a1; text-transform: uppercase; letter-spacing: 0.8px;">
+            OFFICIAL BANK REMITTANCE DETAILS (INVOICE SETTLEMENT)
+          </span>
+        </div>
+        <span style="background: #0284c7; color: #ffffff; font-size: 9.5px; font-weight: 800; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.5px; text-transform: uppercase;">
+          Direct Bank Transfer
+        </span>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+        <tr>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Name</div>
+            <div style="font-size: 13px; font-weight: 900; color: #0f172a;">{{company.bankName}}</div>
+          </td>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Name / Beneficiary</div>
+            <div style="font-size: 13px; font-weight: 900; color: #0f172a;">{{company.accountName}}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="width: 50%; padding: 8px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Sort Code</div>
+            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 4px 12px; font-family: monospace; font-size: 15px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
+              {{company.sortCode}}
+            </div>
+          </td>
+          <td style="width: 50%; padding: 8px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Number</div>
+            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 4px 12px; font-family: monospace; font-size: 15px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
+              {{company.accountNumber}}
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Billing Address</div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #334155;">{{company.billingAddress}}</div>
+          </td>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Mandatory Payment Reference</div>
+            <div style="font-size: 13px; font-weight: 900; font-family: monospace; color: #b91c1c;">{{booking.reference}}</div>
+          </td>
+        </tr>
+      </table>
+      <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 9.5px; color: #475569; text-align: center;">
+        Please quote reference <strong style="color: #0f172a; font-family: monospace;">{{booking.reference}}</strong> on your remittance to ensure immediate payment reconciliation.
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 3: TERMS & CONDITIONS & CUSTOMER ACCEPTANCE -->
+  <div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>
+  <div class="invoice-page page-3" style="padding: 24px 28px; box-sizing: border-box;">
+    <div style="font-size: 14px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+      TERMS & CONDITIONS
+    </div>
+    <div style="font-size: 10.5px; font-weight: 800; color: #b91c1c; text-transform: uppercase; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">
+      {{company.name}} - BOOKING TERMS, CONDITIONS & LEGAL DISCLAIMERS
     </div>
 
-    <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-bottom: 24px; background: #ffffff;">
-      <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+    <div style="margin-bottom: 14px;">
+      {{tables.termsAndConditions}}
+    </div>
+
+    <!-- CUSTOMER ACCEPTANCE & SIGNATURE (PLACED BENEATH TERMS & CONDITIONS) -->
+    <div style="border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 14px 18px; background: #ffffff;">
+      <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
         CUSTOMER ACCEPTANCE & SIGNATURE
       </div>
-      <p style="font-size: 10px; color: #475569; line-height: 1.55; font-style: italic; margin: 0 0 20px 0;">
-        I hereby confirm that all passenger names, flight schedules, hotel categories, ground transport circuits, and total package costs shown above are agreed and approved. I acknowledge and explicitly agree to be legally bound by all {{company.name}} Terms & Conditions listed below.
+      <p style="font-size: 9.5px; color: #475569; line-height: 1.5; font-style: italic; margin: 0 0 16px 0;">
+        I hereby confirm that all passenger names, flight schedules, hotel categories, ground transport circuits, and total package costs shown above are agreed and approved. I acknowledge and explicitly agree to be legally bound by all {{company.name}} Terms & Conditions listed above.
       </p>
-      <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 24px;">
-            <div style="color: #475569; font-weight: 700; margin-bottom: 30px;">Customer Authorized Signature:</div>
-            <div style="border-bottom: 1px solid #0f172a; width: 90%; height: 26px; font-weight: bold; color: #64748b;">X</div>
+            <div style="color: #475569; font-weight: 700; margin-bottom: 24px;">Customer Authorized Signature:</div>
+            <div style="border-bottom: 1px solid #0f172a; width: 90%; height: 22px; font-weight: bold; color: #64748b;">X</div>
           </td>
           <td style="width: 50%; vertical-align: top; padding-left: 24px;">
-            <div style="color: #475569; font-weight: 700; margin-bottom: 4px;">Lead Passenger Name (Printed):</div>
-            <div style="font-weight: 800; color: #0f172a; border-bottom: 1px solid #94a3b8; width: 90%; padding-bottom: 4px; margin-bottom: 20px;">
+            <div style="color: #475569; font-weight: 700; margin-bottom: 3px;">Lead Passenger Name (Printed):</div>
+            <div style="font-weight: 800; color: #0f172a; border-bottom: 1px solid #94a3b8; width: 90%; padding-bottom: 3px; margin-bottom: 14px;">
               {{customer.fullName}}
             </div>
-            <div style="color: #475569; font-weight: 700; margin-bottom: 4px;">Date of Acceptance:</div>
-            <div style="font-weight: 800; color: #0f172a; border-bottom: 1px solid #94a3b8; width: 90%; padding-bottom: 4px;">
+            <div style="color: #475569; font-weight: 700; margin-bottom: 3px;">Date of Acceptance:</div>
+            <div style="font-weight: 800; color: #0f172a; border-bottom: 1px solid #94a3b8; width: 90%; padding-bottom: 3px;">
               {{document.date}}
             </div>
           </td>
         </tr>
       </table>
     </div>
-  </div>
 
-  <!-- PAGE 3: TERMS & CONDITIONS -->
-  <div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>
-  <div class="invoice-page page-3" style="padding: 24px 28px; box-sizing: border-box;">
-    <div style="font-size: 14px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-      TERMS & CONDITIONS
-    </div>
-    <div style="font-size: 10.5px; font-weight: 800; color: #b91c1c; text-transform: uppercase; margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">
-      {{company.name}} - BOOKING TERMS, CONDITIONS & LEGAL DISCLAIMERS
-    </div>
-
-    <div style="font-size: 8.8px; color: #334155; line-height: 1.6;">
-      {{tables.termsAndConditions}}
-    </div>
-
-    <div style="margin-top: 28px; padding-top: 14px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 9.5px; color: #64748b;">
+    <div style="margin-top: 18px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 9px; color: #64748b;">
       <strong>{{company.name}}</strong> | Headquarters: {{company.address}} | Support: {{company.phone}} | Email: {{company.email}} | Web: {{company.website}}
     </div>
   </div>
@@ -8183,6 +8238,12 @@ function buildPackageInclusionsTable(booking: any, currencySymbol: string): stri
     `).join('');
   }
 
+  const tripTypeRaw = booking.tripType;
+  const isSpiritualOrUmrah = !tripTypeRaw || tripTypeRaw.toLowerCase().includes("umrah") || tripTypeRaw.toLowerCase().includes("spiritual");
+  const headline = isSpiritualOrUmrah
+    ? (booking.flightServices?.length && !booking.accommodations?.length ? "Tailored Flight Itinerary Package" : "Tailored Travel Package")
+    : `${tripTypeRaw} Tailored Package`;
+
   return `
     <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #cbd5e1;">
       <thead>
@@ -8196,7 +8257,7 @@ function buildPackageInclusionsTable(booking: any, currencySymbol: string): stri
       <tbody>
         <tr style="background: #ffffff;">
           <td style="padding: 8px 10px; vertical-align: top;">
-            <strong style="color: #0f172a; font-size: 10.5px; display: block; margin-bottom: 4px;">Tailored Package Spiritual Journey</strong>
+            <strong style="color: #0f172a; font-size: 10.5px; display: block; margin-bottom: 4px;">${headline}</strong>
             <ul style="margin: 0; padding-left: 14px; font-size: 9px; color: #475569; line-height: 1.45;">
               ${bulletsHtml}
             </ul>
@@ -8239,19 +8300,21 @@ function buildFinancialSettlementTable(booking: any, currencySymbol: string, tot
 function buildTermsAndConditions(companyName: string): string {
   const name = companyName || 'Tooba Travels Ltd';
   return `
-    <div style="margin-bottom: 6px;"><strong>1. Legally Binding Agreement:</strong> By submitting payment, the client explicitly agrees to be legally bound by all terms. Failure to digitally sign within 48 hours constitutes irrevocable acceptance. All issued tickets and packages are strictly non-changeable and non-refundable.</div>
-    <div style="margin-bottom: 6px;"><strong>2. Payment & Taxation:</strong> A deposit strictly secures a seat, not a locked fare. 70% of the total balance must be cleared within 72 hours of confirmation. The client bears absolute sole responsibility for any supplementary resort fees, city taxes, or mandatory hotel surcharges.</div>
-    <div style="margin-bottom: 6px;"><strong>3. Strict Cancellation Policy:</strong> Cancellations incur strict penalty charges. Credit for future reservations from initial deposits is entirely at the agency's sole discretion. ${name} assumes zero liability for issuing full refunds once services are booked and issued.</div>
-    <div style="margin-bottom: 6px;"><strong>4. Force Majeure:</strong> In unforeseen disruptions (e.g., COVID-19, Saudi Ministry mandates, closures), clients may carry forward or reschedule. Should the client decline to reschedule under Force Majeure conditions, standard cancellation penalties will be strictly enforced.</div>
-    <div style="margin-bottom: 6px;"><strong>5. Flight Obligations:</strong> Clients bear absolute responsibility for exact name matches on passports (minimum 6-8 months validity required). ${name} accepts zero liability for boarding denials. Group fares and block-booked seats are unequivocally non-refundable once issued.</div>
-    <div style="margin-bottom: 6px;"><strong>6. Visa & Immigration:</strong> Visa eligibility and issuance are strictly at the absolute discretion of the Saudi Ministry or relevant consulate. Customers bear sole responsibility for verifying their individual visa eligibility based on their nationality and residency, providing mandatory documentation (e.g., valid BRP, proof of address), and ensuring passports possess 6-8 months validity. We assume zero liability and will issue no refunds for flights, hotels, or transport in the event of visa rejections, processing delays, or non-issuance.</div>
-    <div style="margin-bottom: 6px;"><strong>7. Accommodation & Transfers:</strong> We reserve the absolute right to alter hotels to equivalent properties without prior notice during peak seasons or full bookings. Clients must purchase a local SIM immediately upon arrival. We hold no liability for traffic delays or logistical congestion.</div>
-    <div style="margin-bottom: 6px;"><strong>8. Hajj & Umrah Specific Disclaimers:</strong> ${name} operates solely as a booking agent, not a Hajj Organizer, and disclaims all liability for last-minute itinerary changes by primary organizers. Hajj cancellations incur a mandatory minimum penalty of £250 per person.</div>
-    <div style="margin-bottom: 6px;"><strong>9. Transport & Ground Services:</strong> Passengers must purchase a local SIM upon arrival for driver contact. We accept no liability for traffic delays. Ziyarats are strictly limited to 2-3 hours. Drivers are strictly prohibited from accompanying passengers to locations requiring physical climbing (e.g., Cave of Hira).</div>
-    <div style="margin-bottom: 6px;"><strong>10. Third-Party Liability & Insurance:</strong> All services are subject to the terms of the relevant supplier. We shall not be liable for delays, cancellations, or matters arising from actions of third-party suppliers. We strongly recommend purchasing comprehensive travel insurance for cancellations, emergencies, and missed departures.</div>
-    <div style="margin-bottom: 6px;"><strong>11. Chargebacks & Payment Disputes:</strong> The customer agrees not to initiate any credit card chargebacks or dispute legitimate charges for non-refundable services. In the event of a grievance, the customer must contact ${name} first to seek resolution. Initiating an unwarranted chargeback constitutes a material breach of this agreement and will result in the immediate cancellation of all active travel components without refund. ${name} reserves the right to recover the full disputed amount, plus all associated bank fees, administrative costs, and legal expenses, through a debt collection agency or legal action.</div>
-    <div style="margin-bottom: 6px;"><strong>12. Hotel Check-In & Check-Out Times:</strong> The customer is strictly responsible for verifying all specific hotel check-in and check-out times prior to signing this invoice. Standard global policies typically mandate afternoon check-in and morning check-out, which may not align perfectly with your flight arrival or departure schedules. ${name} accepts absolute zero responsibility or liability for early arrivals, late departures, or any extra charges incurred, and we will not cover or arrange early check-in or late check-out under any circumstances.</div>
-    <div style="margin-bottom: 6px;"><strong>13. Visa On Arrival & Travel Disruptions:</strong> Customers opting for a Visa on Arrival must double-check all entry requirements prior to departure by confirming directly with the Ministry of Interior (MOI) or Ministry of Foreign Affairs (MOFA) of the representative country. ${name} accepts zero liability and takes no responsibility for any travel disruptions, delays, or denials of entry caused by the airline and/or airport.</div>
+    <div style="column-count: 2; column-gap: 16px; font-size: 7.8px; color: #334155; line-height: 1.4; text-align: justify;">
+      <div style="margin-bottom: 5px;"><strong>1. Legally Binding Agreement:</strong> By submitting payment, the client explicitly agrees to be legally bound by all terms. Failure to digitally sign within 48 hours constitutes irrevocable acceptance. All issued tickets and packages are strictly non-changeable and non-refundable.</div>
+      <div style="margin-bottom: 5px;"><strong>2. Payment & Settlement:</strong> A deposit strictly secures reservations. Balance must be cleared prior to ticket issuance. The client bears absolute sole responsibility for any supplementary resort fees, city taxes, or mandatory airline/hotel surcharges.</div>
+      <div style="margin-bottom: 5px;"><strong>3. Strict Cancellation Policy:</strong> Cancellations incur strict penalty charges. Credit for future reservations from initial deposits is entirely at the agency's sole discretion. ${name} assumes zero liability for issuing full refunds once services are booked and issued.</div>
+      <div style="margin-bottom: 5px;"><strong>4. Force Majeure:</strong> In unforeseen disruptions (e.g., weather, regulatory mandates, border closures), clients may carry forward or reschedule. Standard cancellation penalties apply if reschedule is declined.</div>
+      <div style="margin-bottom: 5px;"><strong>5. Flight Obligations:</strong> Clients bear absolute responsibility for exact name matches on passports (minimum 6 months validity required). ${name} accepts zero liability for boarding denials. Group fares and block-booked seats are unequivocally non-refundable once issued.</div>
+      <div style="margin-bottom: 5px;"><strong>6. Visa & Immigration:</strong> Visa eligibility and issuance are strictly at the absolute discretion of destination ministries and consulates. Customers bear sole responsibility for verifying eligibility and possessing valid passports and documentation.</div>
+      <div style="margin-bottom: 5px;"><strong>7. Accommodation & Transfers:</strong> We reserve the right to alter hotels to equivalent properties without prior notice during peak seasons or full bookings. Star ratings correspond to local destination standards.</div>
+      <div style="margin-bottom: 5px;"><strong>8. Specialized & Package Travel:</strong> ${name} operates solely as an authorized travel booking agent and disclaims liability for airline schedule revisions or operating carrier substitutions.</div>
+      <div style="margin-bottom: 5px;"><strong>9. Transport & Ground Services:</strong> Passengers must ensure punctual arrival for scheduled departures and transfers. We accept no liability for traffic congestion or missed connections.</div>
+      <div style="margin-bottom: 5px;"><strong>10. Third-Party Liability & Insurance:</strong> All services are subject to the terms of the operating supplier. We strongly recommend purchasing comprehensive travel insurance for cancellations, emergencies, and missed departures.</div>
+      <div style="margin-bottom: 5px;"><strong>11. Chargebacks & Payment Disputes:</strong> The customer agrees not to initiate credit card chargebacks for legitimately booked non-refundable services. Any grievances must be reported to ${name} directly within 28 days.</div>
+      <div style="margin-bottom: 5px;"><strong>12. Hotel Check-In & Check-Out Times:</strong> The customer is strictly responsible for adhering to hotel check-in and check-out policies. Early arrival or late departure arrangements must be coordinated directly.</div>
+      <div style="margin-bottom: 5px;"><strong>13. Governing Law:</strong> This contract is governed by and construed in accordance with English Law, and both parties submit to the exclusive jurisdiction of the Courts of England and Wales.</div>
+    </div>
   `;
 }
 
@@ -8416,7 +8479,12 @@ const compileTemplateWithBookingData = (
 
   const durationSummaryText =
     totalNights > 0 ? `${totalNights} NIGHTS` : "GROUND LOGISTICS";
-  const packageTypeLabel = `${totalNights > 0 ? `${totalNights + 1}D/${totalNights}N ` : ""}${booking.tripType || "Umrah"} Tailored Package`;
+  const tripTypeRaw = booking.tripType;
+  const isSpiritualOrUmrahTrip = !tripTypeRaw || tripTypeRaw.toLowerCase().includes("umrah") || tripTypeRaw.toLowerCase().includes("spiritual");
+  const cleanTripLabel = isSpiritualOrUmrahTrip
+    ? (hasFlights && !hasHotels ? "Flight Travel" : "Tailored Travel")
+    : tripTypeRaw;
+  const packageTypeLabel = `${totalNights > 0 ? `${totalNights + 1}D/${totalNights}N ` : ""}${cleanTripLabel} Package`;
 
   const passengerRows =
     booking.customers
@@ -8867,6 +8935,88 @@ const compileTemplateWithBookingData = (
       ""
     );
   }
+
+  // Relocate Customer Acceptance & Signature beneath Terms & Conditions if placed earlier
+  const acceptanceRegex = /<div[^>]*border[^>]*>[\s\S]*?CUSTOMER ACCEPTANCE & SIGNATURE[\s\S]*?<\/table>\s*<\/div>/i;
+  const matchAcceptance = htmlToCompile.match(acceptanceRegex);
+  if (matchAcceptance) {
+    const acceptanceBlock = matchAcceptance[0].replace(
+      /Terms & Conditions listed below/gi,
+      "Terms & Conditions listed above"
+    );
+    htmlToCompile = htmlToCompile.replace(acceptanceRegex, "");
+    if (htmlToCompile.includes("{{tables.termsAndConditions}}")) {
+      htmlToCompile = htmlToCompile.replace(
+        "{{tables.termsAndConditions}}",
+        `{{tables.termsAndConditions}}\n\n<div style="margin-top: 16px;">${acceptanceBlock}</div>`
+      );
+    }
+  }
+
+  // Upgrade old bank remittance box to highlighted card
+  const oldBankRegex = /<div style="background:\s*#f8fafc;\s*border:\s*1px solid #e2e8f0;[^>]*>[\s\S]*?Official Bank Remittance Details[\s\S]*?<\/div>/i;
+  if (htmlToCompile.match(oldBankRegex)) {
+    const highlightedBankHtml = `
+    <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 2px solid #0284c7; border-radius: 10px; padding: 18px 22px; margin-top: 18px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #bae6fd; padding-bottom: 10px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 10px; height: 10px; background: #0284c7; border-radius: 50%;"></div>
+          <span style="font-size: 12px; font-weight: 900; color: #0369a1; text-transform: uppercase; letter-spacing: 0.8px;">
+            OFFICIAL BANK REMITTANCE DETAILS (INVOICE SETTLEMENT)
+          </span>
+        </div>
+        <span style="background: #0284c7; color: #ffffff; font-size: 9.5px; font-weight: 800; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.5px; text-transform: uppercase;">
+          Direct Bank Transfer
+        </span>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+        <tr>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Name</div>
+            <div style="font-size: 13px; font-weight: 900; color: #0f172a;">{{company.bankName}}</div>
+          </td>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Name / Beneficiary</div>
+            <div style="font-size: 13px; font-weight: 900; color: #0f172a;">{{company.accountName}}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="width: 50%; padding: 8px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Sort Code</div>
+            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 4px 12px; font-family: monospace; font-size: 15px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
+              {{company.sortCode}}
+            </div>
+          </td>
+          <td style="width: 50%; padding: 8px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Number</div>
+            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 4px 12px; font-family: monospace; font-size: 15px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
+              {{company.accountNumber}}
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Billing Address</div>
+            <div style="font-size: 10.5px; font-weight: 700; color: #334155;">{{company.billingAddress}}</div>
+          </td>
+          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
+            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Mandatory Payment Reference</div>
+            <div style="font-size: 13px; font-weight: 900; font-family: monospace; color: #b91c1c;">{{booking.reference}}</div>
+          </td>
+        </tr>
+      </table>
+      <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 9.5px; color: #475569; text-align: center;">
+        Please quote reference <strong style="color: #0f172a; font-family: monospace;">{{booking.reference}}</strong> on your remittance to ensure immediate payment reconciliation.
+      </div>
+    </div>`;
+    htmlToCompile = htmlToCompile.replace(oldBankRegex, highlightedBankHtml);
+  }
+
+  // Remove any remaining occurrences of "Spiritual Journey" or "Umrah"
+  htmlToCompile = htmlToCompile.replace(/Tailored Package Spiritual Journey/gi, "Tailored Travel Package");
+  htmlToCompile = htmlToCompile.replace(/Spiritual Journey/gi, "Tailored Travel Package");
+  htmlToCompile = htmlToCompile.replace(/Umrah Tailored Package/gi, "Tailored Travel Package");
 
   const compiledHtml = htmlToCompile.replace(
     /\{\{([^{}]+)\}\}/g,

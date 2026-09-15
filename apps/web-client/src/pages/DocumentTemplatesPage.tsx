@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { 
   Layout, Settings, Code, Eye, RefreshCw, Save, Plus, AlertCircle, 
   Globe, Building2, Mail, Phone, ShieldCheck, PlusCircle, Upload, X, Loader2,
-  Palette, Check, ArrowUp, ArrowDown, Trash2
+  Palette, Check, ArrowUp, ArrowDown, Trash2, CreditCard
 } from 'lucide-react';
 
 interface Template {
@@ -616,12 +616,17 @@ export function DocumentTemplatesPage() {
   // Profile States
   const [profile, setProfile] = useState({
     companyName: 'Tooba Travels Ltd',
-    logoPrimary: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=120',
+    logoPrimary: 'https://bucket.techbarred.com/travelbooker-media/4fa089c9-3a6f-459b-b488-ea12a7f4d992.png',
     logoSecondary: '',
-    officeAddress: 'Registered Office: 123 Travel Tower, London, UK',
-    emailSender: 'operations@toobatravels.co.uk',
-    landlineFormat: '+44 20 7946 0958',
-    whatsappWebhook: 'https://api.whatsapp.com/send?phone=442079460958'
+    officeAddress: '63 Buxton Road, London, E17 7EH',
+    emailSender: 'office.toobatravels.co.uk',
+    landlineFormat: '0203 371 8774',
+    whatsappWebhook: 'https://api.whatsapp.com/send?phone=442033718774',
+    bankName: 'Lloyds Bank',
+    accountName: 'TOOBA TRAVELS LTD',
+    accountNumber: '19401663',
+    sortCode: '30-54-66',
+    billingAddress: '63 Buxton Road, London, E17 7EH',
   });
   const [profileLoading, setProfileLoading] = useState(false);
   const [uploadingPrimary, setUploadingPrimary] = useState(false);
@@ -667,6 +672,11 @@ export function DocumentTemplatesPage() {
     { token: '{{company.email}}', desc: 'Corporate support pipeline', isFinancial: false, isVoucherOnly: false },
     { token: '{{company.phone}}', desc: 'Central hotline phone format', isFinancial: false, isVoucherOnly: false },
     { token: '{{company.whatsapp}}', desc: 'WhatsApp API webhook link', isFinancial: false, isVoucherOnly: false },
+    { token: '{{company.bankName}}', desc: 'Official bank remittance name', isFinancial: true, isVoucherOnly: false },
+    { token: '{{company.accountName}}', desc: 'Official bank account name', isFinancial: true, isVoucherOnly: false },
+    { token: '{{company.accountNumber}}', desc: 'Official bank account number', isFinancial: true, isVoucherOnly: false },
+    { token: '{{company.sortCode}}', desc: 'Official bank sort code', isFinancial: true, isVoucherOnly: false },
+    { token: '{{company.billingAddress}}', desc: 'Official billing remittance address', isFinancial: true, isVoucherOnly: false },
     { token: '{{booking.reference}}', desc: 'Unique transaction identifier', isFinancial: false, isVoucherOnly: false },
     { token: '{{booking.date}}', desc: 'Booking creation timestamp', isFinancial: false, isVoucherOnly: false },
     { token: '{{booking.agent}}', desc: 'Assigned broker name', isFinancial: false, isVoucherOnly: false },
@@ -723,10 +733,10 @@ export function DocumentTemplatesPage() {
       // 1. Fetch official company details from active tenant profile
       let tenantDetails = {
         name: 'Tooba Travels Ltd',
-        logo: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=120',
-        location: 'Registered Office: 123 Travel Tower, London, UK',
-        email: 'operations@toobatravels.co.uk',
-        phone: '+44 20 7946 0958'
+        logo: 'https://bucket.techbarred.com/travelbooker-media/4fa089c9-3a6f-459b-b488-ea12a7f4d992.png',
+        location: '63 Buxton Road, London, E17 7EH',
+        email: 'office.toobatravels.co.uk',
+        phone: '0203 371 8774'
       };
 
       try {
@@ -756,7 +766,12 @@ export function DocumentTemplatesPage() {
           officeAddress: ctx.officeAddress || tenantDetails.location,
           emailSender: ctx.emailSender || tenantDetails.email,
           landlineFormat: ctx.landlineFormat || tenantDetails.phone,
-          whatsappWebhook: ctx.whatsappWebhook || `https://api.whatsapp.com/send?phone=${(ctx.landlineFormat || tenantDetails.phone).replace(/[^0-9+]/g, '')}`
+          whatsappWebhook: ctx.whatsappWebhook || `https://api.whatsapp.com/send?phone=${(ctx.landlineFormat || tenantDetails.phone).replace(/[^0-9+]/g, '')}`,
+          bankName: ctx.bankName || 'Lloyds Bank',
+          accountName: ctx.accountName || 'TOOBA TRAVELS LTD',
+          accountNumber: ctx.accountNumber || '19401663',
+          sortCode: ctx.sortCode || '30-54-66',
+          billingAddress: ctx.billingAddress || ctx.officeAddress || '63 Buxton Road, London, E17 7EH',
         });
       } else {
         // Fallback to active tenant info directly
@@ -767,7 +782,12 @@ export function DocumentTemplatesPage() {
           officeAddress: tenantDetails.location,
           emailSender: tenantDetails.email,
           landlineFormat: tenantDetails.phone,
-          whatsappWebhook: `https://api.whatsapp.com/send?phone=${tenantDetails.phone.replace(/[^0-9+]/g, '')}`
+          whatsappWebhook: `https://api.whatsapp.com/send?phone=${tenantDetails.phone.replace(/[^0-9+]/g, '')}`,
+          bankName: 'Lloyds Bank',
+          accountName: 'TOOBA TRAVELS LTD',
+          accountNumber: '19401663',
+          sortCode: '30-54-66',
+          billingAddress: '63 Buxton Road, London, E17 7EH',
         });
       }
     } catch (err) {
@@ -1839,12 +1859,79 @@ export function DocumentTemplatesPage() {
             <div>
               <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1.5">Registered Office Address</label>
               <textarea
-                rows={3}
+                rows={2}
                 value={profile.officeAddress || ''}
                 onChange={e => setProfile({ ...profile, officeAddress: e.target.value })}
-                placeholder="Registered Office: 123 Travel Tower, London, UK"
+                placeholder="63 Buxton Road, London, E17 7EH"
                 className="w-full p-3 border border-slate-200 rounded-2xl text-[11px] font-semibold text-slate-700 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
               />
+            </div>
+
+            {/* Official Bank Remittance Settings */}
+            <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
+                <CreditCard className="w-4 h-4 text-emerald-600" />
+                <div>
+                  <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-wide">Official Bank Remittance Details (Invoice Settlement)</h4>
+                  <p className="text-[9px] text-slate-500">Injected into tax invoices and client remittance payment instructions.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1">Bank Name</label>
+                  <input
+                    type="text"
+                    value={profile.bankName || ''}
+                    onChange={e => setProfile({ ...profile, bankName: e.target.value })}
+                    placeholder="Lloyds Bank"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-700 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1">Account Name</label>
+                  <input
+                    type="text"
+                    value={profile.accountName || ''}
+                    onChange={e => setProfile({ ...profile, accountName: e.target.value })}
+                    placeholder="TOOBA TRAVELS LTD"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-700 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1">Account Number</label>
+                  <input
+                    type="text"
+                    value={profile.accountNumber || ''}
+                    onChange={e => setProfile({ ...profile, accountNumber: e.target.value })}
+                    placeholder="19401663"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[11px] font-mono font-bold text-slate-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1">Sort Code</label>
+                  <input
+                    type="text"
+                    value={profile.sortCode || ''}
+                    onChange={e => setProfile({ ...profile, sortCode: e.target.value })}
+                    placeholder="30-54-66"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[11px] font-mono font-bold text-slate-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1">Bank Billing Address</label>
+                  <input
+                    type="text"
+                    value={profile.billingAddress || ''}
+                    onChange={e => setProfile({ ...profile, billingAddress: e.target.value })}
+                    placeholder="63 Buxton Road, London, E17 7EH"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-700 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                </div>
+              </div>
             </div>
 
             <button

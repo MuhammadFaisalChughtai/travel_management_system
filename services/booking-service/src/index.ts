@@ -7152,7 +7152,7 @@ function getDefaultTaxInvoiceHtml(): string {
     {{tables.financialSettlement}}
 
     <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-size: 10px; color: #334155; line-height: 1.55;">
-      <strong style="color: #0f172a;">Payment Methods & Instructions:</strong> Bank: {{company.bankName}} | Account Name: {{company.accountName}} | Sort Code: {{company.sortCode}} | Account No: {{company.accountNumber}} | Payment Ref: <strong style="font-family: monospace;">{{booking.reference}}</strong> | Cards Accepted: Visa / MasterCard / Amex
+      <strong style="color: #0f172a;">Official Bank Remittance Details:</strong> Bank: <strong>{{company.bankName}}</strong> | Account Name: <strong>{{company.accountName}}</strong> | Sort Code: <strong>{{company.sortCode}}</strong> | Account No: <strong>{{company.accountNumber}}</strong> | Billing Address: <strong>{{company.billingAddress}}</strong> | Payment Ref: <strong style="font-family: monospace;">{{booking.reference}}</strong>
     </div>
 
     <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-bottom: 24px; background: #ffffff;">
@@ -7761,81 +7761,280 @@ function buildTransportLegsTable(booking: any): string {
   `;
 }
 
+const AIRPORT_MAP: Record<string, string> = {
+  // UK & Ireland
+  LHR: "London Heathrow (LHR)",
+  LGW: "London Gatwick (LGW)",
+  STN: "London Stansted (STN)",
+  LTN: "London Luton (LTN)",
+  LCY: "London City (LCY)",
+  MAN: "Manchester Airport (MAN)",
+  BHX: "Birmingham Airport (BHX)",
+  EDI: "Edinburgh Airport (EDI)",
+  GLA: "Glasgow Airport (GLA)",
+  NCL: "Newcastle Airport (NCL)",
+  BFS: "Belfast International (BFS)",
+  BHD: "George Best Belfast City (BHD)",
+  LPL: "Liverpool John Lennon (LPL)",
+  EMA: "East Midlands Airport (EMA)",
+  BRS: "Bristol Airport (BRS)",
+  CWL: "Cardiff Airport (CWL)",
+  ABZ: "Aberdeen Airport (ABZ)",
+  DUB: "Dublin Airport (DUB)",
+
+  // Saudi Arabia & Middle East
+  JED: "King Abdulaziz Int'l, Jeddah (JED)",
+  MED: "Prince Mohammad Bin Abdulaziz, Madinah (MED)",
+  RUH: "King Khalid Int'l, Riyadh (RUH)",
+  DMM: "King Fahd Int'l, Dammam (DMM)",
+  AMM: "Queen Alia Int'l, Amman (AMM)",
+  DXB: "Dubai International (DXB)",
+  DWC: "Al Maktoum Int'l (DWC)",
+  AUH: "Zayed International, Abu Dhabi (AUH)",
+  SHJ: "Sharjah International (SHJ)",
+  DOH: "Hamad International, Doha (DOH)",
+  BAH: "Bahrain International (BAH)",
+  KWI: "Kuwait International (KWI)",
+  MCT: "Muscat International (MCT)",
+  BEY: "Beirut-Rafic Hariri Int'l (BEY)",
+  CAI: "Cairo International (CAI)",
+  HBE: "Borg El Arab, Alexandria (HBE)",
+
+  // Turkey & Europe
+  IST: "Istanbul Airport (IST)",
+  SAW: "Sabiha Gokcen Int'l, Istanbul (SAW)",
+  AYT: "Antalya Airport (AYT)",
+  ADB: "Izmir Adnan Menderes (ADB)",
+  CDG: "Paris Charles de Gaulle (CDG)",
+  ORY: "Paris Orly (ORY)",
+  FRA: "Frankfurt Airport (FRA)",
+  MUC: "Munich Airport (MUC)",
+  AMS: "Amsterdam Schiphol (AMS)",
+  BRU: "Brussels Airport (BRU)",
+  FCO: "Rome Fiumicino (FCO)",
+  MXP: "Milan Malpensa (MXP)",
+  MAD: "Madrid-Barajas (MAD)",
+  BCN: "Barcelona-El Prat (BCN)",
+  ZRH: "Zurich Airport (ZRH)",
+  VIE: "Vienna International (VIE)",
+  GVA: "Geneva Airport (GVA)",
+  CPH: "Copenhagen Airport (CPH)",
+
+  // North America
+  YYZ: "Toronto Pearson International (YYZ)",
+  YVR: "Vancouver International (YVR)",
+  YUL: "Montreal-Trudeau (YUL)",
+  YYC: "Calgary International (YYC)",
+  YOW: "Ottawa Macdonald-Cartier (YOW)",
+  JFK: "John F. Kennedy Int'l, New York (JFK)",
+  EWR: "Newark Liberty Int'l (EWR)",
+  LGA: "LaGuardia Airport, New York (LGA)",
+  ORD: "Chicago O'Hare Int'l (ORD)",
+  MDW: "Chicago Midway (MDW)",
+  LAX: "Los Angeles International (LAX)",
+  SFO: "San Francisco International (SFO)",
+  IAD: "Washington Dulles Int'l (IAD)",
+  DCA: "Ronald Reagan Washington (DCA)",
+  DFW: "Dallas/Fort Worth Int'l (DFW)",
+  IAH: "George Bush Intercontinental, Houston (IAH)",
+  MIA: "Miami International (MIA)",
+  MCO: "Orlando International (MCO)",
+  BOS: "Boston Logan International (BOS)",
+  ATL: "Hartsfield-Jackson Atlanta (ATL)",
+  SEA: "Seattle-Tacoma Int'l (SEA)",
+
+  // South Asia
+  ISB: "Islamabad International (ISB)",
+  LHE: "Allama Iqbal Int'l, Lahore (LHE)",
+  KHI: "Jinnah International, Karachi (KHI)",
+  PEW: "Bacha Khan Int'l, Peshawar (PEW)",
+  MUX: "Multan International (MUX)",
+  SKT: "Sialkot International (SKT)",
+  DEL: "Indira Gandhi Int'l, Delhi (DEL)",
+  BOM: "Chhatrapati Shivaji Maharaj, Mumbai (BOM)",
+  DAC: "Hazrat Shahjalal Int'l, Dhaka (DAC)",
+  CMB: "Bandaranaike Int'l, Colombo (CMB)",
+
+  // Southeast Asia & Others
+  KUL: "Kuala Lumpur International (KUL)",
+  SIN: "Singapore Changi (SIN)",
+  BKK: "Suvarnabhumi Airport, Bangkok (BKK)",
+  CGK: "Soekarno-Hatta Int'l, Jakarta (CGK)",
+  MLE: "Velana International, Maldives (MLE)",
+};
+
+function getAirportDisplay(codeOrName: string | undefined | null): string {
+  if (!codeOrName || typeof codeOrName !== 'string') return '-';
+  const trimmed = codeOrName.trim();
+  if (!trimmed || trimmed === 'Departure Airport' || trimmed === 'Arrival Airport') return '-';
+  if (trimmed.includes('(') && trimmed.includes(')')) return trimmed;
+  const upper = trimmed.toUpperCase();
+  if (AIRPORT_MAP[upper]) return AIRPORT_MAP[upper];
+  return trimmed;
+}
+
+const AIRLINE_MAP: Record<string, string> = {
+  DL: "Delta Air Lines",
+  RJ: "Royal Jordanian",
+  SV: "Saudia",
+  BA: "British Airways",
+  EK: "Emirates",
+  QR: "Qatar Airways",
+  TK: "Turkish Airlines",
+  MS: "EgyptAir",
+  WY: "Oman Air",
+  GF: "Gulf Air",
+  KU: "Kuwait Airways",
+  FZ: "flydubai",
+  XY: "flynas",
+  PK: "PIA (Pakistan International Airlines)",
+  LH: "Lufthansa",
+  AF: "Air France",
+  KL: "KLM",
+  UA: "United Airlines",
+  AA: "American Airlines",
+  AC: "Air Canada",
+  EY: "Etihad Airways",
+  VS: "Virgin Atlantic",
+  SQ: "Singapore Airlines",
+  TG: "Thai Airways",
+  MH: "Malaysia Airlines",
+  AT: "Royal Air Maroc",
+  PC: "Pegasus Airlines",
+  W9: "Wizz Air UK",
+  W6: "Wizz Air",
+  U2: "easyJet",
+  FR: "Ryanair",
+  ME: "Middle East Airlines",
+  RB: "Syrian Air",
+  IA: "Iraqi Airways",
+  J9: "Jazeera Airways",
+};
+
+function getAirlineName(flight: any): string {
+  if (!flight) return "Scheduled International Carrier";
+  const candidate = flight.airline || flight.airlineCarrier;
+  if (candidate && typeof candidate === 'string' && candidate.trim()) {
+    const clean = candidate.trim();
+    const lower = clean.toLowerCase();
+    if (!lower.includes("travel") && !lower.includes("polani") && !lower.includes("basma") && !lower.includes("vendor") && !lower.includes("supplier") && !lower.includes("fleet")) {
+      return clean;
+    }
+  }
+
+  if (flight.flightNo && typeof flight.flightNo === 'string') {
+    const match = flight.flightNo.trim().toUpperCase().match(/^([A-Z0-9]{2})/);
+    if (match && AIRLINE_MAP[match[1]]) {
+      return AIRLINE_MAP[match[1]];
+    }
+  }
+
+  return "Scheduled International Carrier";
+}
+
+function sortFlightsChronologically(flights: any[]): any[] {
+  if (!flights || !Array.isArray(flights)) return [];
+  return [...flights].sort((a, b) => {
+    const dateA = a.departureDate || a.date || '';
+    const dateB = b.departureDate || b.date || '';
+    const timeA = a.departureTime || a.departTime || '00:00';
+    const timeB = b.departureTime || b.departTime || '00:00';
+
+    const parseA = Date.parse(`${dateA}T${timeA.length === 5 ? timeA + ':00' : timeA}`) || Date.parse(`${dateA} ${timeA}`) || Date.parse(dateA) || 0;
+    const parseB = Date.parse(`${dateB}T${timeB.length === 5 ? timeB + ':00' : timeB}`) || Date.parse(`${dateB} ${timeB}`) || Date.parse(dateB) || 0;
+
+    if (parseA !== parseB) {
+      return parseA - parseB;
+    }
+    return (dateA + timeA).localeCompare(dateB + timeB);
+  });
+}
+
 function buildFlightScheduleTable(booking: any): string {
-  const flights = booking.flightServices || [];
-  if (flights.length === 0) {
+  const rawFlights = booking.flightServices || [];
+  if (rawFlights.length === 0) {
     return `<div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; color: #64748b; font-size: 10px;">No scheduled flight segments registered.</div>`;
   }
 
-  const outboundFlights = flights.slice(0, Math.max(1, Math.ceil(flights.length / 2)));
-  const inboundFlights = flights.length > 1 ? flights.slice(Math.max(1, Math.ceil(flights.length / 2))) : [];
+  const flights = sortFlightsChronologically(rawFlights);
 
-  const renderSectorRow = (sectorName: string, sectorFlights: any[]) => {
-    if (!sectorFlights || sectorFlights.length === 0) return '';
-    const f1 = sectorFlights[0];
-    const fLast = sectorFlights[sectorFlights.length - 1];
-    const route = `${f1.departedFrom || 'LHR'} to ${fLast.arrivedAt || 'JED'}`;
-    const flightNos = sectorFlights.map((f: any) => f.flightNo).filter(Boolean).join(' / ') || f1.flightNo || 'TBA';
-    const dateStr = f1.date ? new Date(f1.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : (f1.departureDate ? new Date(f1.departureDate).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : '-');
+  const rows = flights.map((f: any, idx: number) => {
+    const isEven = idx % 2 === 0;
+    const bg = isEven ? '#ffffff' : '#f8fafc';
 
-    const depDetails = `
-      <strong style="color: #0f172a; display: block;">${f1.departedFromAirportName || f1.departedFrom || 'Departure Airport'}</strong>
-      <div style="color: #334155; margin-top: 1px;">Dep: ${f1.departTime || 'TBA'}</div>
-      <div style="color: #64748b; font-size: 9px;">${f1.flightNo || ''} - ${f1.aircraft || 'Boeing 787'}</div>
-      ${sectorFlights.length > 1 ? `<div style="color: #334155; font-size: 9px; margin-top: 1px;">Arr ${f1.arrivedAt || 'Transit'}: ${f1.arrivalTime || 'TBA'}</div>` : ''}
-    `;
+    let sectorLabel = `SECTOR ${idx + 1}`;
+    if (flights.length === 1) {
+      sectorLabel = 'ONE-WAY FLIGHT';
+    } else if (flights.length === 2) {
+      sectorLabel = idx === 0 ? 'OUTBOUND FLIGHT' : 'INBOUND / RETURN';
+    } else {
+      const half = Math.ceil(flights.length / 2);
+      sectorLabel = idx < half ? `OUTBOUND (LEG ${idx + 1})` : `INBOUND (LEG ${idx + 1})`;
+    }
 
-    const arrDetails = `
-      <strong style="color: #0f172a; display: block;">${fLast.arrivedAtAirportName || fLast.arrivedAt || 'Arrival Airport'}</strong>
-      ${sectorFlights.length > 1 ? `<div style="color: #334155; margin-top: 1px;">Dep ${fLast.departedFrom || 'Transit'}: ${fLast.departTime || 'TBA'}</div>` : ''}
-      <div style="color: #64748b; font-size: 9px;">${fLast.flightNo || ''} - ${fLast.aircraft || 'Boeing 787'}</div>
-      <div style="color: #0f172a; font-weight: 700; margin-top: 2px;">Final Arr: ${fLast.arrivalTime || 'TBA'}</div>
-    `;
+    const depDateRaw = f.departureDate || f.date;
+    const dateStr = depDateRaw ? new Date(depDateRaw).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
-    const transitText = sectorFlights.length > 1 
-      ? `<div style="color: #334155; font-weight: 600;">Transit in ${f1.arrivedAt || 'AMM'}:</div><div style="color: #b45309; font-weight: bold; font-size: 9px;">1 hr 30 mins</div>`
-      : `<div style="color: #10b981; font-weight: 600;">Direct Flight</div>`;
+    const fromAirport = getAirportDisplay(f.departedFromAirportName || f.departedFrom);
+    const toAirport = getAirportDisplay(f.arrivedAtAirportName || f.arrivedAt);
+    const airlineName = getAirlineName(f);
+    const flightNo = f.flightNo || 'TBA';
+    const aircraft = f.aircraft || 'Boeing / Airbus Commercial Jet';
+    const cabin = f.flightClass || 'Economy Class';
+    const holdBag = f.checkedBaggage || f.baggageAllowance || f.baggage || '23 Kg Hold Luggage';
+    const handBag = f.carryOnBaggage || '7 Kg Cabin Bag';
 
-    const baggageText = f1.checkedBaggage || f1.baggage || '1x 23kg Hold Luggage';
-    const cabinText = f1.carryOnBaggage || '+ 1x Cabin Bag (pp)';
+    const depTime = f.departTime || f.departureTime || 'TBA';
+    const arrTime = f.arrivalTime || f.arriveTime || 'TBA';
+
+    const isDirect = !f.isTransit && (!f.flightType || f.flightType.toLowerCase().includes('direct'));
 
     return `
-      <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff;">
+      <tr style="border-bottom: 1px solid #e2e8f0; background: ${bg};">
         <td style="padding: 8px 10px; vertical-align: top;">
-          <strong style="color: #0f172a; display: block; font-size: 10px;">${sectorName}</strong>
-          <span style="font-weight: 700; color: #1e3a8a; font-size: 9.5px;">${route}</span>
-          <div style="font-family: monospace; color: #64748b; font-size: 9px; margin-top: 2px;">${flightNos}</div>
+          <strong style="color: #0f172a; display: block; font-size: 10px;">${sectorLabel}</strong>
+          <span style="font-weight: 700; color: #1e3a8a; font-size: 9.5px;">${f.departedFrom || 'DEP'} → ${f.arrivedAt || 'ARR'}</span>
+          <div style="font-family: monospace; font-weight: 700; color: #0284c7; font-size: 9px; margin-top: 2px;">${flightNo}</div>
           <div style="color: #64748b; font-size: 9px;">${dateStr}</div>
         </td>
-        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">${depDetails}</td>
-        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">${arrDetails}</td>
         <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">
-          ${transitText}
-          <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Aircraft: ${f1.aircraft || 'Boeing 787'}</div>
+          <strong style="color: #0f172a; display: block;">${fromAirport}</strong>
+          <div style="color: #334155; margin-top: 2px; font-weight: 600;">Dep Time: <span style="color: #0f172a;">${depTime}</span></div>
+          <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Airline: ${airlineName}</div>
         </td>
         <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">
-          <strong style="color: #0f172a; display: block;">${f1.flightClass || 'Economy Class'}</strong>
-          <div style="color: #64748b; font-size: 9px;">${baggageText}</div>
-          <div style="color: #64748b; font-size: 9px;">${cabinText}</div>
+          <strong style="color: #0f172a; display: block;">${toAirport}</strong>
+          <div style="color: #334155; margin-top: 2px; font-weight: 600;">Arr Time: <span style="color: #0f172a;">${arrTime}</span></div>
+          <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Flight Ref: ${f.pnr ? `PNR ${f.pnr}` : flightNo}</div>
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">
+          ${isDirect 
+            ? '<div style="color: #10b981; font-weight: 700;">Direct Flight</div>' 
+            : '<div style="color: #b45309; font-weight: 700;">Connecting / Transit</div>'}
+          <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Aircraft: ${aircraft}</div>
+        </td>
+        <td style="padding: 8px 10px; vertical-align: top; font-size: 9.5px;">
+          <strong style="color: #0f172a; display: block;">${cabin}</strong>
+          <div style="color: #475569; font-size: 9px;">${holdBag}</div>
+          <div style="color: #64748b; font-size: 9px;">${handBag}</div>
         </td>
       </tr>
     `;
-  };
+  }).join('');
 
   return `
     <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #cbd5e1;">
       <thead>
         <tr style="background: #091E42; color: #ffffff; text-align: left;">
           <th style="padding: 6px 10px; font-weight: 800; width: 18%;">Sector / Flight</th>
-          <th style="padding: 6px 10px; font-weight: 800; width: 25%;">Departure Details</th>
-          <th style="padding: 6px 10px; font-weight: 800; width: 25%;">Arrival Details</th>
-          <th style="padding: 6px 10px; font-weight: 800; width: 17%;">Transit / Aircraft</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 26%;">Departure Airport & Time</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 26%;">Arrival Airport & Time</th>
+          <th style="padding: 6px 10px; font-weight: 800; width: 15%;">Route Type / Aircraft</th>
           <th style="padding: 6px 10px; font-weight: 800; width: 15%;">Cabin & Baggage</th>
         </tr>
       </thead>
       <tbody>
-        ${renderSectorRow('OUTBOUND', outboundFlights)}
-        ${inboundFlights.length > 0 ? renderSectorRow('INBOUND', inboundFlights) : ''}
+        ${rows}
       </tbody>
     </table>
   `;
@@ -7846,8 +8045,9 @@ function buildHotelLogisticsCards(booking: any): string {
   const transports = booking.transportServices || [];
   const visas = booking.visaServices || [];
 
-  const h1 = accommodations[0] || null;
-  const h2 = accommodations[1] || null;
+  if (accommodations.length === 0 && transports.length === 0 && visas.length === 0) {
+    return '';
+  }
 
   const formatDateShort = (d: any) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '-';
 
@@ -7857,72 +8057,68 @@ function buildHotelLogisticsCards(booking: any): string {
     return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
   };
 
-  const renderHotelCard = (h: any, fallbackTitle: string, defaultCity: string) => {
-    if (!h) {
-      return `
-        <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 135px; box-sizing: border-box;">
-          <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">${fallbackTitle}</div>
-          <div style="color: #94a3b8; font-size: 9.5px; font-style: italic; margin-top: 10px;">Not included in this package.</div>
-        </div>
-      `;
-    }
+  const cards: string[] = [];
+
+  accommodations.forEach((h: any, idx: number) => {
     const nights = computeNights(h.checkInDate, h.checkOutDate);
     const dateRange = h.checkInDate && h.checkOutDate ? `${formatDateShort(h.checkInDate)} - ${formatDateShort(h.checkOutDate)}` : 'Dates TBA';
-    const title = h.city ? `${h.city.toUpperCase()} ACCOMMODATION` : fallbackTitle;
-    const stars = h.hotelName?.includes('5-Star') ? '' : ' (4-Star)';
+    const cityTitle = h.city ? `${h.city.toUpperCase()} ACCOMMODATION` : `HOTEL ACCOMMODATION ${idx + 1}`;
+    const stars = h.hotelName?.includes('5-Star') || h.hotelName?.includes('4-Star') || h.hotelName?.includes('3-Star') ? '' : (h.rating ? ` (${h.rating}-Star)` : ' (Confirmed Category)');
 
-    return `
-      <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 135px; box-sizing: border-box;">
-        <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">${title}</div>
-        <div style="font-weight: 800; color: #1e3a8a; font-size: 10.5px; margin-bottom: 4px;">${h.hotelName}${stars}</div>
-        <div style="font-size: 9px; color: #475569; line-height: 1.45;">
-          <div><strong style="color: #334155;">Location:</strong> ${h.city || defaultCity}</div>
-          <div><strong style="color: #334155;">Duration:</strong> ${nights > 0 ? `${nights} Nights (${dateRange})` : dateRange}</div>
-          <div><strong style="color: #334155;">Room:</strong> ${h.roomType || 'Standard Room'}</div>
-          <div><strong style="color: #334155;">Board:</strong> ${h.mealType || 'Room Only'}</div>
-          <div><strong style="color: #334155;">Feature:</strong> ${h.notes || 'Haram Shuttle / Walking Distance'}</div>
+    cards.push(`
+      <td style="vertical-align: top; padding: 0 4px;">
+        <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 125px; box-sizing: border-box;">
+          <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">${cityTitle}</div>
+          <div style="font-weight: 800; color: #1e3a8a; font-size: 10.5px; margin-bottom: 4px;">${h.hotelName}${stars}</div>
+          <div style="font-size: 9px; color: #475569; line-height: 1.45;">
+            <div><strong style="color: #334155;">Location:</strong> ${h.city || 'Confirmed Location'}</div>
+            <div><strong style="color: #334155;">Duration:</strong> ${nights > 0 ? `${nights} Nights (${dateRange})` : dateRange}</div>
+            <div><strong style="color: #334155;">Room:</strong> ${h.roomType || 'Standard Room'} (Qty: ${h.qty || 1})</div>
+            <div><strong style="color: #334155;">Board:</strong> ${h.mealType || 'Room Only'}</div>
+            ${h.notes ? `<div><strong style="color: #334155;">Notes:</strong> ${h.notes}</div>` : ''}
+          </div>
         </div>
-      </div>
-    `;
-  };
+      </td>
+    `);
+  });
 
-  let transportList = '';
-  if (transports.length > 0) {
-    transportList = transports.map((t: any, idx: number) => {
-      const from = t.departureDestination || t.pickUpLocation || 'Pickup';
-      const to = t.arrivalDestination || t.dropOffLocation || 'Dropoff';
-      return `<div>• Sector ${idx + 1}: ${from} to ${to}</div>`;
-    }).join('');
-  } else {
-    transportList = `<div>• Private AC Vehicle Circuit Included</div>`;
-  }
+  if (transports.length > 0 || visas.length > 0) {
+    let transportList = '';
+    if (transports.length > 0) {
+      transportList = transports.map((t: any, idx: number) => {
+        const from = t.departureDestination || t.pickUpLocation || 'Pickup';
+        const to = t.arrivalDestination || t.dropOffLocation || 'Dropoff';
+        const veh = t.vehicleType || 'Private AC Vehicle';
+        return `<div>• Sector ${idx + 1}: ${from} to ${to} (${veh})</div>`;
+      }).join('');
+    }
 
-  let visaList = '';
-  if (visas.length > 0) {
-    visaList = visas.map((v: any) => `<div>• ${v.visaType || 'Saudi Tourist / Umrah Visa'} (${v.country || 'Saudi Arabia'})</div>`).join('');
-  } else {
-    visaList = `<div>• Saudi ETA Visa (2-Year Multiple Entry)</div>`;
+    let visaList = '';
+    if (visas.length > 0) {
+      visaList = visas.map((v: any) => `<div>• ${v.visaType || 'Saudi Tourist / Umrah Visa'} (${v.country || 'Saudi Arabia'})</div>`).join('');
+    }
+
+    const title = transports.length > 0 && visas.length > 0 ? 'TRANSFERS & VISA SERVICES' : (transports.length > 0 ? 'GROUND TRANSPORT & TRANSFERS' : 'VISA SERVICES & AUTHORISATIONS');
+    const subtitle = transports.length > 0 && visas.length > 0 ? 'Private Circuit + Visas' : (transports.length > 0 ? 'Confirmed Vehicle Fleet' : 'Issued Visa Permits');
+
+    cards.push(`
+      <td style="vertical-align: top; padding: 0 4px;">
+        <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 125px; box-sizing: border-box;">
+          <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">${title}</div>
+          <div style="font-weight: 800; color: #1e3a8a; font-size: 10.5px; margin-bottom: 4px;">${subtitle}</div>
+          <div style="font-size: 9px; color: #475569; line-height: 1.45;">
+            ${transportList}
+            ${visaList}
+          </div>
+        </div>
+      </td>
+    `);
   }
 
   return `
     <table style="width: 100%; border-collapse: collapse;">
       <tr>
-        <td style="width: 33.33%; vertical-align: top; padding-right: 6px;">
-          ${renderHotelCard(h1, 'MAKKAH ACCOMMODATION', 'Makkah Al-Mukarramah')}
-        </td>
-        <td style="width: 33.33%; vertical-align: top; padding: 0 3px;">
-          ${renderHotelCard(h2, 'MADINAH ACCOMMODATION', 'Madinah Al-Munawwarah')}
-        </td>
-        <td style="width: 33.33%; vertical-align: top; padding-left: 6px;">
-          <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #ffffff; min-height: 135px; box-sizing: border-box;">
-            <div style="font-size: 10px; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-bottom: 4px;">TRANSFERS & VISA SERVICES</div>
-            <div style="font-weight: 800; color: #1e3a8a; font-size: 10.5px; margin-bottom: 4px;">Private Transport + Visas</div>
-            <div style="font-size: 9px; color: #475569; line-height: 1.45;">
-              ${transportList}
-              ${visaList}
-            </div>
-          </div>
-        </td>
+        ${cards.join('')}
       </tr>
     </table>
   `;
@@ -7935,11 +8131,12 @@ function buildPackageInclusionsTable(booking: any, currencySymbol: string): stri
   const totalGrossFormatted = totalGross.toFixed(2);
 
   const bullets: string[] = [];
+  const sortedFlights = sortFlightsChronologically(booking.flightServices || []);
 
-  if (booking.flightServices && booking.flightServices.length > 0) {
-    const f1 = booking.flightServices[0];
-    const carrier = f1.vendorName || f1.airlineCarrier || 'Royal Jordanian';
-    const routes = booking.flightServices.map((f: any) => `${f.departedFrom} to ${f.arrivedAt}`).join(' | ');
+  if (sortedFlights.length > 0) {
+    const f1 = sortedFlights[0];
+    const carrier = getAirlineName(f1);
+    const routes = sortedFlights.map((f: any) => `${f.departedFrom} to ${f.arrivedAt}`).join(' | ');
     bullets.push(`Return Flights with ${carrier}: ${routes}`);
   }
 
@@ -7957,7 +8154,9 @@ function buildPackageInclusionsTable(booking: any, currencySymbol: string): stri
     bullets.push(`${booking.visaServices.length}x Saudi Visa Authorisations (ETA / Entry Visas)`);
   }
 
-  bullets.push(`Airline Checked Baggage (23 kg) + Cabin Baggage + All Taxes & Airport Surcharges`);
+  if (sortedFlights.length > 0) {
+    bullets.push(`Airline Checked Baggage (23 kg) + Cabin Baggage + All Taxes & Airport Surcharges`);
+  }
 
   const bulletsHtml = bullets.map(b => `<li style="margin-bottom: 2px;">${b}</li>`).join('');
 
@@ -8117,10 +8316,17 @@ const compileTemplateWithBookingData = (
           .join("")
       : "";
 
+  // Sorted flights
+  const sortedFlights = sortFlightsChronologically(booking.flightServices || []);
+  const hasFlights = sortedFlights.length > 0;
+  const hasHotels = Boolean(booking.accommodations && booking.accommodations.length > 0);
+  const hasTransports = Boolean(booking.transportServices && booking.transportServices.length > 0);
+  const hasVisas = Boolean(booking.visaServices && booking.visaServices.length > 0);
+
   // Date and duration calculations
   let totalNights = 0;
   let travelDatesText = "Dates TBA";
-  if (booking.accommodations && booking.accommodations.length > 0) {
+  if (hasHotels) {
     const validDates = booking.accommodations.filter(
       (a: any) => a.checkInDate && a.checkOutDate,
     );
@@ -8143,27 +8349,31 @@ const compileTemplateWithBookingData = (
       );
       travelDatesText = `${earliest.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${latest.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${totalNights + 1} Days / ${totalNights} Nights)`;
     }
-  } else if (booking.flightServices && booking.flightServices.length > 0) {
-    const f1 = booking.flightServices[0];
-    const fLast = booking.flightServices[booking.flightServices.length - 1];
-    if (f1.date && fLast.date) {
-      const d1 = new Date(f1.date);
-      const d2 = new Date(fLast.date);
+  } else if (hasFlights) {
+    const f1 = sortedFlights[0];
+    const fLast = sortedFlights[sortedFlights.length - 1];
+    const d1Raw = f1.departureDate || f1.date;
+    const d2Raw = fLast.departureDate || fLast.date;
+    if (d1Raw && d2Raw) {
+      const d1 = new Date(d1Raw);
+      const d2 = new Date(d2Raw);
+      const startD = d1 <= d2 ? d1 : d2;
+      const endD = d1 <= d2 ? d2 : d1;
       totalNights = Math.max(
         1,
-        Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)),
+        Math.round((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)),
       );
-      travelDatesText = `${d1.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${d2.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${totalNights + 1} Days / ${totalNights} Nights)`;
+      travelDatesText = `${startD.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${endD.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${totalNights + 1} Days / ${totalNights} Nights)`;
     }
   }
 
   // Package Route
   let packageRoute = "London Heathrow (LHR) to Jeddah / Madinah (Return)";
-  if (booking.flightServices && booking.flightServices.length > 0) {
-    const f1 = booking.flightServices[0];
-    const fLast = booking.flightServices[booking.flightServices.length - 1];
-    packageRoute = `${f1.departedFrom || "LHR"} to ${fLast.arrivedAt || "JED"} (Return)`;
-  } else if (booking.accommodations && booking.accommodations.length > 0) {
+  if (hasFlights) {
+    const f1 = sortedFlights[0];
+    const fLast = sortedFlights[sortedFlights.length - 1];
+    packageRoute = `${f1.departedFrom || "Origin"} to ${fLast.arrivedAt || f1.arrivedAt || "Dest"} (Return)`;
+  } else if (hasHotels) {
     const cities = Array.from(
       new Set(
         booking.accommodations.map((a: any) => a.city).filter(Boolean),
@@ -8171,18 +8381,17 @@ const compileTemplateWithBookingData = (
     );
     packageRoute =
       cities.length > 0
-        ? `${cities.join(" & ")} Package`
+        ? `${cities.join(" & ")} Tailored Package`
         : "Tailored Travel Package";
   }
 
-  const carrierName =
-    booking.flightServices?.[0]?.vendorName ||
-    booking.flightServices?.[0]?.airlineCarrier ||
-    "Royal Jordanian";
+  const carrierName = hasFlights
+    ? getAirlineName(sortedFlights[0])
+    : "Scheduled Carrier";
   const flightClassName =
-    booking.flightServices?.[0]?.flightClass || "Economy Class";
+    sortedFlights[0]?.flightClass || "Economy Class";
   const carrierSummary = `${carrierName} (${flightClassName})`;
-  const visaAuthSummary = booking.visaServices?.[0]?.visaType
+  const visaAuthSummary = hasVisas && booking.visaServices[0]?.visaType
     ? `${booking.visaServices[0].visaType} (${booking.visaServices[0].country || "Saudi Arabia"})`
     : "Saudi Electronic Travel Authorisation (ETA)";
   const bookingStatusSummary =
@@ -8241,15 +8450,15 @@ const compileTemplateWithBookingData = (
   `;
 
   const flightRows =
-    booking.flightServices
+    sortedFlights
       ?.map(
         (f: any) => `
     <tr style="border-bottom: 1px solid #f1f5f9;">
       <td style="padding: 6px 12px; color: #334155;">${f.departureDate || f.date ? new Date(f.departureDate || f.date).toLocaleDateString("en-GB") : "-"}</td>
       <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${f.flightNo || "-"}</td>
       <td style="padding: 6px 12px; color: #334155; font-family: monospace;">${f.pnr || "-"}</td>
-      <td style="padding: 6px 12px; color: #334155;">${f.departedFrom || "-"}</td>
-      <td style="padding: 6px 12px; color: #334155;">${f.arrivedAt || "-"}</td>
+      <td style="padding: 6px 12px; color: #334155;">${getAirportDisplay(f.departedFrom)}</td>
+      <td style="padding: 6px 12px; color: #334155;">${getAirportDisplay(f.arrivedAt)}</td>
       <td style="padding: 6px 12px; color: #334155;">${f.departTime || f.departureTime || "-"}</td>
       <td style="padding: 6px 12px; color: #64748b;">${f.baggageAllowance || f.baggage || "-"}</td>
     </tr>
@@ -8321,7 +8530,7 @@ const compileTemplateWithBookingData = (
       <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${t.vehicleType || "-"}</td>
       <td style="padding: 6px 12px; color: #334155;">${t.departureDestination || t.pickUpLocation || "-"} to ${t.arrivalDestination || t.dropOffLocation || "-"}</td>
       <td style="padding: 6px 12px; color: #334155;">${t.departureTime || "-"}</td>
-      <td style="padding: 6px 12px; color: #64748b;">${t.vendorName || "-"}</td>
+      <td style="padding: 6px 12px; color: #64748b;">Private Chauffeur Service</td>
     </tr>
   `,
       )
@@ -8336,7 +8545,7 @@ const compileTemplateWithBookingData = (
           <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Vehicle Class</th>
           <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Route (Pickup / Dropoff)</th>
           <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Time</th>
-          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Provider</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Service</th>
         </tr>
       </thead>
       <tbody>
@@ -8354,7 +8563,7 @@ const compileTemplateWithBookingData = (
       <td style="padding: 6px 12px; color: #334155; font-family: monospace;">${v.passportNumber || "-"}</td>
       <td style="padding: 6px 12px; color: #334155; font-family: monospace;">${v.visaNumber || "Pending"}</td>
       <td style="padding: 6px 12px; color: #64748b;">${v.issueDate ? new Date(v.issueDate).toLocaleDateString("en-GB") : "-"} to ${v.expiryDate ? new Date(v.expiryDate).toLocaleDateString("en-GB") : "-"}</td>
-      <td style="padding: 6px 12px; color: #334155;">${v.vendorName || "-"}</td>
+      <td style="padding: 6px 12px; color: #334155;">Ministry of Foreign Affairs (MOFA)</td>
     </tr>
   `,
       )
@@ -8369,7 +8578,7 @@ const compileTemplateWithBookingData = (
           <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Passport Number</th>
           <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Visa Number</th>
           <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Validity Window</th>
-          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Vendor</th>
+          <th style="padding: 6px 12px; font-weight: bold; color: #475569;">Authority</th>
         </tr>
       </thead>
       <tbody>
@@ -8384,7 +8593,7 @@ const compileTemplateWithBookingData = (
         (s: any) => `
     <tr style="border-bottom: 1px solid #f1f5f9;">
       <td style="padding: 6px 12px; color: #334155; font-weight: 600;">${s.serviceName || "-"}</td>
-      <td style="padding: 6px 12px; color: #334155;">${s.vendorName || "-"}</td>
+      <td style="padding: 6px 12px; color: #334155;">Direct Service Provider</td>
       <td style="padding: 6px 12px; color: #64748b;">${s.notes || "-"}</td>
     </tr>
   `,
@@ -8439,10 +8648,10 @@ const compileTemplateWithBookingData = (
   `;
 
   const serviceRows: string[] = [];
-  booking.flightServices?.forEach((f: any) => {
+  sortedFlights.forEach((f: any) => {
     serviceRows.push(`
       <tr style="border-bottom: 1px solid #f1f5f9;">
-        <td style="padding: 6px 12px; color: #334155;">Flight: ${f.departedFrom} to ${f.arrivedAt} (${f.flightNo || ""})</td>
+        <td style="padding: 6px 12px; color: #334155;">Flight: ${getAirportDisplay(f.departedFrom)} to ${getAirportDisplay(f.arrivedAt)} (${f.flightNo || ""})</td>
         <td style="padding: 6px 12px; color: #334155; font-weight: 600; text-align: right;">${currencySymbol}${Number(f.price).toFixed(2)}</td>
       </tr>
     `);
@@ -8502,25 +8711,38 @@ const compileTemplateWithBookingData = (
     </table>
   `;
 
+  const defaultBankName = "Lloyds Bank";
+  const defaultAccountName = "TOOBA TRAVELS LTD";
+  const defaultAccountNumber = "19401663";
+  const defaultSortCode = "30-54-66";
+  const defaultBillingAddress = "63 Buxton Road, London, E17 7EH";
+
+  const bankName = companyContext?.bankName || defaultBankName;
+  const accountName = companyContext?.accountName || defaultAccountName;
+  const accountNumber = companyContext?.accountNumber || defaultAccountNumber;
+  const sortCode = companyContext?.sortCode || defaultSortCode;
+  const billingAddress = companyContext?.billingAddress || defaultBillingAddress;
+
   const tokens: Record<string, string> = {
-    "company.name": companyContext.companyName || "Travel Agency Ltd",
+    "company.name": companyContext.companyName || "Tooba Travels Ltd",
     "company.logoPrimary": companyContext.logoPrimary
       ? `<img src="${companyContext.logoPrimary}" alt="${companyContext.companyName || 'Company'}" style="max-height: 52px; max-width: 180px; object-fit: contain; vertical-align: middle;" />`
       : `<div style="width: 44px; height: 44px; border-radius: 8px; background: #0f172a; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px;">${(companyContext.companyName || "T").charAt(0)}</div>`,
     "company.logoSecondary": companyContext.logoSecondary
       ? `<img src="${companyContext.logoSecondary}" style="max-height: 50px; object-fit: contain;" />`
       : "",
-    "company.address": companyContext.officeAddress || "London, United Kingdom",
-    "company.email": companyContext.emailSender || "operations@travelagency.com",
-    "company.phone": companyContext.landlineFormat || "+44 20 7946 0958",
+    "company.address": companyContext.officeAddress || defaultBillingAddress,
+    "company.email": companyContext.emailSender || "operations@toobatravels.co.uk",
+    "company.phone": companyContext.landlineFormat || "0203 371 8774",
     "company.website": companyContext.website || "www.toobatravels.co.uk",
     "company.whatsapp": companyContext.whatsappWebhook
       ? `<a href="${companyContext.whatsappWebhook}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>`
       : "",
-    "company.bankName": companyContext.bankName || "Barclays Bank UK",
-    "company.accountName": companyContext.accountName || companyContext.companyName || "Tooba Travels Ltd",
-    "company.sortCode": companyContext.sortCode || "20-00-00",
-    "company.accountNumber": companyContext.accountNumber || "12345678",
+    "company.bankName": bankName,
+    "company.accountName": accountName,
+    "company.sortCode": sortCode,
+    "company.accountNumber": accountNumber,
+    "company.billingAddress": billingAddress,
     "invoice.number": `INV-${booking.bookingReference}`,
     "invoice.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
     "document.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
@@ -8565,8 +8787,8 @@ const compileTemplateWithBookingData = (
       ? new Date(booking.accommodations[0].checkOutDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
       : "TBA",
     "hotel.nights": totalNights > 0 ? `${totalNights} Night(s)` : "Standard Stay",
-    "transport.vendorName": booking.transportServices?.[0]?.vendorName || "Basma Transport / Ground Fleet",
-    "transport.vendorPhone": companyContext.landlineFormat || "+44 20 7946 0958",
+    "transport.vendorName": "Executive Chauffeur Fleet",
+    "transport.vendorPhone": companyContext.landlineFormat || "0203 371 8774",
     "transport.vendorEmail": companyContext.emailSender || "operations@toobatravels.co.uk",
     "company.atolNumber": "11492",
     "company.iataNumber": "9127845",
@@ -8592,7 +8814,7 @@ const compileTemplateWithBookingData = (
     "document.timestamp": new Date().toLocaleString("en-GB"),
   };
 
-  const htmlToCompile = template.structureHtml
+  let htmlToCompile = template.structureHtml
     .replace(
       /£\{\{booking\.amountGross\}\}/g,
       `${currencySymbol}{{booking.amountGross}}`,
@@ -8605,6 +8827,46 @@ const compileTemplateWithBookingData = (
       /£\{\{booking\.amountDue\}\}/g,
       `${currencySymbol}{{booking.amountDue}}`,
     );
+
+  // If no hotel accommodations, ground transports, or visas are present in the booking, strip out section 2 entirely!
+  if (!hasHotels && !hasTransports && !hasVisas) {
+    htmlToCompile = htmlToCompile.replace(
+      /<!--\s*2\.\s*HOTEL ACCOMMODATIONS[\s\S]*?\{\{tables\.hotelLogistics\}\}\s*<\/div>/gi,
+      ""
+    );
+    htmlToCompile = htmlToCompile.replace(
+      /<div[^>]*>[\s\S]*?HOTEL ACCOMMODATIONS & GROUND LOGISTICS[\s\S]*?\{\{tables\.hotelLogistics\}\}\s*<\/div>/gi,
+      ""
+    );
+    htmlToCompile = htmlToCompile.replace(
+      /3\.\s*BILLING & PACKAGE FARE BREAKDOWN/g,
+      "2. BILLING & PACKAGE FARE BREAKDOWN"
+    );
+  }
+
+  // If visas are not booked, omit the visa authorization row from Customer / Package Summary
+  if (!hasVisas) {
+    htmlToCompile = htmlToCompile.replace(
+      /<div>\s*<span[^>]*>Visa Authorization:<\/span>[\s\S]*?<\/div>/gi,
+      ""
+    );
+  }
+
+  // If flights are not booked, omit flight schedule section and airline carrier summary
+  if (!hasFlights) {
+    htmlToCompile = htmlToCompile.replace(
+      /<div>\s*<span[^>]*>Airline Carrier:<\/span>[\s\S]*?<\/div>/gi,
+      ""
+    );
+    htmlToCompile = htmlToCompile.replace(
+      /<!--\s*1\.\s*FLIGHT ITINERARY[\s\S]*?\{\{tables\.flightSchedule\}\}\s*<\/div>/gi,
+      ""
+    );
+    htmlToCompile = htmlToCompile.replace(
+      /<div[^>]*>[\s\S]*?FLIGHT ITINERARY SCHEDULE[\s\S]*?\{\{tables\.flightSchedule\}\}\s*<\/div>/gi,
+      ""
+    );
+  }
 
   const compiledHtml = htmlToCompile.replace(
     /\{\{([^{}]+)\}\}/g,
@@ -9073,7 +9335,43 @@ app.get(
         });
       }
 
-      res.status(200).json({ companyContext: context });
+      let bankData: any = {};
+      if (context?.defaultTerms && context.defaultTerms.includes("<!-- BANK_CONFIG:")) {
+        try {
+          const match = context.defaultTerms.match(/<!-- BANK_CONFIG:\s*(\{.*?\})\s*-->/);
+          if (match && match[1]) {
+            bankData = JSON.parse(match[1]);
+          }
+        } catch (e) {}
+      }
+
+      const defaultBankName = "Lloyds Bank";
+      const defaultAccountName = "TOOBA TRAVELS LTD";
+      const defaultAccountNumber = "19401663";
+      const defaultSortCode = "30-54-66";
+      const defaultBillingAddress = "63 Buxton Road, London, E17 7EH";
+
+      const bankName = bankData.bankName || (context as any)?.bankName || defaultBankName;
+      const accountName = bankData.accountName || (context as any)?.accountName || defaultAccountName;
+      const accountNumber = bankData.accountNumber || (context as any)?.accountNumber || defaultAccountNumber;
+      const sortCode = bankData.sortCode || (context as any)?.sortCode || defaultSortCode;
+      const billingAddress = bankData.billingAddress || (context as any)?.billingAddress || defaultBillingAddress;
+
+      const cleanTerms = context?.defaultTerms
+        ? context.defaultTerms.replace(/<!-- BANK_CONFIG:\s*\{.*?\}\s*-->\s*/g, "").trim()
+        : "";
+
+      const enhancedContext = {
+        ...(context ? (context as any) : {}),
+        bankName,
+        accountName,
+        accountNumber,
+        sortCode,
+        billingAddress,
+        defaultTerms: cleanTerms,
+      };
+
+      res.status(200).json({ companyContext: enhancedContext });
     } catch (error) {
       console.error("Fetch Company Context Error:", error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -9105,6 +9403,11 @@ app.put(
         vatNumber,
         licenceNumber,
         defaultTerms,
+        bankName,
+        accountName,
+        accountNumber,
+        sortCode,
+        billingAddress,
       } = req.body;
 
       if (!companyName) {
@@ -9113,6 +9416,18 @@ app.put(
           message: "companyName is required",
         });
       }
+
+      const bankPayload = {
+        bankName: bankName || "Lloyds Bank",
+        accountName: accountName || "TOOBA TRAVELS LTD",
+        accountNumber: accountNumber || "19401663",
+        sortCode: sortCode || "30-54-66",
+        billingAddress: billingAddress || officeAddress || "63 Buxton Road, London, E17 7EH",
+      };
+
+      const rawTerms = defaultTerms || "";
+      const cleanedTerms = rawTerms.replace(/<!-- BANK_CONFIG:\s*\{.*?\}\s*-->\s*/g, "").trim();
+      const packedTerms = `<!-- BANK_CONFIG: ${JSON.stringify(bankPayload)} -->\n${cleanedTerms}`;
 
       const context = await prisma.companyContext.upsert({
         where: { tenantId },
@@ -9128,7 +9443,7 @@ app.put(
           registrationNumber: registrationNumber || null,
           vatNumber: vatNumber || null,
           licenceNumber: licenceNumber || null,
-          defaultTerms: defaultTerms || null,
+          defaultTerms: packedTerms,
         },
         create: {
           tenantId,
@@ -9143,13 +9458,19 @@ app.put(
           registrationNumber: registrationNumber || null,
           vatNumber: vatNumber || null,
           licenceNumber: licenceNumber || null,
-          defaultTerms: defaultTerms || null,
+          defaultTerms: packedTerms,
         },
       });
 
+      const responseContext = {
+        ...context,
+        ...bankPayload,
+        defaultTerms: cleanedTerms,
+      };
+
       res.status(200).json({
         message: "Company context updated successfully",
-        companyContext: context,
+        companyContext: responseContext,
       });
     } catch (error) {
       console.error("Update Company Context Error:", error);
@@ -9238,6 +9559,28 @@ app.get(
       const whatsapp =
         companyContext?.whatsappWebhook || MOCK_PREVIEW_DATA.company.whatsapp;
 
+      let bankData: any = {};
+      if (companyContext?.defaultTerms && companyContext.defaultTerms.includes("<!-- BANK_CONFIG:")) {
+        try {
+          const match = companyContext.defaultTerms.match(/<!-- BANK_CONFIG:\s*(\{.*?\})\s*-->/);
+          if (match && match[1]) {
+            bankData = JSON.parse(match[1]);
+          }
+        } catch (e) {}
+      }
+
+      const defaultBankName = "Lloyds Bank";
+      const defaultAccountName = "TOOBA TRAVELS LTD";
+      const defaultAccountNumber = "19401663";
+      const defaultSortCode = "30-54-66";
+      const defaultBillingAddress = "63 Buxton Road, London, E17 7EH";
+
+      const bankName = bankData.bankName || (companyContext as any)?.bankName || defaultBankName;
+      const accountName = bankData.accountName || (companyContext as any)?.accountName || defaultAccountName;
+      const accountNumber = bankData.accountNumber || (companyContext as any)?.accountNumber || defaultAccountNumber;
+      const sortCode = bankData.sortCode || (companyContext as any)?.sortCode || defaultSortCode;
+      const billingAddress = bankData.billingAddress || (companyContext as any)?.billingAddress || defaultBillingAddress;
+
       const tokens: Record<string, string> = {
         "company.name": companyName,
         "company.logoPrimary": logoPrimary
@@ -9253,10 +9596,11 @@ app.get(
           ? `<a href="${whatsapp}" target="_blank" style="color: #059669; font-weight: 600;">WhatsApp Support</a>`
           : "",
         "company.website": (tenantProfile as any)?.domain ? `www.${(tenantProfile as any).domain}` : (companyContext?.website || "www.toobatravels.co.uk"),
-        "company.bankName": "Barclays Bank UK",
-        "company.accountName": companyName,
-        "company.sortCode": "20-00-00",
-        "company.accountNumber": "12345678",
+        "company.bankName": bankName,
+        "company.accountName": accountName,
+        "company.sortCode": sortCode,
+        "company.accountNumber": accountNumber,
+        "company.billingAddress": billingAddress,
         "invoice.number": "INV-TT-UMR-950",
         "invoice.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
         "document.date": new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
@@ -9626,13 +9970,56 @@ app.post(
         whatsappWebhook:
           companyContext?.whatsappWebhook ||
           `https://api.whatsapp.com/send?phone=${((tenantProfile as any)?.phone || companyContext?.landlineFormat || "442079460958").replace(/[^0-9+]/g, "")}`,
-        bankName: "Barclays Bank UK",
-        accountName:
-          tenantProfile?.name ||
-          companyContext?.companyName ||
-          "Tooba Travels Ltd",
-        sortCode: "20-00-00",
-        accountNumber: "12345678",
+        bankName: (() => {
+          let bName = "Lloyds Bank";
+          if (companyContext?.defaultTerms && companyContext.defaultTerms.includes("<!-- BANK_CONFIG:")) {
+            try {
+              const match = companyContext.defaultTerms.match(/<!-- BANK_CONFIG:\s*(\{.*?\})\s*-->/);
+              if (match && match[1]) bName = JSON.parse(match[1]).bankName || bName;
+            } catch (e) {}
+          }
+          return (companyContext as any)?.bankName || bName;
+        })(),
+        accountName: (() => {
+          let aName = "TOOBA TRAVELS LTD";
+          if (companyContext?.defaultTerms && companyContext.defaultTerms.includes("<!-- BANK_CONFIG:")) {
+            try {
+              const match = companyContext.defaultTerms.match(/<!-- BANK_CONFIG:\s*(\{.*?\})\s*-->/);
+              if (match && match[1]) aName = JSON.parse(match[1]).accountName || aName;
+            } catch (e) {}
+          }
+          return (companyContext as any)?.accountName || aName;
+        })(),
+        sortCode: (() => {
+          let sCode = "30-54-66";
+          if (companyContext?.defaultTerms && companyContext.defaultTerms.includes("<!-- BANK_CONFIG:")) {
+            try {
+              const match = companyContext.defaultTerms.match(/<!-- BANK_CONFIG:\s*(\{.*?\})\s*-->/);
+              if (match && match[1]) sCode = JSON.parse(match[1]).sortCode || sCode;
+            } catch (e) {}
+          }
+          return (companyContext as any)?.sortCode || sCode;
+        })(),
+        accountNumber: (() => {
+          let aNum = "19401663";
+          if (companyContext?.defaultTerms && companyContext.defaultTerms.includes("<!-- BANK_CONFIG:")) {
+            try {
+              const match = companyContext.defaultTerms.match(/<!-- BANK_CONFIG:\s*(\{.*?\})\s*-->/);
+              if (match && match[1]) aNum = JSON.parse(match[1]).accountNumber || aNum;
+            } catch (e) {}
+          }
+          return (companyContext as any)?.accountNumber || aNum;
+        })(),
+        billingAddress: (() => {
+          let bAddr = "63 Buxton Road, London, E17 7EH";
+          if (companyContext?.defaultTerms && companyContext.defaultTerms.includes("<!-- BANK_CONFIG:")) {
+            try {
+              const match = companyContext.defaultTerms.match(/<!-- BANK_CONFIG:\s*(\{.*?\})\s*-->/);
+              if (match && match[1]) bAddr = JSON.parse(match[1]).billingAddress || bAddr;
+            } catch (e) {}
+          }
+          return (companyContext as any)?.billingAddress || bAddr;
+        })(),
       };
 
       const secret = process.env.JWT_SECRET || "travel-secret";

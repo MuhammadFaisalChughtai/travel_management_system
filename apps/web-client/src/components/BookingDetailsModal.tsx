@@ -1522,6 +1522,11 @@ export function BookingDetailsModal({
                 email: companyInfo?.emailSender || user?.email || "operations@toobatravels.co.uk",
                 logo: companyInfo?.logoPrimary || null,
                 website: companyInfo?.website || "www.toobatravels.co.uk",
+                bankName: companyInfo?.bankName,
+                accountName: companyInfo?.accountName,
+                accountNumber: companyInfo?.accountNumber,
+                sortCode: companyInfo?.sortCode,
+                billingAddress: companyInfo?.billingAddress,
               }}
             />
           </div>

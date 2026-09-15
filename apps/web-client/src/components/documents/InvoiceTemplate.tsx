@@ -14,7 +14,197 @@ interface InvoiceTemplateProps {
     accountName?: string;
     sortCode?: string;
     accountNumber?: string;
+    billingAddress?: string;
   };
+}
+
+const AIRPORT_MAP: Record<string, string> = {
+  // UK & Ireland
+  LHR: "London Heathrow (LHR)",
+  LGW: "London Gatwick (LGW)",
+  STN: "London Stansted (STN)",
+  LTN: "London Luton (LTN)",
+  LCY: "London City (LCY)",
+  MAN: "Manchester Airport (MAN)",
+  BHX: "Birmingham Airport (BHX)",
+  EDI: "Edinburgh Airport (EDI)",
+  GLA: "Glasgow Airport (GLA)",
+  NCL: "Newcastle Airport (NCL)",
+  BFS: "Belfast International (BFS)",
+  BHD: "George Best Belfast City (BHD)",
+  LPL: "Liverpool John Lennon (LPL)",
+  EMA: "East Midlands Airport (EMA)",
+  BRS: "Bristol Airport (BRS)",
+  CWL: "Cardiff Airport (CWL)",
+  ABZ: "Aberdeen Airport (ABZ)",
+  DUB: "Dublin Airport (DUB)",
+
+  // Saudi Arabia & Middle East
+  JED: "King Abdulaziz Int'l, Jeddah (JED)",
+  MED: "Prince Mohammad Bin Abdulaziz, Madinah (MED)",
+  RUH: "King Khalid Int'l, Riyadh (RUH)",
+  DMM: "King Fahd Int'l, Dammam (DMM)",
+  AMM: "Queen Alia Int'l, Amman (AMM)",
+  DXB: "Dubai International (DXB)",
+  DWC: "Al Maktoum Int'l (DWC)",
+  AUH: "Zayed International, Abu Dhabi (AUH)",
+  SHJ: "Sharjah International (SHJ)",
+  DOH: "Hamad International, Doha (DOH)",
+  BAH: "Bahrain International (BAH)",
+  KWI: "Kuwait International (KWI)",
+  MCT: "Muscat International (MCT)",
+  BEY: "Beirut-Rafic Hariri Int'l (BEY)",
+  CAI: "Cairo International (CAI)",
+  HBE: "Borg El Arab, Alexandria (HBE)",
+
+  // Turkey & Europe
+  IST: "Istanbul Airport (IST)",
+  SAW: "Sabiha Gokcen Int'l, Istanbul (SAW)",
+  AYT: "Antalya Airport (AYT)",
+  ADB: "Izmir Adnan Menderes (ADB)",
+  CDG: "Paris Charles de Gaulle (CDG)",
+  ORY: "Paris Orly (ORY)",
+  FRA: "Frankfurt Airport (FRA)",
+  MUC: "Munich Airport (MUC)",
+  AMS: "Amsterdam Schiphol (AMS)",
+  BRU: "Brussels Airport (BRU)",
+  FCO: "Rome Fiumicino (FCO)",
+  MXP: "Milan Malpensa (MXP)",
+  MAD: "Madrid-Barajas (MAD)",
+  BCN: "Barcelona-El Prat (BCN)",
+  ZRH: "Zurich Airport (ZRH)",
+  VIE: "Vienna International (VIE)",
+  GVA: "Geneva Airport (GVA)",
+  CPH: "Copenhagen Airport (CPH)",
+
+  // North America
+  YYZ: "Toronto Pearson International (YYZ)",
+  YVR: "Vancouver International (YVR)",
+  YUL: "Montreal-Trudeau (YUL)",
+  YYC: "Calgary International (YYC)",
+  YOW: "Ottawa Macdonald-Cartier (YOW)",
+  JFK: "John F. Kennedy Int'l, New York (JFK)",
+  EWR: "Newark Liberty Int'l (EWR)",
+  LGA: "LaGuardia Airport, New York (LGA)",
+  ORD: "Chicago O'Hare Int'l (ORD)",
+  MDW: "Chicago Midway (MDW)",
+  LAX: "Los Angeles International (LAX)",
+  SFO: "San Francisco International (SFO)",
+  IAD: "Washington Dulles Int'l (IAD)",
+  DCA: "Ronald Reagan Washington (DCA)",
+  DFW: "Dallas/Fort Worth Int'l (DFW)",
+  IAH: "George Bush Intercontinental, Houston (IAH)",
+  MIA: "Miami International (MIA)",
+  MCO: "Orlando International (MCO)",
+  BOS: "Boston Logan International (BOS)",
+  ATL: "Hartsfield-Jackson Atlanta (ATL)",
+  SEA: "Seattle-Tacoma Int'l (SEA)",
+
+  // South Asia
+  ISB: "Islamabad International (ISB)",
+  LHE: "Allama Iqbal Int'l, Lahore (LHE)",
+  KHI: "Jinnah International, Karachi (KHI)",
+  PEW: "Bacha Khan Int'l, Peshawar (PEW)",
+  MUX: "Multan International (MUX)",
+  SKT: "Sialkot International (SKT)",
+  DEL: "Indira Gandhi Int'l, Delhi (DEL)",
+  BOM: "Chhatrapati Shivaji Maharaj, Mumbai (BOM)",
+  DAC: "Hazrat Shahjalal Int'l, Dhaka (DAC)",
+  CMB: "Bandaranaike Int'l, Colombo (CMB)",
+
+  // Southeast Asia & Others
+  KUL: "Kuala Lumpur International (KUL)",
+  SIN: "Singapore Changi (SIN)",
+  BKK: "Suvarnabhumi Airport, Bangkok (BKK)",
+  CGK: "Soekarno-Hatta Int'l, Jakarta (CGK)",
+  MLE: "Velana International, Maldives (MLE)",
+};
+
+function getAirportDisplay(codeOrName: string | undefined | null): string {
+  if (!codeOrName || typeof codeOrName !== 'string') return '-';
+  const trimmed = codeOrName.trim();
+  if (!trimmed || trimmed === 'Departure Airport' || trimmed === 'Arrival Airport') return '-';
+  if (trimmed.includes('(') && trimmed.includes(')')) return trimmed;
+  const upper = trimmed.toUpperCase();
+  if (AIRPORT_MAP[upper]) return AIRPORT_MAP[upper];
+  return trimmed;
+}
+
+const AIRLINE_MAP: Record<string, string> = {
+  DL: "Delta Air Lines",
+  RJ: "Royal Jordanian",
+  SV: "Saudia",
+  BA: "British Airways",
+  EK: "Emirates",
+  QR: "Qatar Airways",
+  TK: "Turkish Airlines",
+  MS: "EgyptAir",
+  WY: "Oman Air",
+  GF: "Gulf Air",
+  KU: "Kuwait Airways",
+  FZ: "flydubai",
+  XY: "flynas",
+  PK: "PIA (Pakistan International Airlines)",
+  LH: "Lufthansa",
+  AF: "Air France",
+  KL: "KLM",
+  UA: "United Airlines",
+  AA: "American Airlines",
+  AC: "Air Canada",
+  EY: "Etihad Airways",
+  VS: "Virgin Atlantic",
+  SQ: "Singapore Airlines",
+  TG: "Thai Airways",
+  MH: "Malaysia Airlines",
+  AT: "Royal Air Maroc",
+  PC: "Pegasus Airlines",
+  W9: "Wizz Air UK",
+  W6: "Wizz Air",
+  U2: "easyJet",
+  FR: "Ryanair",
+  ME: "Middle East Airlines",
+  RB: "Syrian Air",
+  IA: "Iraqi Airways",
+  J9: "Jazeera Airways",
+};
+
+function getAirlineName(flight: any): string {
+  if (!flight) return "Scheduled International Carrier";
+  const candidate = flight.airline || flight.airlineCarrier;
+  if (candidate && typeof candidate === 'string' && candidate.trim()) {
+    const clean = candidate.trim();
+    const lower = clean.toLowerCase();
+    if (!lower.includes("travel") && !lower.includes("polani") && !lower.includes("basma") && !lower.includes("vendor") && !lower.includes("supplier") && !lower.includes("fleet")) {
+      return clean;
+    }
+  }
+
+  if (flight.flightNo && typeof flight.flightNo === 'string') {
+    const match = flight.flightNo.trim().toUpperCase().match(/^([A-Z0-9]{2})/);
+    if (match && AIRLINE_MAP[match[1]]) {
+      return AIRLINE_MAP[match[1]];
+    }
+  }
+
+  return "Scheduled International Carrier";
+}
+
+function sortFlightsChronologically(flights: any[]): any[] {
+  if (!flights || !Array.isArray(flights)) return [];
+  return [...flights].sort((a, b) => {
+    const dateA = a.departureDate || a.date || '';
+    const dateB = b.departureDate || b.date || '';
+    const timeA = a.departureTime || a.departTime || '00:00';
+    const timeB = b.departureTime || b.departTime || '00:00';
+
+    const parseA = Date.parse(`${dateA}T${timeA.length === 5 ? timeA + ':00' : timeA}`) || Date.parse(`${dateA} ${timeA}`) || Date.parse(dateA) || 0;
+    const parseB = Date.parse(`${dateB}T${timeB.length === 5 ? timeB + ':00' : timeB}`) || Date.parse(`${dateB} ${timeB}`) || Date.parse(dateB) || 0;
+
+    if (parseA !== parseB) {
+      return parseA - parseB;
+    }
+    return (dateA + timeA).localeCompare(dateB + timeB);
+  });
 }
 
 export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, companyInfo }) => {
@@ -25,12 +215,15 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
   const companyLogo = companyInfo?.logo;
   const companyAddress = companyInfo?.location || "63 Buxton Road, London, E17 7EH";
   const companyPhone = companyInfo?.phone || "+44 20 7946 0958";
-  const companyEmail = companyInfo?.email || "operations@travelagency.com";
+  const companyEmail = companyInfo?.email || "operations@toobatravels.co.uk";
   const companyWebsite = companyInfo?.website || "www.toobatravels.co.uk";
-  const bankName = companyInfo?.bankName || "Barclays Bank UK";
-  const accountName = companyInfo?.accountName || companyName;
-  const sortCode = companyInfo?.sortCode || "20-00-00";
-  const accountNumber = companyInfo?.accountNumber || "12345678";
+  
+  // Official Tooba Travels Bank Remittance Details
+  const bankName = companyInfo?.bankName || "Lloyds Bank";
+  const accountName = companyInfo?.accountName || "TOOBA TRAVELS LTD";
+  const sortCode = companyInfo?.sortCode || "30-54-66";
+  const accountNumber = companyInfo?.accountNumber || "19401663";
+  const billingAddress = companyInfo?.billingAddress || "63 Buxton Road, London, E17 7EH";
 
   const totalGross = Number(booking.totalPrice || 0);
   const totalSettled = Number(
@@ -51,29 +244,74 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
     .map((c: any) => `${c.firstName} ${c.lastName}`)
     .join(', ');
 
-  // Travel dates & duration
+  // Chronologically sorted flights
+  const rawFlights = booking.flightServices || [];
+  const sortedFlights = sortFlightsChronologically(rawFlights);
+
+  // Accommodations, Transports, and Visas
+  const accommodations = booking.accommodations || [];
+  const transports = booking.transportServices || [];
+  const visas = booking.visaServices || [];
+
+  const hasAccommodations = accommodations.length > 0;
+  const hasTransports = transports.length > 0;
+  const hasVisas = visas.length > 0;
+  const hasGroundLogistics = hasAccommodations || hasTransports || hasVisas;
+
+  // Travel dates & duration calculation
   let travelDatesText = "Dates TBA";
   let totalNights = 0;
-  if (booking.accommodations && booking.accommodations.length > 0) {
-    const valid = booking.accommodations.filter((a: any) => a.checkInDate && a.checkOutDate);
+  if (hasAccommodations) {
+    const valid = accommodations.filter((a: any) => a.checkInDate && a.checkOutDate);
     if (valid.length > 0) {
       const earliest = new Date(Math.min(...valid.map((a: any) => new Date(a.checkInDate).getTime())));
       const latest = new Date(Math.max(...valid.map((a: any) => new Date(a.checkOutDate).getTime())));
       totalNights = Math.max(1, Math.round((latest.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24)));
       travelDatesText = `${earliest.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${latest.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${totalNights + 1} Days / ${totalNights} Nights)`;
     }
+  } else if (sortedFlights.length > 0) {
+    const firstFlight = sortedFlights[0];
+    const lastFlight = sortedFlights[sortedFlights.length - 1];
+    const depDate = firstFlight.departureDate || firstFlight.date;
+    const retDate = lastFlight.departureDate || lastFlight.date;
+    if (depDate && retDate) {
+      const d1 = new Date(depDate);
+      const d2 = new Date(retDate);
+      const diff = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)));
+      travelDatesText = `${d1.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${d2.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${diff + 1} Days)`;
+    } else if (depDate) {
+      travelDatesText = new Date(depDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    }
+  } else if (booking.departureDate && booking.returnDate) {
+    const d1 = new Date(booking.departureDate);
+    const d2 = new Date(booking.returnDate);
+    const diff = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)));
+    travelDatesText = `${d1.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} to ${d2.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (${diff + 1} Days)`;
   }
 
-  const packageRoute = booking.flightServices && booking.flightServices.length > 0
-    ? `${booking.flightServices[0].departedFrom || 'LHR'} to ${booking.flightServices[booking.flightServices.length - 1].arrivedAt || 'JED'} (Return)`
+  // Package Route
+  const packageRoute = sortedFlights.length > 0
+    ? `${getAirportDisplay(sortedFlights[0].departedFromAirportName || sortedFlights[0].departedFrom)} to ${getAirportDisplay(sortedFlights[sortedFlights.length - 1].arrivedAtAirportName || sortedFlights[sortedFlights.length - 1].arrivedAt)}`
     : "London Heathrow (LHR) to Jeddah / Madinah (Return)";
 
-  const flights = booking.flightServices || [];
-  const outboundFlights = flights.slice(0, Math.max(1, Math.ceil(flights.length / 2)));
-  const inboundFlights = flights.length > 1 ? flights.slice(Math.max(1, Math.ceil(flights.length / 2))) : [];
-
-  const h1 = booking.accommodations?.[0] || null;
-  const h2 = booking.accommodations?.[1] || null;
+  // Dynamic contracted inclusions (never mention non-included services)
+  const inclusions: string[] = [];
+  if (sortedFlights.length > 0) {
+    inclusions.push("Return scheduled flights with luggage & airport taxes included");
+  }
+  if (hasAccommodations) {
+    const hotelNames = accommodations.map((h: any) => h.hotelName).filter(Boolean).join(", ");
+    inclusions.push(`Hotel accommodations (${hotelNames || "Confirmed hotel booking"})`);
+  }
+  if (hasTransports) {
+    inclusions.push("Ground transportation circuits and airport transfers");
+  }
+  if (hasVisas) {
+    inclusions.push("Saudi tourist / Umrah visa processing and issuing");
+  }
+  if (inclusions.length === 0) {
+    inclusions.push("Arranged travel management services as contracted");
+  }
 
   return (
     <div className="tax-invoice-root bg-white text-slate-800 text-[11px] font-sans leading-tight">
@@ -92,7 +330,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
         }
       `}</style>
 
-      {/* PAGE 1: ITINERARY, ACCOMMODATION & BILLING BREAKDOWN */}
+      {/* PAGE 1: ITINERARY, FLIGHT SCHEDULE & BILLING BREAKDOWN */}
       <div className="tax-invoice-page p-6 border-b border-slate-200 min-h-[1050px] flex flex-col justify-between">
         <div>
           {/* Header */}
@@ -141,7 +379,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Customer Details</p>
               <p className="font-bold text-slate-900 text-[12px]">{customerFullName}</p>
               {additionalPax && <p className="text-[9px] text-slate-600"><span className="font-semibold">Pax:</span> {additionalPax}</p>}
-              <p className="text-[9px] text-slate-600"><span className="font-semibold">Phone:</span> {leadCustomer?.phone || "Phone on file"}</p>
+              <p className="text-[9px] text-slate-600"><span className="font-semibold">Phone:</span> {leadCustomer?.phone || leadCustomer?.phoneNumber || "Phone on file"}</p>
               <p className="text-[9px] text-slate-600"><span className="font-semibold">Email:</span> {leadCustomer?.email || "Email on file"}</p>
             </div>
 
@@ -154,7 +392,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
             </div>
           </div>
 
-          {/* Flight Schedule */}
+          {/* Confirmed Flight Schedule (Strictly Sorted Chronologically) */}
           <div className="mb-4">
             <div className="bg-slate-900 text-white font-extrabold text-[10px] uppercase px-2.5 py-1 rounded-t flex justify-between">
               <span>Confirmed Flight Schedule</span>
@@ -163,129 +401,134 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
             <table className="w-full text-left border-collapse border border-slate-200 text-[9.5px]">
               <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                 <tr>
-                  <th className="p-1.5 w-[20%]">Sector / Route</th>
-                  <th className="p-1.5 w-[25%]">Departure</th>
-                  <th className="p-1.5 w-[25%]">Arrival</th>
-                  <th className="p-1.5 w-[15%]">Transit</th>
-                  <th className="p-1.5 w-[15%]">Class & Baggage</th>
+                  <th className="p-1.5 w-[18%]">Sector / Route</th>
+                  <th className="p-1.5 w-[27%]">Departure Airport & Time</th>
+                  <th className="p-1.5 w-[27%]">Arrival Airport & Time</th>
+                  <th className="p-1.5 w-[14%]">Transit / Airline</th>
+                  <th className="p-1.5 w-[14%]">Cabin & Baggage</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {outboundFlights.length > 0 ? (
-                  <tr>
-                    <td className="p-1.5 align-top">
-                      <strong className="block text-slate-900">OUTBOUND</strong>
-                      <span className="font-bold text-blue-900">{outboundFlights[0].departedFrom} to {outboundFlights[outboundFlights.length - 1].arrivedAt}</span>
-                      <div className="text-[8.5px] text-slate-500 font-mono">{outboundFlights.map((f: any) => f.flightNo).filter(Boolean).join(' / ')}</div>
-                    </td>
-                    <td className="p-1.5 align-top">
-                      <strong className="text-slate-800 block">{outboundFlights[0].departedFromAirportName || outboundFlights[0].departedFrom}</strong>
-                      <div>Dep: {outboundFlights[0].departTime || 'TBA'}</div>
-                      <div className="text-[8.5px] text-slate-500">{outboundFlights[0].flightNo}</div>
-                    </td>
-                    <td className="p-1.5 align-top">
-                      <strong className="text-slate-800 block">{outboundFlights[outboundFlights.length - 1].arrivedAtAirportName || outboundFlights[outboundFlights.length - 1].arrivedAt}</strong>
-                      <div>Arr: {outboundFlights[outboundFlights.length - 1].arrivalTime || 'TBA'}</div>
-                    </td>
-                    <td className="p-1.5 align-top">
-                      {outboundFlights.length > 1 ? (
-                        <div>Transit {outboundFlights[0].arrivedAt}</div>
-                      ) : (
-                        <div className="text-emerald-700 font-bold">Direct</div>
-                      )}
-                    </td>
-                    <td className="p-1.5 align-top">
-                      <strong className="block text-slate-800">{outboundFlights[0].flightClass || 'Economy'}</strong>
-                      <div className="text-[8.5px] text-slate-500">{outboundFlights[0].checkedBaggage || '1x 23kg Hold'}</div>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr><td colSpan={5} className="p-2 text-center text-slate-400 italic">No outbound flight segments registered.</td></tr>
-                )}
+                {sortedFlights.length > 0 ? (
+                  sortedFlights.map((f: any, idx: number) => {
+                    let sectorLabel = `Sector ${idx + 1}`;
+                    if (sortedFlights.length === 1) {
+                      sectorLabel = 'One-Way Flight';
+                    } else if (sortedFlights.length === 2) {
+                      sectorLabel = idx === 0 ? 'Outbound Flight' : 'Inbound Flight';
+                    } else {
+                      const half = Math.ceil(sortedFlights.length / 2);
+                      sectorLabel = idx < half ? `Outbound (Leg ${idx + 1})` : `Inbound (Leg ${idx + 1})`;
+                    }
 
-                {inboundFlights.length > 0 && (
+                    const depDateRaw = f.departureDate || f.date;
+                    const dateStr = depDateRaw ? new Date(depDateRaw).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                    const fromAirport = getAirportDisplay(f.departedFromAirportName || f.departedFrom);
+                    const toAirport = getAirportDisplay(f.arrivedAtAirportName || f.arrivedAt);
+                    const airlineName = getAirlineName(f);
+                    const flightNo = f.flightNo || 'TBA';
+                    const depTime = f.departTime || f.departureTime || 'TBA';
+                    const arrTime = f.arrivalTime || f.arriveTime || 'TBA';
+                    const aircraft = f.aircraft || 'Commercial Jet';
+                    const cabin = f.flightClass || 'Economy Class';
+                    const holdBag = f.checkedBaggage || f.baggageAllowance || f.baggage || '23kg Hold Luggage';
+                    const handBag = f.carryOnBaggage || '7kg Cabin Bag';
+                    const isDirect = !f.isTransit && (!f.flightType || f.flightType.toLowerCase().includes('direct'));
+
+                    return (
+                      <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                        <td className="p-1.5 align-top">
+                          <strong className="block text-slate-900 uppercase text-[9px]">{sectorLabel}</strong>
+                          <span className="font-bold text-blue-900">{f.departedFrom || 'DEP'} → {f.arrivedAt || 'ARR'}</span>
+                          <div className="text-[8.5px] font-mono text-sky-700 font-bold">{flightNo}</div>
+                          <div className="text-[8.5px] text-slate-500">{dateStr}</div>
+                        </td>
+                        <td className="p-1.5 align-top">
+                          <strong className="text-slate-800 block text-[9.5px]">{fromAirport}</strong>
+                          <div className="text-slate-700 font-semibold mt-0.5">Dep: <span className="font-bold text-slate-900">{depTime}</span></div>
+                          <div className="text-[8.5px] text-slate-500">Airline: {airlineName}</div>
+                        </td>
+                        <td className="p-1.5 align-top">
+                          <strong className="text-slate-800 block text-[9.5px]">{toAirport}</strong>
+                          <div className="text-slate-700 font-semibold mt-0.5">Arr: <span className="font-bold text-slate-900">{arrTime}</span></div>
+                          <div className="text-[8.5px] text-slate-500">{f.pnr ? `PNR: ${f.pnr}` : `Flight ${flightNo}`}</div>
+                        </td>
+                        <td className="p-1.5 align-top">
+                          {isDirect ? (
+                            <span className="text-emerald-700 font-bold block">Direct Flight</span>
+                          ) : (
+                            <span className="text-amber-700 font-bold block">Connecting / Transit</span>
+                          )}
+                          <div className="text-[8.5px] text-slate-500 mt-0.5">{aircraft}</div>
+                        </td>
+                        <td className="p-1.5 align-top">
+                          <strong className="block text-slate-800">{cabin}</strong>
+                          <div className="text-[8.5px] text-slate-600">{holdBag}</div>
+                          <div className="text-[8.5px] text-slate-400">{handBag}</div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
                   <tr>
-                    <td className="p-1.5 align-top">
-                      <strong className="block text-slate-900">INBOUND</strong>
-                      <span className="font-bold text-blue-900">{inboundFlights[0].departedFrom} to {inboundFlights[inboundFlights.length - 1].arrivedAt}</span>
-                      <div className="text-[8.5px] text-slate-500 font-mono">{inboundFlights.map((f: any) => f.flightNo).filter(Boolean).join(' / ')}</div>
-                    </td>
-                    <td className="p-1.5 align-top">
-                      <strong className="text-slate-800 block">{inboundFlights[0].departedFromAirportName || inboundFlights[0].departedFrom}</strong>
-                      <div>Dep: {inboundFlights[0].departTime || 'TBA'}</div>
-                      <div className="text-[8.5px] text-slate-500">{inboundFlights[0].flightNo}</div>
-                    </td>
-                    <td className="p-1.5 align-top">
-                      <strong className="text-slate-800 block">{inboundFlights[outboundFlights.length - 1].arrivedAtAirportName || inboundFlights[outboundFlights.length - 1].arrivedAt}</strong>
-                      <div>Arr: {inboundFlights[inboundFlights.length - 1].arrivalTime || 'TBA'}</div>
-                    </td>
-                    <td className="p-1.5 align-top">
-                      {inboundFlights.length > 1 ? (
-                        <div>Transit {inboundFlights[0].arrivedAt}</div>
-                      ) : (
-                        <div className="text-emerald-700 font-bold">Direct</div>
-                      )}
-                    </td>
-                    <td className="p-1.5 align-top">
-                      <strong className="block text-slate-800">{inboundFlights[0].flightClass || 'Economy'}</strong>
-                      <div className="text-[8.5px] text-slate-500">{inboundFlights[0].checkedBaggage || '1x 23kg Hold'}</div>
-                    </td>
+                    <td colSpan={5} className="p-3 text-center text-slate-400 italic">No scheduled flight segments registered.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Accommodation & Ground Logistics Cards */}
-          <div className="grid grid-cols-3 gap-2.5 mb-4">
-            <div className="border border-slate-200 rounded p-2.5 bg-white">
-              <p className="text-[9px] font-black text-slate-900 uppercase mb-1">Makkah Accommodation</p>
-              {h1 ? (
-                <>
-                  <p className="font-bold text-blue-900 text-[10px]">{h1.hotelName}</p>
-                  <p className="text-[8.5px] text-slate-600 mt-1"><span className="font-semibold">City:</span> {h1.city || 'Makkah'}</p>
-                  <p className="text-[8.5px] text-slate-600"><span className="font-semibold">Room:</span> {h1.roomType || 'Standard Room'}</p>
-                  <p className="text-[8.5px] text-slate-600"><span className="font-semibold">Board:</span> {h1.mealType || 'Room Only'}</p>
-                </>
-              ) : (
-                <p className="text-[9px] text-slate-400 italic">Not specified</p>
+          {/* Accommodation & Ground Logistics Cards (Only rendered if actually present) */}
+          {hasGroundLogistics && (
+            <div className={`grid gap-2.5 mb-4 ${accommodations.length + (hasTransports ? 1 : 0) + (hasVisas ? 1 : 0) > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              {accommodations.map((h: any, idx: number) => (
+                <div key={idx} className="border border-slate-200 rounded p-2.5 bg-white">
+                  <p className="text-[9px] font-black text-slate-900 uppercase mb-1">{h.city ? `${h.city} Accommodation` : `Hotel Stay ${idx + 1}`}</p>
+                  <p className="font-bold text-blue-900 text-[10px]">{h.hotelName || 'Confirmed Hotel'}</p>
+                  <p className="text-[8.5px] text-slate-600 mt-1">
+                    <span className="font-semibold">Duration:</span> {h.checkInDate ? new Date(h.checkInDate).toLocaleDateString('en-GB') : '-'} to {h.checkOutDate ? new Date(h.checkOutDate).toLocaleDateString('en-GB') : '-'}
+                  </p>
+                  <p className="text-[8.5px] text-slate-600"><span className="font-semibold">Room:</span> {h.roomType || 'Standard Room'}</p>
+                  <p className="text-[8.5px] text-slate-600"><span className="font-semibold">Board:</span> {h.mealType || 'Room Only'}</p>
+                </div>
+              ))}
+
+              {hasTransports && (
+                <div className="border border-slate-200 rounded p-2.5 bg-white">
+                  <p className="text-[9px] font-black text-slate-900 uppercase mb-1">Ground Logistics & Transfers</p>
+                  <p className="font-bold text-blue-900 text-[10px]">Private Ground Transport</p>
+                  <div className="text-[8.5px] text-slate-600 mt-1 space-y-0.5">
+                    {transports.slice(0, 3).map((t: any, idx: number) => (
+                      <div key={idx}>• {t.pickupLocation || 'Origin'} to {t.dropoffLocation || 'Destination'} ({t.vehicleType || 'Private Vehicle'})</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {hasVisas && (
+                <div className="border border-slate-200 rounded p-2.5 bg-white">
+                  <p className="text-[9px] font-black text-slate-900 uppercase mb-1">Visa Processing & Authorization</p>
+                  <p className="font-bold text-blue-900 text-[10px]">Official Travel Authorization</p>
+                  <div className="text-[8.5px] text-slate-600 mt-1 space-y-0.5">
+                    {visas.slice(0, 3).map((v: any, idx: number) => (
+                      <div key={idx}>• {v.visaType || 'Saudi Tourist / Umrah Visa'} - {v.country || 'Saudi Arabia'} ({v.visaStatus || 'Confirmed'})</div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
+          )}
 
-            <div className="border border-slate-200 rounded p-2.5 bg-white">
-              <p className="text-[9px] font-black text-slate-900 uppercase mb-1">Madinah Accommodation</p>
-              {h2 ? (
-                <>
-                  <p className="font-bold text-blue-900 text-[10px]">{h2.hotelName}</p>
-                  <p className="text-[8.5px] text-slate-600 mt-1"><span className="font-semibold">City:</span> {h2.city || 'Madinah'}</p>
-                  <p className="text-[8.5px] text-slate-600"><span className="font-semibold">Room:</span> {h2.roomType || 'Standard Room'}</p>
-                  <p className="text-[8.5px] text-slate-600"><span className="font-semibold">Board:</span> {h2.mealType || 'Room Only'}</p>
-                </>
-              ) : (
-                <p className="text-[9px] text-slate-400 italic">Not specified</p>
-              )}
-            </div>
-
-            <div className="border border-slate-200 rounded p-2.5 bg-white">
-              <p className="text-[9px] font-black text-slate-900 uppercase mb-1">Transfers & Visas</p>
-              <p className="font-bold text-blue-900 text-[10px]">Private Circuit + Visas</p>
-              <div className="text-[8.5px] text-slate-600 mt-1 space-y-0.5">
-                <div>• Private Air-Conditioned Vehicle Circuit</div>
-                <div>• Saudi Entry Visas / ETA Approvals</div>
-                <div>• Complete Ground Meet & Assist</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Financial Settlement Summary */}
+          {/* Official Bank Remittance & Financial Settlement Summary */}
           <div className="grid grid-cols-2 gap-3 mb-2">
             <div className="border border-slate-200 rounded p-2.5 bg-slate-50 text-[9.5px]">
               <p className="font-black text-slate-900 uppercase text-[9px] mb-1">Official Bank Remittance Details</p>
-              <p><span className="font-semibold text-slate-700">Bank:</span> {bankName}</p>
-              <p><span className="font-semibold text-slate-700">Account Name:</span> {accountName}</p>
-              <p><span className="font-semibold text-slate-700">Sort Code:</span> {sortCode}</p>
-              <p><span className="font-semibold text-slate-700">Account No:</span> {accountNumber}</p>
-              <p className="text-[8.5px] text-slate-500 mt-1">Reference: <strong className="text-slate-800">{booking.bookingReference}</strong></p>
+              <p><span className="font-semibold text-slate-700">Bank:</span> <strong>{bankName}</strong></p>
+              <p><span className="font-semibold text-slate-700">Account Name:</span> <strong>{accountName}</strong></p>
+              <p><span className="font-semibold text-slate-700">Sort Code:</span> <strong>{sortCode}</strong></p>
+              <p><span className="font-semibold text-slate-700">Account No:</span> <strong>{accountNumber}</strong></p>
+              <p><span className="font-semibold text-slate-700">Billing Address:</span> <strong>{billingAddress}</strong></p>
+              <p className="text-[8.5px] text-slate-500 mt-1">Payment Reference: <strong className="text-slate-800">{booking.bookingReference}</strong></p>
             </div>
 
             <div className="border border-slate-200 rounded p-2.5 bg-white text-[10px] space-y-1">
@@ -308,8 +551,8 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
 
         {/* Page 1 Footer */}
         <div className="border-t border-slate-200 pt-2 flex justify-between text-[8.5px] text-slate-400">
-          <span>{companyName} • Registered ATOL & Umrah Service Provider</span>
-          <span>Page 1 of 3 (Itinerary & Financial Summary)</span>
+          <span>{companyName} • Official Travel & Logistics Service Provider</span>
+          <span>Page 1 of 3 (Itinerary & Financial Settlement)</span>
         </div>
       </div>
 
@@ -341,12 +584,11 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
               <tbody className="divide-y divide-slate-100">
                 <tr>
                   <td className="p-2">
-                    <strong className="text-slate-900 block font-bold text-[10px]">{booking.tripType || "Umrah"} Tailored Full Package Provision</strong>
+                    <strong className="text-slate-900 block font-bold text-[10px]">{booking.tripType || "Umrah"} Tailored Package Provision</strong>
                     <ul className="list-disc pl-4 text-[9px] text-slate-600 mt-1 space-y-0.5">
-                      <li>Return scheduled flights with luggage & taxes included</li>
-                      <li>Hotel accommodations in Makkah & Madinah</li>
-                      <li>Ground transportation circuits</li>
-                      <li>Saudi tourist / Umrah visa processing and issuing</li>
+                      {inclusions.map((inc, i) => (
+                        <li key={i}>{inc}</li>
+                      ))}
                     </ul>
                   </td>
                   <td className="p-2 text-center font-bold">{booking.customers?.length || 1} Pax</td>

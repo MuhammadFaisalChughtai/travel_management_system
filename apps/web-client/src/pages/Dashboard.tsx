@@ -2348,7 +2348,7 @@ export function Dashboard() {
       />
 
       {/* Background Watermark Logo */}
-      <div className="fixed bottom-6 right-8 pointer-events-none z-0 opacity-40 mix-blend-multiply">
+      <div className="fixed bottom-6 right-8 pointer-events-none z-0 opacity-40 mix-blend-multiply print:hidden">
         <TechbarredLogo />
       </div>
 

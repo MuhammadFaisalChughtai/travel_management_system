@@ -398,7 +398,7 @@ export function Layout() {
       </main>
 
       {!isDashboard && (
-        <footer className="bg-white border-t py-12 mt-12">
+        <footer className="bg-white border-t py-12 mt-12 print:hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center justify-center gap-6">
             <p className="text-slate-500 text-sm">&copy; 2026 Travel Booking Management System. All rights reserved.</p>
             <TechbarredLogo />

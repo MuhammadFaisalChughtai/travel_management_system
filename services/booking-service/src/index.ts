@@ -10228,12 +10228,33 @@ app.post(
         },
       });
 
+      const cleanFileNamePart = (str: string) =>
+        (str || "").replace(/[/\\?%*:|"<>]/g, "").trim().replace(/\s+/g, " ");
+
+      const leadCustomer = booking.customers && booking.customers[0];
+      const customerName = leadCustomer
+        ? `${leadCustomer.firstName || ""} ${leadCustomer.lastName || ""}`.trim()
+        : (booking as any).leadPassengerName || "Customer";
+
+      const compName =
+        resolvedContext.companyName ||
+        (tenantProfile as any)?.name ||
+        "Tooba Travels Ltd";
+      const bRef = booking.bookingReference || "Booking";
+
+      let suggestedFileName = `${cleanFileNamePart(bRef)} - ${cleanFileNamePart(customerName)} - ${cleanFileNamePart(compName)}.pdf`;
+      if (template.type !== "INVOICE") {
+        const typeLabel = template.name || template.type || "Voucher";
+        suggestedFileName = `${cleanFileNamePart(bRef)} - ${cleanFileNamePart(customerName)} - ${cleanFileNamePart(typeLabel)} - ${cleanFileNamePart(compName)}.pdf`;
+      }
+
       res.status(200).json({
         message: "Document compiled successfully",
         docLogId: docLog.id,
         compiledHtml,
         compiledCss: template.structureCss,
         digitalSignature,
+        suggestedFileName,
         financials: {
           totalGross,
           totalSettled,

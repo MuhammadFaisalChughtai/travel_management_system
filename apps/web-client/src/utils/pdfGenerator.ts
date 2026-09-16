@@ -119,13 +119,20 @@ export const printHtmlViaIframe = (
     doc.close();
 
     const triggerPrint = () => {
+      const originalDocTitle = document.title;
       try {
+        if (cleanTitle) {
+          document.title = cleanTitle;
+        }
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
       } catch (err) {
         console.error('Error during iframe printing execution:', err);
       } finally {
         setTimeout(() => {
+          if (cleanTitle && originalDocTitle !== undefined) {
+            document.title = originalDocTitle;
+          }
           if (iframe && iframe.parentNode) {
             iframe.parentNode.removeChild(iframe);
           }

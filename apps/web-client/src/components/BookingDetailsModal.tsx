@@ -181,9 +181,25 @@ export function BookingDetailsModal({
     }
   };
 
+  const getDocumentFileName = (type: string = 'Invoice') => {
+    const ref = booking?.bookingReference || 'INV';
+    const lead = booking?.customers?.[0];
+    const customerName = lead
+      ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim()
+      : (booking?.leadPassengerName || 'Customer');
+    const company = companyInfo?.companyName || companyInfo?.name || user?.name || 'Tooba Travels Ltd';
+    const clean = (str: string) => (str || '').replace(/[/\\?%*:|"<>]/g, '').trim().replace(/\s+/g, ' ');
+
+    if (type.toLowerCase() === 'invoice') {
+      return `${clean(ref)} - ${clean(customerName)} - ${clean(company)}.pdf`;
+    }
+    return `${clean(ref)} - ${clean(customerName)} - ${clean(type)} - ${clean(company)}.pdf`;
+  };
+
   const handleGenerateInvoice = async () => {
     if (!booking) return;
     setIsGeneratingPDF(true);
+    const invoiceFileName = getDocumentFileName('Invoice');
     try {
       const templatesRes = await api.get('/finance/templates');
       let activeTemplate = templatesRes.data.templates?.find(
@@ -203,7 +219,7 @@ export function BookingDetailsModal({
             printCompiledTemplate(
               compileRes.data.compiledHtml,
               compileRes.data.compiledCss,
-              `Invoice_${booking.bookingReference}.pdf`
+              compileRes.data?.suggestedFileName || invoiceFileName
             );
             printed = true;
           }
@@ -215,7 +231,7 @@ export function BookingDetailsModal({
       if (!printed) {
         await generateInvoicePDF(
           "invoice-template",
-          `Invoice_${booking.bookingReference}.pdf`,
+          invoiceFileName,
         );
       }
     } catch (err) {
@@ -223,7 +239,7 @@ export function BookingDetailsModal({
       try {
         await generateInvoicePDF(
           "invoice-template",
-          `Invoice_${booking.bookingReference}.pdf`,
+          invoiceFileName,
         );
       } catch (fallbackErr) {
         console.error("Fallback invoice generation failed:", fallbackErr);
@@ -248,6 +264,7 @@ export function BookingDetailsModal({
   const handleGenerateCustomVoucher = async (template: any) => {
     if (!booking) return;
     setIsGeneratingVoucher(true);
+    const voucherFileName = getDocumentFileName(template.name || 'Voucher');
     try {
       const compileRes = await api.post(`/finance/templates/${template.id}/compile`, {
         bookingId: booking.id
@@ -255,7 +272,7 @@ export function BookingDetailsModal({
       printCompiledTemplate(
         compileRes.data.compiledHtml,
         compileRes.data.compiledCss,
-        `${template.name.replace(/\s+/g, '_')}_${booking.bookingReference}.pdf`
+        compileRes.data?.suggestedFileName || voucherFileName
       );
       toast.success("Voucher generated successfully");
     } catch (err) {
@@ -274,6 +291,7 @@ export function BookingDetailsModal({
     )
       return;
     setIsGeneratingHotelVoucher(true);
+    const hotelFileName = getDocumentFileName('Hotel Voucher');
     try {
       const templatesRes = await api.get('/finance/templates');
       const templates = templatesRes.data.templates || [];
@@ -302,7 +320,7 @@ export function BookingDetailsModal({
             printCompiledTemplate(
               compileRes.data.compiledHtml,
               compileRes.data.compiledCss,
-              `HotelVoucher_${booking.bookingReference}.pdf`
+              compileRes.data?.suggestedFileName || hotelFileName
             );
             printed = true;
           }
@@ -314,7 +332,7 @@ export function BookingDetailsModal({
       if (!printed) {
         await generateInvoicePDF(
           "hotel-voucher-template",
-          `HotelVoucher_${booking.bookingReference}.pdf`,
+          hotelFileName,
         );
       }
     } catch (err) {
@@ -322,7 +340,7 @@ export function BookingDetailsModal({
       try {
         await generateInvoicePDF(
           "hotel-voucher-template",
-          `HotelVoucher_${booking.bookingReference}.pdf`,
+          hotelFileName,
         );
       } catch (fallbackErr) {
         console.error("Fallback hotel voucher failed:", fallbackErr);
@@ -340,6 +358,7 @@ export function BookingDetailsModal({
     )
       return;
     setIsGeneratingTransportVoucher(true);
+    const transportFileName = getDocumentFileName('Transport Voucher');
     try {
       const templatesRes = await api.get('/finance/templates');
       const templates = templatesRes.data.templates || [];
@@ -368,7 +387,7 @@ export function BookingDetailsModal({
             printCompiledTemplate(
               compileRes.data.compiledHtml,
               compileRes.data.compiledCss,
-              `TransportVoucher_${booking.bookingReference}.pdf`
+              compileRes.data?.suggestedFileName || transportFileName
             );
             printed = true;
           }
@@ -380,7 +399,7 @@ export function BookingDetailsModal({
       if (!printed) {
         await generateInvoicePDF(
           "transport-voucher-template",
-          `TransportVoucher_${booking.bookingReference}.pdf`,
+          transportFileName,
         );
       }
     } catch (err) {
@@ -388,7 +407,7 @@ export function BookingDetailsModal({
       try {
         await generateInvoicePDF(
           "transport-voucher-template",
-          `TransportVoucher_${booking.bookingReference}.pdf`,
+          transportFileName,
         );
       } catch (fallbackErr) {
         console.error("Fallback transport voucher failed:", fallbackErr);
@@ -839,13 +858,24 @@ export function BookingDetailsModal({
     if (isOpen && bookingId) {
       fetchDetails();
       fetchVoucherTemplates();
-      api.get('/finance/company-context')
-        .then((res) => {
-          if (res.data?.companyContext) {
-            setCompanyInfo(res.data.companyContext);
-          }
-        })
-        .catch(() => {});
+      Promise.allSettled([
+        api.get('/finance/company-context'),
+        api.get('/auth/tenants/profile')
+      ]).then(([ctxRes, tenantRes]) => {
+        const ctx = ctxRes.status === 'fulfilled' ? ctxRes.value.data?.companyContext : {};
+        const tenant = tenantRes.status === 'fulfilled' ? tenantRes.value.data?.tenant : {};
+        const mergedCompany = {
+          ...ctx,
+          companyName: tenant?.name || ctx?.companyName || 'Tooba Travels Ltd',
+          name: tenant?.name || ctx?.companyName || 'Tooba Travels Ltd',
+          logoPrimary: tenant?.logo || ctx?.logoPrimary || null,
+          officeAddress: tenant?.location || ctx?.officeAddress || '63 Buxton Road, London, E17 7EH',
+          landlineFormat: tenant?.phone || ctx?.landlineFormat || '+44 20 7946 0958',
+          emailSender: tenant?.email || ctx?.emailSender || 'operations@toobatravels.co.uk',
+          website: tenant?.domain || ctx?.website || 'www.toobatravels.co.uk',
+        };
+        setCompanyInfo(mergedCompany);
+      }).catch(() => {});
     } else {
       setBooking(null);
       setVoucherTemplates([]);

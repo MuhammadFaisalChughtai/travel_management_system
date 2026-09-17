@@ -8300,20 +8300,20 @@ function buildFinancialSettlementTable(booking: any, currencySymbol: string, tot
 function buildTermsAndConditions(companyName: string): string {
   const name = companyName || 'Tooba Travels Ltd';
   return `
-    <div style="column-count: 2; column-gap: 16px; font-size: 7.8px; color: #334155; line-height: 1.4; text-align: justify;">
-      <div style="margin-bottom: 5px;"><strong>1. Legally Binding Agreement:</strong> By submitting payment, the client explicitly agrees to be legally bound by all terms. Failure to digitally sign within 48 hours constitutes irrevocable acceptance. All issued tickets and packages are strictly non-changeable and non-refundable.</div>
-      <div style="margin-bottom: 5px;"><strong>2. Payment & Settlement:</strong> A deposit strictly secures reservations. Balance must be cleared prior to ticket issuance. The client bears absolute sole responsibility for any supplementary resort fees, city taxes, or mandatory airline/hotel surcharges.</div>
-      <div style="margin-bottom: 5px;"><strong>3. Strict Cancellation Policy:</strong> Cancellations incur strict penalty charges. Credit for future reservations from initial deposits is entirely at the agency's sole discretion. ${name} assumes zero liability for issuing full refunds once services are booked and issued.</div>
-      <div style="margin-bottom: 5px;"><strong>4. Force Majeure:</strong> In unforeseen disruptions (e.g., weather, regulatory mandates, border closures), clients may carry forward or reschedule. Standard cancellation penalties apply if reschedule is declined.</div>
-      <div style="margin-bottom: 5px;"><strong>5. Flight Obligations:</strong> Clients bear absolute responsibility for exact name matches on passports (minimum 6 months validity required). ${name} accepts zero liability for boarding denials. Group fares and block-booked seats are unequivocally non-refundable once issued.</div>
-      <div style="margin-bottom: 5px;"><strong>6. Visa & Immigration:</strong> Visa eligibility and issuance are strictly at the absolute discretion of destination ministries and consulates. Customers bear sole responsibility for verifying eligibility and possessing valid passports and documentation.</div>
-      <div style="margin-bottom: 5px;"><strong>7. Accommodation & Transfers:</strong> We reserve the right to alter hotels to equivalent properties without prior notice during peak seasons or full bookings. Star ratings correspond to local destination standards.</div>
-      <div style="margin-bottom: 5px;"><strong>8. Specialized & Package Travel:</strong> ${name} operates solely as an authorized travel booking agent and disclaims liability for airline schedule revisions or operating carrier substitutions.</div>
-      <div style="margin-bottom: 5px;"><strong>9. Transport & Ground Services:</strong> Passengers must ensure punctual arrival for scheduled departures and transfers. We accept no liability for traffic congestion or missed connections.</div>
-      <div style="margin-bottom: 5px;"><strong>10. Third-Party Liability & Insurance:</strong> All services are subject to the terms of the operating supplier. We strongly recommend purchasing comprehensive travel insurance for cancellations, emergencies, and missed departures.</div>
-      <div style="margin-bottom: 5px;"><strong>11. Chargebacks & Payment Disputes:</strong> The customer agrees not to initiate credit card chargebacks for legitimately booked non-refundable services. Any grievances must be reported to ${name} directly within 28 days.</div>
-      <div style="margin-bottom: 5px;"><strong>12. Hotel Check-In & Check-Out Times:</strong> The customer is strictly responsible for adhering to hotel check-in and check-out policies. Early arrival or late departure arrangements must be coordinated directly.</div>
-      <div style="margin-bottom: 5px;"><strong>13. Governing Law:</strong> This contract is governed by and construed in accordance with English Law, and both parties submit to the exclusive jurisdiction of the Courts of England and Wales.</div>
+    <div style="column-count: 2; column-gap: 18px; font-size: 8px; color: #334155; line-height: 1.45; text-align: justify;">
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">1. Legally Binding Agreement:</strong> By submitting payment, the client explicitly agrees to be legally bound by all terms. Failure to digitally sign within 48 hours constitutes irrevocable acceptance. All issued tickets and packages are strictly non-changeable and non-refundable.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">2. Payment & Settlement:</strong> A deposit strictly secures reservations. Balance must be cleared prior to ticket issuance. The client bears absolute sole responsibility for any supplementary resort fees, city taxes, or mandatory airline/hotel surcharges.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">3. Strict Cancellation Policy:</strong> Cancellations incur strict penalty charges. Credit for future reservations from initial deposits is entirely at the agency's sole discretion. ${name} assumes zero liability for issuing full refunds once services are booked and issued.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">4. Force Majeure:</strong> In unforeseen disruptions (e.g., weather, regulatory mandates, border closures), clients may carry forward or reschedule. Standard cancellation penalties apply if reschedule is declined.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">5. Flight Obligations:</strong> Clients bear absolute responsibility for exact name matches on passports (minimum 6 months validity required). ${name} accepts zero liability for boarding denials. Group fares and block-booked seats are unequivocally non-refundable once issued.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">6. Visa & Immigration:</strong> Visa eligibility and issuance are strictly at the absolute discretion of destination ministries and consulates. Customers bear sole responsibility for verifying eligibility and possessing valid passports and documentation.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">7. Accommodation & Transfers:</strong> We reserve the right to alter hotels to equivalent properties without prior notice during peak seasons or full bookings. Star ratings correspond to local destination standards.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">8. Specialized & Package Travel:</strong> ${name} operates solely as an authorized travel booking agent and disclaims liability for airline schedule revisions or operating carrier substitutions.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">9. Transport & Ground Services:</strong> Passengers must ensure punctual arrival for scheduled departures and transfers. We accept no liability for traffic congestion or missed connections.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">10. Third-Party Liability & Insurance:</strong> All services are subject to the terms of the operating supplier. We strongly recommend purchasing comprehensive travel insurance for cancellations, emergencies, and missed departures.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">11. Chargebacks & Payment Disputes:</strong> The customer agrees not to initiate credit card chargebacks for legitimately booked non-refundable services. Any grievances must be reported to ${name} directly within 28 days.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">12. Hotel Check-In & Check-Out Times:</strong> The customer is strictly responsible for adhering to hotel check-in and check-out policies. Early arrival or late departure arrangements must be coordinated directly.</div>
+      <div style="margin-bottom: 6px; break-inside: avoid;"><strong style="color: #0f172a; font-weight: 800;">13. Governing Law:</strong> This contract is governed by and construed in accordance with English Law, and both parties submit to the exclusive jurisdiction of the Courts of England and Wales.</div>
     </div>
   `;
 }
@@ -8936,6 +8936,22 @@ const compileTemplateWithBookingData = (
     );
   }
 
+  // If invoice template, strip any leading page-break or empty containers so Page 1 is never blank!
+  if (template.type === "INVOICE") {
+    htmlToCompile = htmlToCompile.replace(/^\s*(<!--[\s\S]*?-->\s*)*(<div[^>]*class="[^"]*page-break[^"]*"[^>]*>\s*<\/div>\s*)+/gi, "");
+    htmlToCompile = htmlToCompile.replace(/^\s*(<!--[\s\S]*?-->\s*)*(<div[^>]*class="[^"]*invoice-page[^"]*"[^>]*>\s*<\/div>\s*)+/gi, "");
+
+    // Check if Terms & Conditions appears before the Tax Invoice Header or Customer Details
+    const headerPos = htmlToCompile.search(/TAX\s*INVOICE|CUSTOMER\s*\/\s*BILL\s*TO/i);
+    const tcBlockRegex = /(<!--\s*PAGE\s*\d*:\s*TERMS\s*&\s*CONDITIONS[\s\S]*?<\/div>\s*<\/div>|<div[^>]*class="[^"]*page-3[^"]*"[^>]*>[\s\S]*?TERMS\s*&\s*CONDITIONS[\s\S]*?<\/div>\s*<\/div>|<div[^>]*>[\s\S]*?TERMS\s*&\s*CONDITIONS[\s\S]*?\{\{tables\.termsAndConditions\}\}[\s\S]*?<\/div>)/i;
+    const tcMatch = htmlToCompile.match(tcBlockRegex);
+    if (tcMatch && headerPos !== -1 && tcMatch.index !== undefined && tcMatch.index < headerPos) {
+      const tcBlock = tcMatch[0];
+      htmlToCompile = htmlToCompile.replace(tcBlock, "");
+      htmlToCompile = htmlToCompile.trim() + `\n\n<div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>\n` + tcBlock;
+    }
+  }
+
   // Relocate Customer Acceptance & Signature beneath Terms & Conditions if placed earlier
   const acceptanceRegex = /<div[^>]*border[^>]*>[\s\S]*?CUSTOMER ACCEPTANCE & SIGNATURE[\s\S]*?<\/table>\s*<\/div>/i;
   const matchAcceptance = htmlToCompile.match(acceptanceRegex);
@@ -8950,6 +8966,8 @@ const compileTemplateWithBookingData = (
         "{{tables.termsAndConditions}}",
         `{{tables.termsAndConditions}}\n\n<div style="margin-top: 16px;">${acceptanceBlock}</div>`
       );
+    } else {
+      htmlToCompile = htmlToCompile.trim() + `\n\n<div style="margin-top: 16px;">${acceptanceBlock}</div>`;
     }
   }
 
@@ -10181,11 +10199,22 @@ app.post(
 
       const curSym = await getTenantCurrencySymbol(tenantId);
 
-      if (!template.structureHtml || template.structureHtml.trim().length < 20) {
-        if (template.type === "INVOICE") {
+      if (template.type === "INVOICE") {
+        const hasInvertedTerms = /terms\s*&\s*conditions[\s\S]*?(tax\s*invoice|bill\s*to)/i.test(template.structureHtml || "");
+        const hasLeadingPageBreak = /^\s*(<!--[\s\S]*?-->\s*)*<div[^>]*class="[^"]*page-break/i.test(template.structureHtml || "");
+        if (!template.structureHtml || template.structureHtml.trim().length < 20 || hasInvertedTerms || hasLeadingPageBreak) {
           template.structureHtml = getDefaultTaxInvoiceHtml();
           template.structureCss = getDefaultTaxInvoiceCss();
-        } else if (
+          await prisma.documentTemplate.update({
+            where: { id: template.id },
+            data: {
+              structureHtml: getDefaultTaxInvoiceHtml(),
+              structureCss: getDefaultTaxInvoiceCss(),
+            },
+          }).catch(() => {});
+        }
+      } else if (!template.structureHtml || template.structureHtml.trim().length < 20) {
+        if (
           template.name.toLowerCase().includes("transport") ||
           template.name.toLowerCase().includes("transfer")
         ) {
@@ -10228,24 +10257,25 @@ app.post(
         },
       });
 
-      const cleanFileNamePart = (str: string) =>
-        (str || "").replace(/[/\\?%*:|"<>]/g, "").trim().replace(/\s+/g, " ");
+      const sanitizeForFilename = (str: string) =>
+        (str || "")
+          .replace(/[/\\?%*:|"<>#]/g, "")
+          .trim()
+          .replace(/\s+/g, "_")
+          .replace(/_+/g, "_");
 
       const leadCustomer = booking.customers && booking.customers[0];
-      const customerName = leadCustomer
+      const rawCustomerName = leadCustomer
         ? `${leadCustomer.firstName || ""} ${leadCustomer.lastName || ""}`.trim()
         : (booking as any).leadPassengerName || "Customer";
 
-      const compName =
-        resolvedContext.companyName ||
-        (tenantProfile as any)?.name ||
-        "Tooba Travels Ltd";
-      const bRef = booking.bookingReference || "Booking";
+      const bRef = sanitizeForFilename(booking.bookingReference || "BOOKING");
+      const cName = sanitizeForFilename(rawCustomerName);
 
-      let suggestedFileName = `${cleanFileNamePart(bRef)} - ${cleanFileNamePart(customerName)} - ${cleanFileNamePart(compName)}.pdf`;
+      let suggestedFileName = `${bRef}_${cName}.pdf`;
       if (template.type !== "INVOICE") {
-        const typeLabel = template.name || template.type || "Voucher";
-        suggestedFileName = `${cleanFileNamePart(bRef)} - ${cleanFileNamePart(customerName)} - ${cleanFileNamePart(typeLabel)} - ${cleanFileNamePart(compName)}.pdf`;
+        const typeLabel = sanitizeForFilename(template.name || template.type || "Voucher");
+        suggestedFileName = `${bRef}_${cName}_${typeLabel}.pdf`;
       }
 
       res.status(200).json({

@@ -686,8 +686,8 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
           {/* Header */}
           <div className="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
             <div>
-              <h2 className="text-sm font-black text-slate-900 uppercase">Terms & Conditions of Contract</h2>
-              <p className="text-[9.5px] text-slate-500">Standard Package Travel Regulations & Industry Compliance Guidelines</p>
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">TERMS & CONDITIONS</h2>
+              <p className="text-[10px] font-extrabold text-rose-700 uppercase tracking-tight">{companyName} - BOOKING TERMS, CONDITIONS & LEGAL DISCLAIMERS</p>
             </div>
             <span className="text-[10px] font-black text-slate-900 uppercase tracking-wider">PAGE 3 OF 3</span>
           </div>
@@ -696,70 +696,70 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
           <div className="grid grid-cols-2 gap-4 text-[8.5px] text-slate-600 leading-relaxed text-justify mb-4">
             <div className="space-y-2.5">
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">1. CONTRACT FORMATION & PARTIES</strong>
-                This contract is concluded between {companyName} ("the Company") and the lead client named overleaf ("the Client"). The Client confirms they have authority to accept and do accept these booking conditions on behalf of all persons in the party.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">1. Legally Binding Agreement:</strong>
+                By submitting payment, the client explicitly agrees to be legally bound by all terms. Failure to digitally sign within 48 hours constitutes irrevocable acceptance. All issued tickets and packages are strictly non-changeable and non-refundable.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">2. PAYMENT SCHEDULE & PRICE GUARANTEE</strong>
-                A non-refundable deposit is required at booking. Full payment must be cleared prior to ticket issuance. We reserve the right to cancel bookings where balances remain unpaid past the due date with forfeiture of deposits.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">2. Payment & Settlement:</strong>
+                A deposit strictly secures reservations. Balance must be cleared prior to ticket issuance. The client bears absolute sole responsibility for any supplementary resort fees, city taxes, or mandatory airline/hotel surcharges.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">3. CANCELLATION BY CLIENT & REFUND POLICY</strong>
-                Any cancellation by the Client must be made in writing. Once flights and services are issued, airline tickets and fees are strictly non-refundable and non-transferable under all circumstances.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">3. Strict Cancellation Policy:</strong>
+                Cancellations incur strict penalty charges. Credit for future reservations from initial deposits is entirely at the agency's sole discretion. {companyName} assumes zero liability for issuing full refunds once services are booked and issued.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">4. PASSPORT, VISA & HEALTH REGULATIONS</strong>
-                All travellers must possess a machine-readable biometric passport with at least 6 months validity from return date. Clients are solely responsible for ensuring compliance with all entrance requirements, vaccination rules, and visa protocols.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">4. Force Majeure:</strong>
+                In unforeseen disruptions (e.g., weather, regulatory mandates, border closures), clients may carry forward or reschedule. Standard cancellation penalties apply if reschedule is declined.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">5. FLIGHT SCHEDULES, AIRLINES & DELAYS</strong>
-                Flight timings and carriers are subject to change by aviation authorities. The Company acts as agent for airlines and does not accept liability for delays, cancellations, aircraft substitutions, or schedule revisions made by the operating carrier.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">5. Flight Obligations:</strong>
+                Clients bear absolute responsibility for exact name matches on passports (minimum 6 months validity required). {companyName} accepts zero liability for boarding denials. Group fares and block-booked seats are unequivocally non-refundable once issued.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">6. BAGGAGE ALLOWANCE & RESTRICTIONS</strong>
-                Hold and cabin baggage limits are set strictly by the operating airline. The Company accepts no liability for excess baggage charges or damages/delays to luggage during transit.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">6. Visa & Immigration:</strong>
+                Visa eligibility and issuance are strictly at the absolute discretion of destination ministries and consulates. Customers bear sole responsibility for verifying eligibility and possessing valid passports and documentation.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">7. ACCOMMODATION STANDARDS & CHECK-IN / CHECK-OUT</strong>
-                Standard check-in time is afternoon and check-out is noon. Early check-in or late check-out is strictly subject to hotel availability and surcharges. Star ratings correspond to local standards.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">7. Accommodation & Transfers:</strong>
+                We reserve the right to alter hotels to equivalent properties without prior notice during peak seasons or full bookings. Star ratings correspond to local destination standards.
               </div>
             </div>
 
             <div className="space-y-2.5">
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">8. GROUND TRANSPORTATION & TRANSFERS</strong>
-                Transfer timings are synchronized with flight arrivals. In cases of flight delay exceeding 90 minutes, passengers must notify our dispatch team. Missed transfers due to unreported delays will require private re-booking.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">8. Specialized & Package Travel:</strong>
+                {companyName} operates solely as an authorized travel booking agent and disclaims liability for airline schedule revisions or operating carrier substitutions.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">9. PACKAGE ALTERATIONS & ITINERARY VARIATIONS</strong>
-                While the Company makes every effort to execute arrangements as contracted, operational or regulatory circumstances may necessitate alterations in hotels, routes, or dates.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">9. Transport & Ground Services:</strong>
+                Passengers must ensure punctual arrival for scheduled departures and transfers. We accept no liability for traffic congestion or missed connections.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">10. TRAVEL INSURANCE MANDATE</strong>
-                Comprehensive travel, health, and cancellation insurance is strongly advised for all passengers. The Company shall not be held liable for medical expenses or emergency repatriation costs.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">10. Third-Party Liability & Insurance:</strong>
+                All services are subject to the terms of the operating supplier. We strongly recommend purchasing comprehensive travel insurance for cancellations, emergencies, and missed departures.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">11. COMPLAINTS PROCEDURE & DISPUTE RESOLUTION</strong>
-                Any issues arising during travel must be reported immediately to our local representative or 24/7 operations line. Written claims must be submitted to the Company within 28 days of return.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">11. Chargebacks & Payment Disputes:</strong>
+                The customer agrees not to initiate credit card chargebacks for legitimately booked non-refundable services. Any grievances must be reported to {companyName} directly within 28 days.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">12. FORCE MAJEURE & LIMITATION OF LIABILITY</strong>
-                The Company shall not be liable for non-performance or delays caused by natural disasters, epidemics, border closures, weather conditions, or governmental regulations beyond our reasonable control.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">12. Hotel Check-In & Check-Out Times:</strong>
+                The customer is strictly responsible for adhering to hotel check-in and check-out policies. Early arrival or late departure arrangements must be coordinated directly.
               </div>
 
               <div>
-                <strong className="text-slate-900 block font-bold text-[9px]">13. GOVERNING LAW & JURISDICTION</strong>
-                This contract is governed by and construed in accordance with English Law. Both parties agree to submit to the exclusive jurisdiction of the Courts of England and Wales in the event of any dispute.
+                <strong className="text-slate-900 font-bold text-[9px] mr-1">13. Governing Law:</strong>
+                This contract is governed by and construed in accordance with English Law, and both parties submit to the exclusive jurisdiction of the Courts of England and Wales.
               </div>
             </div>
           </div>

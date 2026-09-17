@@ -4,14 +4,23 @@
  * correct pagination, accurate font rendering, and avoid CSS bleeding/parent opacity bugs.
  */
 
+let isPrintingGlobalLock = false;
+
 export const printHtmlViaIframe = (
   html: string,
   css: string = '',
   filename: string = 'document.pdf'
 ) => {
+  if (isPrintingGlobalLock) {
+    console.warn('Print already in progress, suppressing duplicate call');
+    return;
+  }
+  isPrintingGlobalLock = true;
+
   try {
     if (!html || !html.trim()) {
       console.warn('printHtmlViaIframe received empty HTML payload');
+      isPrintingGlobalLock = false;
       return;
     }
 
@@ -41,6 +50,7 @@ export const printHtmlViaIframe = (
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!doc) {
       console.error('Failed to access print iframe document');
+      isPrintingGlobalLock = false;
       return;
     }
 
@@ -118,7 +128,18 @@ export const printHtmlViaIframe = (
 </html>`);
     doc.close();
 
+    let hasPrinted = false;
+    let fallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const triggerPrint = () => {
+      if (hasPrinted) return;
+      hasPrinted = true;
+
+      if (fallbackTimeout) {
+        clearTimeout(fallbackTimeout);
+        fallbackTimeout = null;
+      }
+
       const originalDocTitle = document.title;
       try {
         if (cleanTitle) {
@@ -130,27 +151,29 @@ export const printHtmlViaIframe = (
         console.error('Error during iframe printing execution:', err);
       } finally {
         setTimeout(() => {
+          isPrintingGlobalLock = false;
           if (cleanTitle && originalDocTitle !== undefined) {
             document.title = originalDocTitle;
           }
           if (iframe && iframe.parentNode) {
             iframe.parentNode.removeChild(iframe);
           }
-        }, 5000);
+        }, 3000);
       }
     };
 
-    // Wait for images and resources to settle before triggering print dialog
+    // Wait for images and resources to settle before triggering print dialog exactly ONCE
     if (iframe.contentWindow) {
       iframe.contentWindow.onload = () => {
-        setTimeout(triggerPrint, 300);
+        setTimeout(triggerPrint, 250);
       };
-      // Guaranteed safety fallback
-      setTimeout(triggerPrint, 450);
+      // Guaranteed safety fallback if onload does not fire within 1500ms
+      fallbackTimeout = setTimeout(triggerPrint, 1500);
     } else {
-      setTimeout(triggerPrint, 450);
+      fallbackTimeout = setTimeout(triggerPrint, 400);
     }
   } catch (error) {
+    isPrintingGlobalLock = false;
     console.error('Error in printHtmlViaIframe:', error);
   }
 };

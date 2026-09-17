@@ -182,22 +182,28 @@ export function BookingDetailsModal({
   };
 
   const getDocumentFileName = (type: string = 'Invoice') => {
-    const ref = booking?.bookingReference || 'INV';
+    const sanitizePart = (str: string) =>
+      (str || '')
+        .replace(/[/\\?%*:|"<>#]/g, '')
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/_+/g, '_');
+
+    const ref = sanitizePart(booking?.bookingReference || 'BOOKING');
     const lead = booking?.customers?.[0];
-    const customerName = lead
+    const rawCustomerName = lead
       ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim()
-      : (booking?.leadPassengerName || 'Customer');
-    const company = companyInfo?.companyName || companyInfo?.name || user?.name || 'Tooba Travels Ltd';
-    const clean = (str: string) => (str || '').replace(/[/\\?%*:|"<>]/g, '').trim().replace(/\s+/g, ' ');
+      : ((booking as any)?.leadPassengerName || 'Customer');
+    const customerName = sanitizePart(rawCustomerName);
 
     if (type.toLowerCase() === 'invoice') {
-      return `${clean(ref)} - ${clean(customerName)} - ${clean(company)}.pdf`;
+      return `${ref}_${customerName}.pdf`;
     }
-    return `${clean(ref)} - ${clean(customerName)} - ${clean(type)} - ${clean(company)}.pdf`;
+    return `${ref}_${customerName}_${sanitizePart(type)}.pdf`;
   };
 
   const handleGenerateInvoice = async () => {
-    if (!booking) return;
+    if (!booking || isGeneratingPDF) return;
     setIsGeneratingPDF(true);
     const invoiceFileName = getDocumentFileName('Invoice');
     try {
@@ -229,21 +235,19 @@ export function BookingDetailsModal({
       }
 
       if (!printed) {
-        await generateInvoicePDF(
-          "invoice-template",
-          invoiceFileName,
-        );
+        try {
+          await generateInvoicePDF(
+            "invoice-template",
+            invoiceFileName,
+          );
+        } catch (fallbackErr) {
+          console.error("Fallback invoice generation failed:", fallbackErr);
+          toast.error("Failed to generate invoice");
+        }
       }
     } catch (err) {
-      console.error("Failed to generate custom invoice:", err);
-      try {
-        await generateInvoicePDF(
-          "invoice-template",
-          invoiceFileName,
-        );
-      } catch (fallbackErr) {
-        console.error("Fallback invoice generation failed:", fallbackErr);
-      }
+      console.error("Failed to generate invoice:", err);
+      toast.error("Failed to generate invoice");
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -262,7 +266,7 @@ export function BookingDetailsModal({
   };
 
   const handleGenerateCustomVoucher = async (template: any) => {
-    if (!booking) return;
+    if (!booking || isGeneratingVoucher) return;
     setIsGeneratingVoucher(true);
     const voucherFileName = getDocumentFileName(template.name || 'Voucher');
     try {
@@ -286,6 +290,7 @@ export function BookingDetailsModal({
   const handleGenerateHotelVoucher = async () => {
     if (
       !booking ||
+      isGeneratingHotelVoucher ||
       !booking.accommodations ||
       booking.accommodations.length === 0
     )
@@ -330,21 +335,19 @@ export function BookingDetailsModal({
       }
 
       if (!printed) {
-        await generateInvoicePDF(
-          "hotel-voucher-template",
-          hotelFileName,
-        );
+        try {
+          await generateInvoicePDF(
+            "hotel-voucher-template",
+            hotelFileName,
+          );
+        } catch (localErr) {
+          console.error("Local hotel voucher failed:", localErr);
+          toast.error("Failed to generate hotel voucher");
+        }
       }
     } catch (err) {
-      console.error("Failed to generate custom hotel voucher:", err);
-      try {
-        await generateInvoicePDF(
-          "hotel-voucher-template",
-          hotelFileName,
-        );
-      } catch (fallbackErr) {
-        console.error("Fallback hotel voucher failed:", fallbackErr);
-      }
+      console.error("Failed to generate hotel voucher:", err);
+      toast.error("Failed to generate hotel voucher");
     } finally {
       setIsGeneratingHotelVoucher(false);
     }
@@ -353,6 +356,7 @@ export function BookingDetailsModal({
   const handleGenerateTransportVoucher = async () => {
     if (
       !booking ||
+      isGeneratingTransportVoucher ||
       !booking.transportServices ||
       booking.transportServices.length === 0
     )
@@ -397,21 +401,19 @@ export function BookingDetailsModal({
       }
 
       if (!printed) {
-        await generateInvoicePDF(
-          "transport-voucher-template",
-          transportFileName,
-        );
+        try {
+          await generateInvoicePDF(
+            "transport-voucher-template",
+            transportFileName,
+          );
+        } catch (localErr) {
+          console.error("Local transport voucher failed:", localErr);
+          toast.error("Failed to generate transport voucher");
+        }
       }
     } catch (err) {
-      console.error("Failed to generate custom transport voucher:", err);
-      try {
-        await generateInvoicePDF(
-          "transport-voucher-template",
-          transportFileName,
-        );
-      } catch (fallbackErr) {
-        console.error("Fallback transport voucher failed:", fallbackErr);
-      }
+      console.error("Failed to generate transport voucher:", err);
+      toast.error("Failed to generate transport voucher");
     } finally {
       setIsGeneratingTransportVoucher(false);
     }

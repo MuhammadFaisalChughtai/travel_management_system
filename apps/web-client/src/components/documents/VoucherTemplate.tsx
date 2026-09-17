@@ -177,27 +177,6 @@ export const VoucherTemplate: React.FC<VoucherTemplateProps> = ({
           </tbody>
         </table>
 
-        {/* Regulatory Protection Strip */}
-        <div
-          style={{
-            background: "#091E42",
-            color: "#ffffff",
-            borderRadius: "6px",
-            padding: "6px 14px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: "9px",
-            fontWeight: 700,
-            marginBottom: "16px",
-            letterSpacing: "0.3px",
-          }}
-        >
-          <span>ATOL PROTECTED (REG. NO {atolNo})</span>
-          <span>• OFFICIAL ACCOMMODATION CONFIRMATION VOUCHER •</span>
-          <span>IATA MEMBER AGENCY ({iataNo})</span>
-        </div>
-
         {/* 2-Column Overview Cards */}
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
           <tbody>
@@ -466,27 +445,6 @@ export const VoucherTemplate: React.FC<VoucherTemplateProps> = ({
           </tr>
         </tbody>
       </table>
-
-      {/* Regulatory Protection Strip */}
-      <div
-        style={{
-          background: "#091E42",
-          color: "#ffffff",
-          borderRadius: "6px",
-          padding: "6px 14px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          fontSize: "9px",
-          fontWeight: 700,
-          marginBottom: "16px",
-          letterSpacing: "0.3px",
-        }}
-      >
-        <span>ATOL PROTECTED (REG. NO {atolNo})</span>
-        <span>• GROUND LOGISTICS & TRANSFERS VOUCHER •</span>
-        <span>IATA MEMBER AGENCY ({iataNo})</span>
-      </div>
 
       {/* 2-Column Overview Cards */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>

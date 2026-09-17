@@ -7356,13 +7356,6 @@ function getDefaultHotelVoucherHtml(): string {
       </tr>
     </table>
 
-    <!-- Regulatory Ribbon -->
-    <div style="background: #091E42; color: #ffffff; border-radius: 6px; padding: 6px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 700; margin-bottom: 16px; letter-spacing: 0.3px;">
-      <span>ATOL PROTECTED (REG. NO {{company.atolNumber}})</span>
-      <span>• OFFICIAL ACCOMMODATION CONFIRMATION VOUCHER •</span>
-      <span>IATA MEMBER AGENCY ({{company.iataNumber}})</span>
-    </div>
-
     <!-- 2-Column Overview Cards -->
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
       <tr>
@@ -7521,13 +7514,6 @@ function getDefaultTransportVoucherHtml(): string {
         </td>
       </tr>
     </table>
-
-    <!-- Regulatory Ribbon -->
-    <div style="background: #091E42; color: #ffffff; border-radius: 6px; padding: 6px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 700; margin-bottom: 16px; letter-spacing: 0.3px;">
-      <span>ATOL PROTECTED (REG. NO {{company.atolNumber}})</span>
-      <span>• GROUND LOGISTICS & TRANSFERS VOUCHER •</span>
-      <span>IATA MEMBER AGENCY ({{company.iataNumber}})</span>
-    </div>
 
     <!-- 2-Column Overview Cards -->
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
@@ -8950,6 +8936,12 @@ const compileTemplateWithBookingData = (
       htmlToCompile = htmlToCompile.replace(tcBlock, "");
       htmlToCompile = htmlToCompile.trim() + `\n\n<div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>\n` + tcBlock;
     }
+  } else {
+    // Strip ATOL / Regulatory ribbon from Hotel and Transport vouchers
+    htmlToCompile = htmlToCompile
+      .replace(/<!--\s*Regulatory Ribbon\s*-->\s*<div[^>]*>[\s\S]*?ATOL\s*PROTECTED[\s\S]*?<\/div>/gi, "")
+      .replace(/<div[^>]*style="[^"]*background:\s*#091E42[^"]*"[^>]*>[\s\S]*?ATOL\s*PROTECTED[\s\S]*?<\/div>/gi, "")
+      .replace(/<div[^>]*>[\s\S]*?ATOL\s*PROTECTED[\s\S]*?(CONFIRMATION\s*VOUCHER|TRANSFERS\s*VOUCHER|LOGISTICS)[\s\S]*?<\/div>/gi, "");
   }
 
   // Relocate Customer Acceptance & Signature beneath Terms & Conditions if placed earlier
@@ -10224,6 +10216,15 @@ app.post(
           template.structureHtml = getDefaultHotelVoucherHtml();
           template.structureCss = getDefaultHotelVoucherCss();
         }
+      } else if (template.structureHtml && /ATOL\s*PROTECTED/i.test(template.structureHtml)) {
+        template.structureHtml = template.structureHtml
+          .replace(/<!--\s*Regulatory Ribbon\s*-->\s*<div[^>]*>[\s\S]*?ATOL\s*PROTECTED[\s\S]*?<\/div>/gi, "")
+          .replace(/<div[^>]*style="[^"]*background:\s*#091E42[^"]*"[^>]*>[\s\S]*?ATOL\s*PROTECTED[\s\S]*?<\/div>/gi, "")
+          .replace(/<div[^>]*>[\s\S]*?ATOL\s*PROTECTED[\s\S]*?(CONFIRMATION\s*VOUCHER|TRANSFERS\s*VOUCHER|LOGISTICS)[\s\S]*?<\/div>/gi, "");
+        await prisma.documentTemplate.update({
+          where: { id: template.id },
+          data: { structureHtml: template.structureHtml },
+        }).catch(() => {});
       }
 
       const { compiledHtml, totalGross, totalSettled, balanceDue } =

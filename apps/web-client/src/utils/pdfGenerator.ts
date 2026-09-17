@@ -15,132 +15,146 @@ export function normalizeDocumentLayout(html: string): string {
   const temp = document.createElement('div');
   temp.innerHTML = html;
 
-  // 1. Remove any leading page breaks, empty text, or comments at document start
-  while (temp.firstChild) {
-    const node = temp.firstChild;
-    if (node.nodeType === Node.COMMENT_NODE) {
-      temp.removeChild(node);
-    } else if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
-      temp.removeChild(node);
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      if (
-        el.classList.contains('page-break') ||
-        (el.textContent?.trim() === '' && !el.querySelector('img, table, svg'))
-      ) {
-        temp.removeChild(node);
+  // Helper to find innermost leaf element matching text (avoids matching large parent wrappers)
+  const findDeepestElementByText = (root: HTMLElement, regex: RegExp): HTMLElement | null => {
+    const elements = Array.from(root.querySelectorAll('h1, h2, h3, h4, h5, h6, div, p, span, strong, b, td, th'));
+    const matches = elements.filter((el) => {
+      const txt = (el.textContent || '').trim();
+      return regex.test(txt) && txt.length < 200;
+    });
+    if (matches.length === 0) return null;
+    matches.sort((a, b) => (a.textContent?.trim().length || 0) - (b.textContent?.trim().length || 0));
+    return matches[0] as HTMLElement;
+  };
+
+  // Helper to find the top-level section container for an element without ascending into other sections
+  const findSpecificSectionContainer = (
+    headingNode: HTMLElement,
+    docRoot: HTMLElement,
+    boundaryHeadings: (HTMLElement | null)[]
+  ): HTMLElement => {
+    let curr: HTMLElement = headingNode;
+    while (curr.parentElement && curr.parentElement !== docRoot && curr.parentElement.tagName !== 'BODY') {
+      const parent = curr.parentElement;
+      const containsBoundary = boundaryHeadings.some(
+        (b) => b && b !== headingNode && parent.contains(b)
+      );
+      if (containsBoundary) {
+        break;
+      }
+      curr = parent;
+    }
+    return curr;
+  };
+
+  // 1. Remove leading page breaks and empty nodes from root
+  const stripLeadingBreaksAndEmpty = (container: HTMLElement) => {
+    while (container.firstChild) {
+      const node = container.firstChild;
+      if (node.nodeType === Node.COMMENT_NODE) {
+        container.removeChild(node);
+      } else if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
+        container.removeChild(node);
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (
+          el.classList.contains('page-break') ||
+          (el.textContent?.trim() === '' && !el.querySelector('img, table, svg'))
+        ) {
+          container.removeChild(node);
+        } else {
+          break;
+        }
       } else {
         break;
       }
-    } else {
-      break;
     }
-  }
+  };
 
-  const docRoot = (temp.querySelector('.tax-invoice-document, .doc-container') as HTMLElement) || temp;
-  while (docRoot.firstChild) {
-    const node = docRoot.firstChild;
-    if (node.nodeType === Node.COMMENT_NODE) {
-      docRoot.removeChild(node);
-    } else if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
-      docRoot.removeChild(node);
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      if (
-        el.classList.contains('page-break') ||
-        (el.textContent?.trim() === '' && !el.querySelector('img, table, svg'))
-      ) {
-        docRoot.removeChild(node);
-      } else {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
+  stripLeadingBreaksAndEmpty(temp);
 
-  // 2. Identify Terms & Conditions block and Customer Acceptance block
-  const allElements = Array.from(temp.querySelectorAll('*'));
-  
-  const tcHeading = allElements.find((el) => {
-    const txt = el.textContent || '';
-    return /TERMS\s*&\s*CONDITIONS/i.test(txt) && (el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'DIV');
-  });
+  const docRoot = (temp.querySelector('.tax-invoice-document, .doc-container, #invoice-template') as HTMLElement) || temp;
+  stripLeadingBreaksAndEmpty(docRoot);
 
-  const sigHeading = allElements.find((el) => {
-    const txt = el.textContent || '';
-    return (
-      /CUSTOMER\s*ACCEPTANCE\s*&\s*SIGNATURE/i.test(txt) ||
-      /Legal Acceptance & Booking Confirmation Signatures/i.test(txt)
-    );
-  });
+  // 2. Locate distinct semantic headings
+  const invoiceHeading = findDeepestElementByText(temp, /TAX\s*INVOICE/i);
+  const customerHeading = findDeepestElementByText(temp, /CUSTOMER\s*\/\s*BILL\s*TO/i);
+  const billingHeading = findDeepestElementByText(temp, /BILLING\s*&?\s*PACKAGE\s*FARE|Package Billing & Inclusions/i);
+  const totalsHeading = findDeepestElementByText(temp, /TOTAL\s*AMOUNT\s*DUE|FINANCIAL\s*SETTLEMENT/i);
+  const tcHeading = findDeepestElementByText(temp, /TERMS\s*&\s*CONDITIONS/i);
+  const sigHeading = findDeepestElementByText(temp, /CUSTOMER\s*ACCEPTANCE|Legal Acceptance & Booking Confirmation/i);
 
-  const invoiceHeader = allElements.find((el) => {
-    const txt = el.textContent || '';
-    return /TAX\s*INVOICE/i.test(txt) && (el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'DIV' || el.tagName === 'SPAN');
-  });
-
-  if (tcHeading && invoiceHeader) {
-    let tcContainer: HTMLElement = tcHeading as HTMLElement;
-    while (
-      tcContainer.parentElement &&
-      tcContainer.parentElement !== temp &&
-      tcContainer.parentElement !== docRoot &&
-      !tcContainer.parentElement.classList.contains('tax-invoice-document') &&
-      tcContainer.parentElement.id !== 'invoice-template'
-    ) {
-      tcContainer = tcContainer.parentElement;
-    }
+  if (tcHeading) {
+    const priorHeadings = [invoiceHeading, customerHeading, billingHeading, totalsHeading].filter(Boolean) as HTMLElement[];
+    const tcContainer = findSpecificSectionContainer(tcHeading, docRoot, priorHeadings);
 
     let sigContainer: HTMLElement | null = null;
     if (sigHeading) {
-      sigContainer = sigHeading as HTMLElement;
-      while (
-        sigContainer.parentElement &&
-        sigContainer.parentElement !== temp &&
-        sigContainer.parentElement !== docRoot &&
-        sigContainer.parentElement !== tcContainer &&
-        !sigContainer.parentElement.classList.contains('tax-invoice-document') &&
-        sigContainer.parentElement.id !== 'invoice-template'
-      ) {
-        sigContainer = sigContainer.parentElement;
-      }
+      sigContainer = findSpecificSectionContainer(sigHeading, docRoot, [...priorHeadings, tcHeading]);
     }
 
-    const isTcBeforeInvoice = !!(tcContainer.compareDocumentPosition(invoiceHeader) & Node.DOCUMENT_POSITION_FOLLOWING);
+    // Check if Terms & Conditions is placed before customer/invoice or before billing/amount
+    const isTcBeforeContent = priorHeadings.some((prior) => {
+      return !!(tcContainer.compareDocumentPosition(prior) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
 
-    if (isTcBeforeInvoice) {
+    if (isTcBeforeContent) {
+      // Detach TC and Signature
       tcContainer.remove();
-
       if (sigContainer && sigContainer !== tcContainer) {
         sigContainer.remove();
       }
 
-      while (docRoot.firstElementChild && docRoot.firstElementChild.classList.contains('page-break')) {
-        docRoot.firstElementChild.remove();
-      }
+      stripLeadingBreaksAndEmpty(docRoot);
 
+      // Clean up orphaned page breaks between customer details and amount
+      const internalBreaks = Array.from(docRoot.querySelectorAll('.page-break'));
+      internalBreaks.forEach((br) => {
+        if (br.parentElement && br.parentElement !== docRoot) {
+          br.remove();
+        }
+      });
+
+      // Append clean page break
       const pageBreak = document.createElement('div');
       pageBreak.className = 'page-break';
-      pageBreak.style.cssText = 'page-break-after: always; break-after: page; height: 0; margin: 0; padding: 0;';
-
+      pageBreak.style.cssText = 'page-break-after: always !important; break-after: page !important; height: 0; margin: 0; padding: 0; border: none;';
       docRoot.appendChild(pageBreak);
-      docRoot.appendChild(tcContainer);
 
+      // Wrap and append Terms & Conditions
+      const tcWrapper = document.createElement('div');
+      tcWrapper.className = 'invoice-page tc-page';
+      tcWrapper.style.cssText = 'padding: 24px 28px; box-sizing: border-box;';
+      tcWrapper.appendChild(tcContainer);
+      docRoot.appendChild(tcWrapper);
+
+      // Append Signature block beneath Terms & Conditions
       if (sigContainer && sigContainer !== tcContainer) {
         const sigWrap = document.createElement('div');
-        sigWrap.style.cssText = 'margin-top: 16px;';
+        sigWrap.className = 'signature-wrap';
+        sigWrap.style.cssText = 'margin-top: 18px;';
         sigWrap.appendChild(sigContainer);
-        docRoot.appendChild(sigWrap);
+        tcWrapper.appendChild(sigWrap);
       }
     } else if (sigContainer && tcContainer && (sigContainer.compareDocumentPosition(tcContainer) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+      // Signature is before TC -> move signature beneath TC at the end
       sigContainer.remove();
       const sigWrap = document.createElement('div');
-      sigWrap.style.cssText = 'margin-top: 16px;';
+      sigWrap.className = 'signature-wrap';
+      sigWrap.style.cssText = 'margin-top: 18px;';
       sigWrap.appendChild(sigContainer);
-      docRoot.appendChild(sigWrap);
+      tcContainer.parentElement?.appendChild(sigWrap) || docRoot.appendChild(sigWrap);
     }
   }
+
+  // Ensure bold titles on all 13 clauses for crisp typography
+  const tcClauses = Array.from(temp.querySelectorAll('.tc-page div, .tc-page p, .tax-invoice-page div, .tax-invoice-page p'));
+  tcClauses.forEach((el) => {
+    const html = el.innerHTML;
+    if (/(?:^|\s)(\d{1,2}\.\s*[^:<]+:)/.test(html) && !/<strong[^>]*>\s*\d{1,2}\./.test(html)) {
+      el.innerHTML = html.replace(/(?:^|\s)(\d{1,2}\.\s*[^:<]+:)/g, ' <strong>$1</strong>');
+    }
+  });
 
   return temp.innerHTML;
 }

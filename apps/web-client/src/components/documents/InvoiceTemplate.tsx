@@ -525,30 +525,89 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
             </div>
           )}
 
-          {/* Official Bank Remittance & Financial Settlement Summary */}
+          {/* 3. Package Billing & Inclusions Table (Amount Details) */}
+          <div className="mb-3">
+            <div className="bg-slate-900 text-white font-extrabold text-[10px] uppercase px-2.5 py-1 rounded-t flex justify-between">
+              <span>3. Package Billing & Inclusions Breakdown</span>
+              <span className="font-normal text-[9px] opacity-80">All taxes & contracted inclusions itemized</span>
+            </div>
+            <table className="w-full text-left border-collapse border border-slate-200 text-[9px]">
+              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="p-1.5 w-[58%]">Contracted Inclusions & Itemized Description</th>
+                  <th className="p-1.5 text-center w-[12%]">Quantity</th>
+                  <th className="p-1.5 text-right w-[15%]">Rate ({symbol})</th>
+                  <th className="p-1.5 text-right w-[15%]">Total ({symbol})</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                <tr>
+                  <td className="p-1.5">
+                    <strong className="text-slate-900 block font-bold text-[9.5px]">{cleanTripType} Package Provision</strong>
+                    <ul className="list-disc pl-4 text-[8.5px] text-slate-600 mt-0.5 space-y-0.5">
+                      {inclusions.map((inc, i) => (
+                        <li key={i}>{inc}</li>
+                      ))}
+                    </ul>
+                  </td>
+                  <td className="p-1.5 text-center font-bold align-top">{booking.customers?.length || 1} Pax</td>
+                  <td className="p-1.5 text-right align-top">{(totalGross / (booking.customers?.length || 1)).toFixed(2)}</td>
+                  <td className="p-1.5 text-right font-bold align-top">{totalGross.toFixed(2)}</td>
+                </tr>
+
+                {booking.additionalServices?.map((s: any) => (
+                  <tr key={s.id}>
+                    <td className="p-1.5">
+                      <strong className="text-slate-900">{s.serviceName}</strong>
+                      <div className="text-[8px] text-slate-500">{s.description}</div>
+                    </td>
+                    <td className="p-1.5 text-center font-bold">1</td>
+                    <td className="p-1.5 text-right">{Number(s.price || 0).toFixed(2)}</td>
+                    <td className="p-1.5 text-right font-bold">{Number(s.price || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+
+                {booking.discounts?.map((d: any) => (
+                  <tr key={d.id} className="text-rose-600">
+                    <td className="p-1.5">
+                      <strong>Discount: {d.description}</strong>
+                    </td>
+                    <td className="p-1.5 text-center font-bold">1</td>
+                    <td className="p-1.5 text-right">-{Number(d.amount || 0).toFixed(2)}</td>
+                    <td className="p-1.5 text-right font-bold">-{Number(d.amount || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 4. Financial Settlement Summary & Official Bank Remittance (Amount Details) */}
           <div className="grid grid-cols-2 gap-3 mb-2">
-            <div className="border-2 border-sky-400 rounded-lg p-2.5 bg-gradient-to-br from-sky-50 to-blue-50 text-[9.5px] shadow-sm">
+            <div className="border-2 border-sky-500 rounded-lg p-2.5 bg-gradient-to-br from-sky-50 to-blue-50 text-[9.5px] shadow-sm">
               <div className="flex justify-between items-center border-b border-sky-200 pb-1 mb-1.5">
-                <p className="font-black text-sky-950 uppercase text-[9px] tracking-wide">Official Bank Remittance Details</p>
-                <span className="text-[8px] font-bold bg-sky-600 text-white px-1.5 py-0.5 rounded uppercase">Direct Settlement</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-sky-600 inline-block"></span>
+                  <p className="font-black text-sky-950 uppercase text-[9px] tracking-wide">Official Bank Remittance Details</p>
+                </div>
+                <span className="text-[7.5px] font-bold bg-sky-600 text-white px-1.5 py-0.5 rounded uppercase">Direct Settlement</span>
               </div>
               <p><span className="font-semibold text-slate-600">Bank:</span> <strong className="text-slate-900">{bankName}</strong></p>
               <p><span className="font-semibold text-slate-600">Account Name:</span> <strong className="text-slate-900">{accountName}</strong></p>
               <div className="flex items-center gap-2 my-1">
                 <div>
-                  <span className="font-semibold text-slate-600 text-[8.5px] block">Sort Code:</span>
+                  <span className="font-semibold text-slate-600 text-[8px] block">Sort Code:</span>
                   <span className="inline-block bg-yellow-200 text-yellow-950 border border-yellow-400 font-mono font-black px-1.5 py-0.5 rounded text-[11px]">{sortCode}</span>
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-600 text-[8.5px] block">Account Number:</span>
+                  <span className="font-semibold text-slate-600 text-[8px] block">Account Number:</span>
                   <span className="inline-block bg-yellow-200 text-yellow-950 border border-yellow-400 font-mono font-black px-1.5 py-0.5 rounded text-[11px]">{accountNumber}</span>
                 </div>
               </div>
-              <p className="text-[8.5px]"><span className="font-semibold text-slate-600">Billing Address:</span> {billingAddress}</p>
-              <p className="text-[8.5px] text-slate-500 mt-0.5">Payment Reference: <strong className="font-mono text-rose-700 font-bold">{booking.bookingReference}</strong></p>
+              <p className="text-[8px]"><span className="font-semibold text-slate-600">Billing Address:</span> {billingAddress}</p>
+              <p className="text-[8px] text-slate-500 mt-0.5">Payment Reference: <strong className="font-mono text-rose-700 font-bold">{booking.bookingReference}</strong></p>
             </div>
 
-            <div className="border border-slate-200 rounded p-2.5 bg-white text-[10px] space-y-1">
+            <div className="border border-slate-200 rounded-lg p-2.5 bg-white text-[9.5px] space-y-1">
               <div className="flex justify-between font-semibold text-slate-700">
                 <span>Total Package Price:</span>
                 <span>{symbol}{totalGross.toFixed(2)}</span>
@@ -558,10 +617,11 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
                 <span>{symbol}{totalSettled.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-black text-[12px] text-slate-900 border-t border-slate-200 pt-1">
-                <span>Balance Due:</span>
+                <span>Total Balance Due:</span>
                 <span className="text-blue-900">{symbol}{balanceDue.toFixed(2)}</span>
               </div>
-              <p className="text-[8.5px] text-slate-500 text-right pt-1">Initial Deposit Required: {symbol}{depositDue.toFixed(2)}</p>
+              <p className="text-[8px] text-slate-500 text-right pt-0.5">Initial Deposit Required: {symbol}{depositDue.toFixed(2)}</p>
+              <p className="text-[7.5px] text-slate-400 text-right">Government taxes, APD & regulatory surcharges included</p>
             </div>
           </div>
         </div>
@@ -569,127 +629,22 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
         {/* Page 1 Footer */}
         <div className="border-t border-slate-200 pt-2 flex justify-between text-[8.5px] text-slate-400">
           <span>{companyName} • Official Travel & Logistics Service Provider</span>
-          <span>Page 1 of 3 (Itinerary & Financial Settlement)</span>
+          <span>Page 1 of 2 (Reservation & Package Billing Settlement)</span>
         </div>
       </div>
 
-      <div className="page-break" />
+      <div className="page-break" style={{ pageBreakAfter: 'always', breakAfter: 'page', height: 0, margin: 0, padding: 0 }} />
 
-      {/* PAGE 2: ITEMIZED FINANCIAL SCHEDULE & CLIENT ACCEPTANCE */}
-      <div className="tax-invoice-page p-6 border-b border-slate-200 min-h-[1050px] flex flex-col justify-between">
-        <div>
-          {/* Header */}
-          <div className="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
-            <div>
-              <h2 className="text-sm font-black text-slate-900 uppercase">Package Billing & Inclusions Manifest</h2>
-              <p className="text-[9.5px] text-slate-500">Invoice Ref: INV-{booking.bookingReference} | Date: {new Date().toLocaleDateString('en-GB')}</p>
-            </div>
-            <span className="text-[10px] font-black text-slate-900 uppercase tracking-wider">PAGE 2 OF 3</span>
-          </div>
-
-          {/* Package Inclusions Table */}
-          <div className="mb-5">
-            <table className="w-full text-left border-collapse border border-slate-200 text-[9.5px]">
-              <thead className="bg-slate-900 text-white font-bold">
-                <tr>
-                  <th className="p-2 w-[60%]">Contracted Inclusions & Itemized Description</th>
-                  <th className="p-2 text-center w-[12%]">Quantity</th>
-                  <th className="p-2 text-right w-[14%]">Rate ({symbol})</th>
-                  <th className="p-2 text-right w-[14%]">Total ({symbol})</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                <tr>
-                  <td className="p-2">
-                    <strong className="text-slate-900 block font-bold text-[10px]">{cleanTripType} Package Provision</strong>
-                    <ul className="list-disc pl-4 text-[9px] text-slate-600 mt-1 space-y-0.5">
-                      {inclusions.map((inc, i) => (
-                        <li key={i}>{inc}</li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td className="p-2 text-center font-bold">{booking.customers?.length || 1} Pax</td>
-                  <td className="p-2 text-right">{(totalGross / (booking.customers?.length || 1)).toFixed(2)}</td>
-                  <td className="p-2 text-right font-bold">{totalGross.toFixed(2)}</td>
-                </tr>
-
-                {booking.additionalServices?.map((s: any) => (
-                  <tr key={s.id}>
-                    <td className="p-2">
-                      <strong className="text-slate-900">{s.serviceName}</strong>
-                      <div className="text-[8.5px] text-slate-500">{s.description}</div>
-                    </td>
-                    <td className="p-2 text-center font-bold">1</td>
-                    <td className="p-2 text-right">{Number(s.price || 0).toFixed(2)}</td>
-                    <td className="p-2 text-right font-bold">{Number(s.price || 0).toFixed(2)}</td>
-                  </tr>
-                ))}
-
-                {booking.discounts?.map((d: any) => (
-                  <tr key={d.id} className="text-rose-600">
-                    <td className="p-2">
-                      <strong>Discount: {d.description}</strong>
-                    </td>
-                    <td className="p-2 text-center font-bold">1</td>
-                    <td className="p-2 text-right">-{Number(d.amount || 0).toFixed(2)}</td>
-                    <td className="p-2 text-right font-bold">-{Number(d.amount || 0).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Payment Receipts Log */}
-          <div className="mb-5">
-            <h3 className="text-[10px] font-black text-slate-900 uppercase mb-1">Settlement & Payment Receipts Ledger</h3>
-            <table className="w-full text-left border-collapse border border-slate-200 text-[9.5px]">
-              <thead className="bg-slate-100 text-slate-700 font-bold">
-                <tr>
-                  <th className="p-1.5 w-[20%]">Date</th>
-                  <th className="p-1.5 w-[25%]">Method</th>
-                  <th className="p-1.5 w-[35%]">Transaction Reference</th>
-                  <th className="p-1.5 text-right w-[20%]">Amount Paid</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {(booking.payments && booking.payments.length > 0) ? (
-                  booking.payments.map((p: any) => (
-                    <tr key={p.id}>
-                      <td className="p-1.5">{new Date(p.createdAt).toLocaleDateString('en-GB')}</td>
-                      <td className="p-1.5 font-semibold">{p.paymentMethod || 'Bank Remittance'}</td>
-                      <td className="p-1.5 font-mono text-[8.5px]">{p.reference || 'TXN-CONFIRMED'}</td>
-                      <td className="p-1.5 text-right font-bold text-emerald-700">{symbol}{Number(p.amount).toFixed(2)}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="p-2 text-center text-slate-400 italic">No payment receipts registered yet. Initial deposit outstanding.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Page 2 Footer */}
-        <div className="border-t border-slate-200 pt-2 flex justify-between text-[8.5px] text-slate-400">
-          <span>{companyName} • Registered Travel & Logistics Provider</span>
-          <span>Page 2 of 3 (Billing & Settlement Ledger)</span>
-        </div>
-      </div>
-
-      <div className="page-break" />
-
-      {/* PAGE 3: 13 COMPREHENSIVE TERMS & CONDITIONS & CLIENT ACCEPTANCE */}
+      {/* PAGE 2: TERMS & CONDITIONS AND CLIENT ACCEPTANCE SIGNATURE */}
       <div className="tax-invoice-page p-6 min-h-[1050px] flex flex-col justify-between">
         <div>
           {/* Header */}
-          <div className="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
+          <div className="flex justify-between items-center border-b border-slate-200 pb-3 mb-3">
             <div>
               <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">TERMS & CONDITIONS</h2>
               <p className="text-[10px] font-extrabold text-rose-700 uppercase tracking-tight">{companyName} - BOOKING TERMS, CONDITIONS & LEGAL DISCLAIMERS</p>
             </div>
-            <span className="text-[10px] font-black text-slate-900 uppercase tracking-wider">PAGE 3 OF 3</span>
+            <span className="text-[10px] font-black text-slate-900 uppercase tracking-wider">PAGE 2 OF 2</span>
           </div>
 
           {/* 13 Clauses in 2 columns */}
@@ -787,10 +742,10 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ booking, compa
           </div>
         </div>
 
-        {/* Page 3 Footer */}
+        {/* Page 2 Footer */}
         <div className="border-t border-slate-200 pt-2 flex justify-between text-[8.5px] text-slate-400">
           <span>{companyName} • Regulated Tourism & Booking Agreement</span>
-          <span>Page 3 of 3 (Contractual Terms & Acceptance Signatures)</span>
+          <span>Page 2 of 2 (Contractual Terms & Acceptance Signatures)</span>
         </div>
       </div>
     </div>

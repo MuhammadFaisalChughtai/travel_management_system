@@ -8926,7 +8926,24 @@ const compileTemplateWithBookingData = (
     (template.name && template.name.toLowerCase().includes("invoice"));
 
   if (isInvoiceTemplate) {
-    if (/terms\s*&\s*conditions[\s\S]*?(tax\s*invoice|customer\s*\/\s*bill\s*to)/i.test(htmlToCompile)) {
+    const lowerHtml = htmlToCompile.toLowerCase();
+    const posTerms = lowerHtml.indexOf("terms & conditions");
+    const posInvoice = lowerHtml.indexOf("tax invoice");
+    const posCustomer = lowerHtml.indexOf("bill to");
+    const posBilling = Math.max(
+      lowerHtml.indexOf("billing &"),
+      lowerHtml.indexOf("fare breakdown"),
+      lowerHtml.indexOf("package fare"),
+      lowerHtml.indexOf("package description")
+    );
+
+    const isTermsBeforeContent =
+      posTerms !== -1 &&
+      ((posInvoice !== -1 && posTerms < posInvoice) ||
+        (posCustomer !== -1 && posTerms < posCustomer) ||
+        (posBilling !== -1 && posTerms < posBilling));
+
+    if (isTermsBeforeContent || /^\s*(<!--[\s\S]*?-->\s*)*<div[^>]*class="[^"]*page-break/i.test(htmlToCompile)) {
       htmlToCompile = getDefaultTaxInvoiceHtml();
     }
     htmlToCompile = htmlToCompile.replace(/^\s*(<!--[\s\S]*?-->\s*)*(<div[^>]*class="[^"]*page-break[^"]*"[^>]*>\s*<\/div>\s*)+/gi, "");
@@ -10191,9 +10208,25 @@ app.post(
         (template.name && template.name.toLowerCase().includes("invoice"));
 
       if (isInvoiceDoc) {
-        const hasInvertedTerms = /terms\s*&\s*conditions[\s\S]*?(tax\s*invoice|bill\s*to)/i.test(template.structureHtml || "");
+        const lowerHtml = (template.structureHtml || "").toLowerCase();
+        const posTerms = lowerHtml.indexOf("terms & conditions");
+        const posInvoice = lowerHtml.indexOf("tax invoice");
+        const posCustomer = lowerHtml.indexOf("bill to");
+        const posBilling = Math.max(
+          lowerHtml.indexOf("billing &"),
+          lowerHtml.indexOf("fare breakdown"),
+          lowerHtml.indexOf("package fare"),
+          lowerHtml.indexOf("package description")
+        );
+
+        const isTermsBeforeContent =
+          posTerms !== -1 &&
+          ((posInvoice !== -1 && posTerms < posInvoice) ||
+            (posCustomer !== -1 && posTerms < posCustomer) ||
+            (posBilling !== -1 && posTerms < posBilling));
+
         const hasLeadingPageBreak = /^\s*(<!--[\s\S]*?-->\s*)*<div[^>]*class="[^"]*page-break/i.test(template.structureHtml || "");
-        if (!template.structureHtml || template.structureHtml.trim().length < 20 || hasInvertedTerms || hasLeadingPageBreak) {
+        if (!template.structureHtml || template.structureHtml.trim().length < 20 || isTermsBeforeContent || hasLeadingPageBreak) {
           template.structureHtml = getDefaultTaxInvoiceHtml();
           template.structureCss = getDefaultTaxInvoiceCss();
           await prisma.documentTemplate.update({

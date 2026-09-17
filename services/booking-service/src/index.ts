@@ -7138,81 +7138,80 @@ function getDefaultTaxInvoiceHtml(): string {
     </div>
 
     <!-- 3. BILLING & PACKAGE FARE BREAKDOWN -->
-    <div style="margin-bottom: 8px;">
+    <div style="margin-bottom: 14px;">
       <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
         3. BILLING & PACKAGE FARE BREAKDOWN
       </div>
       {{tables.packageInclusions}}
     </div>
-  </div>
 
-  <!-- PAGE 2: FINANCIAL SETTLEMENT & PAYMENT INSTRUCTIONS -->
-  <div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>
-  <div class="invoice-page page-2" style="padding: 24px 28px; box-sizing: border-box;">
-    <div style="font-size: 13px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-      FINANCIAL SETTLEMENT & PAYMENT SCHEDULE
+    <!-- FINANCIAL SETTLEMENT & TOTAL AMOUNT DUE -->
+    <div style="margin-bottom: 14px;">
+      <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+        FINANCIAL SETTLEMENT & PAYMENT SCHEDULE
+      </div>
+      {{tables.financialSettlement}}
     </div>
-    {{tables.financialSettlement}}
 
     <!-- HIGHLIGHTED OFFICIAL BANK REMITTANCE DETAILS -->
-    <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 2px solid #0284c7; border-radius: 10px; padding: 18px 22px; margin-top: 18px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #bae6fd; padding-bottom: 10px; margin-bottom: 14px;">
+    <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 2px solid #0284c7; border-radius: 10px; padding: 14px 18px; margin-top: 14px; margin-bottom: 8px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #bae6fd; padding-bottom: 8px; margin-bottom: 10px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <div style="width: 10px; height: 10px; background: #0284c7; border-radius: 50%;"></div>
-          <span style="font-size: 12px; font-weight: 900; color: #0369a1; text-transform: uppercase; letter-spacing: 0.8px;">
+          <span style="font-size: 11px; font-weight: 900; color: #0369a1; text-transform: uppercase; letter-spacing: 0.8px;">
             OFFICIAL BANK REMITTANCE DETAILS (INVOICE SETTLEMENT)
           </span>
         </div>
-        <span style="background: #0284c7; color: #ffffff; font-size: 9.5px; font-weight: 800; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.5px; text-transform: uppercase;">
+        <span style="background: #0284c7; color: #ffffff; font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.5px; text-transform: uppercase;">
           Direct Bank Transfer
         </span>
       </div>
 
-      <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
         <tr>
-          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
-            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Name</div>
-            <div style="font-size: 13px; font-weight: 900; color: #0f172a;">{{company.bankName}}</div>
+          <td style="width: 50%; padding: 4px 8px; vertical-align: top;">
+            <div style="font-size: 8.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Name</div>
+            <div style="font-size: 12px; font-weight: 900; color: #0f172a;">{{company.bankName}}</div>
           </td>
-          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
-            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Name / Beneficiary</div>
-            <div style="font-size: 13px; font-weight: 900; color: #0f172a;">{{company.accountName}}</div>
+          <td style="width: 50%; padding: 4px 8px; vertical-align: top;">
+            <div style="font-size: 8.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Name / Beneficiary</div>
+            <div style="font-size: 12px; font-weight: 900; color: #0f172a;">{{company.accountName}}</div>
           </td>
         </tr>
         <tr>
-          <td style="width: 50%; padding: 8px 10px; vertical-align: top;">
-            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Sort Code</div>
-            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 4px 12px; font-family: monospace; font-size: 15px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
+          <td style="width: 50%; padding: 6px 8px; vertical-align: top;">
+            <div style="font-size: 8.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Sort Code</div>
+            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 3px 10px; font-family: monospace; font-size: 14px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
               {{company.sortCode}}
             </div>
           </td>
-          <td style="width: 50%; padding: 8px 10px; vertical-align: top;">
-            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Number</div>
-            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 4px 12px; font-family: monospace; font-size: 15px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
+          <td style="width: 50%; padding: 6px 8px; vertical-align: top;">
+            <div style="font-size: 8.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Account Number</div>
+            <div style="display: inline-block; background: #fef08a; border: 1.5px solid #eab308; border-radius: 6px; padding: 3px 10px; font-family: monospace; font-size: 14px; font-weight: 900; color: #854d0e; letter-spacing: 1px;">
               {{company.accountNumber}}
             </div>
           </td>
         </tr>
         <tr>
-          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
-            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Billing Address</div>
-            <div style="font-size: 10.5px; font-weight: 700; color: #334155;">{{company.billingAddress}}</div>
+          <td style="width: 50%; padding: 4px 8px; vertical-align: top;">
+            <div style="font-size: 8.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bank Billing Address</div>
+            <div style="font-size: 10px; font-weight: 700; color: #334155;">{{company.billingAddress}}</div>
           </td>
-          <td style="width: 50%; padding: 6px 10px; vertical-align: top;">
-            <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Mandatory Payment Reference</div>
-            <div style="font-size: 13px; font-weight: 900; font-family: monospace; color: #b91c1c;">{{booking.reference}}</div>
+          <td style="width: 50%; padding: 4px 8px; vertical-align: top;">
+            <div style="font-size: 8.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Mandatory Payment Reference</div>
+            <div style="font-size: 12px; font-weight: 900; font-family: monospace; color: #b91c1c;">{{booking.reference}}</div>
           </td>
         </tr>
       </table>
-      <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 9.5px; color: #475569; text-align: center;">
+      <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #cbd5e1; font-size: 9px; color: #475569; text-align: center;">
         Please quote reference <strong style="color: #0f172a; font-family: monospace;">{{booking.reference}}</strong> on your remittance to ensure immediate payment reconciliation.
       </div>
     </div>
   </div>
 
-  <!-- PAGE 3: TERMS & CONDITIONS & CUSTOMER ACCEPTANCE -->
-  <div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>
-  <div class="invoice-page page-3" style="padding: 24px 28px; box-sizing: border-box;">
+  <!-- PAGE 2: TERMS & CONDITIONS & CUSTOMER ACCEPTANCE -->
+  <div class="page-break" style="page-break-after: always; break-after: page; height: 0; margin: 0; padding: 0;"></div>
+  <div class="invoice-page page-2" style="padding: 24px 28px; box-sizing: border-box;">
     <div style="font-size: 14px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
       TERMS & CONDITIONS
     </div>
@@ -7220,11 +7219,11 @@ function getDefaultTaxInvoiceHtml(): string {
       {{company.name}} - BOOKING TERMS, CONDITIONS & LEGAL DISCLAIMERS
     </div>
 
-    <div style="margin-bottom: 14px;">
+    <div style="margin-bottom: 16px;">
       {{tables.termsAndConditions}}
     </div>
 
-    <!-- CUSTOMER ACCEPTANCE & SIGNATURE (PLACED BENEATH TERMS & CONDITIONS) -->
+    <!-- CUSTOMER ACCEPTANCE & SIGNATURE (PLACED BENEATH TERMS & CONDITIONS AT THE VERY END) -->
     <div style="border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 14px 18px; background: #ffffff;">
       <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
         CUSTOMER ACCEPTANCE & SIGNATURE
@@ -7252,7 +7251,7 @@ function getDefaultTaxInvoiceHtml(): string {
       </table>
     </div>
 
-    <div style="margin-top: 18px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 9px; color: #64748b;">
+    <div style="margin-top: 16px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 9px; color: #64748b;">
       <strong>{{company.name}}</strong> | Headquarters: {{company.address}} | Support: {{company.phone}} | Email: {{company.email}} | Web: {{company.website}}
     </div>
   </div>
@@ -8922,20 +8921,16 @@ const compileTemplateWithBookingData = (
     );
   }
 
-  // If invoice template, strip any leading page-break or empty containers so Page 1 is never blank!
-  if (template.type === "INVOICE") {
+  const isInvoiceTemplate =
+    template.type?.toUpperCase() === "INVOICE" ||
+    (template.name && template.name.toLowerCase().includes("invoice"));
+
+  if (isInvoiceTemplate) {
+    if (/terms\s*&\s*conditions[\s\S]*?(tax\s*invoice|customer\s*\/\s*bill\s*to)/i.test(htmlToCompile)) {
+      htmlToCompile = getDefaultTaxInvoiceHtml();
+    }
     htmlToCompile = htmlToCompile.replace(/^\s*(<!--[\s\S]*?-->\s*)*(<div[^>]*class="[^"]*page-break[^"]*"[^>]*>\s*<\/div>\s*)+/gi, "");
     htmlToCompile = htmlToCompile.replace(/^\s*(<!--[\s\S]*?-->\s*)*(<div[^>]*class="[^"]*invoice-page[^"]*"[^>]*>\s*<\/div>\s*)+/gi, "");
-
-    // Check if Terms & Conditions appears before the Tax Invoice Header or Customer Details
-    const headerPos = htmlToCompile.search(/TAX\s*INVOICE|CUSTOMER\s*\/\s*BILL\s*TO/i);
-    const tcBlockRegex = /(<!--\s*PAGE\s*\d*:\s*TERMS\s*&\s*CONDITIONS[\s\S]*?<\/div>\s*<\/div>|<div[^>]*class="[^"]*page-3[^"]*"[^>]*>[\s\S]*?TERMS\s*&\s*CONDITIONS[\s\S]*?<\/div>\s*<\/div>|<div[^>]*>[\s\S]*?TERMS\s*&\s*CONDITIONS[\s\S]*?\{\{tables\.termsAndConditions\}\}[\s\S]*?<\/div>)/i;
-    const tcMatch = htmlToCompile.match(tcBlockRegex);
-    if (tcMatch && headerPos !== -1 && tcMatch.index !== undefined && tcMatch.index < headerPos) {
-      const tcBlock = tcMatch[0];
-      htmlToCompile = htmlToCompile.replace(tcBlock, "");
-      htmlToCompile = htmlToCompile.trim() + `\n\n<div class="page-break" style="page-break-after: always; break-after: page; height: 1px;"></div>\n` + tcBlock;
-    }
   } else {
     // Strip ATOL / Regulatory ribbon from Hotel and Transport vouchers
     htmlToCompile = htmlToCompile
@@ -10191,7 +10186,11 @@ app.post(
 
       const curSym = await getTenantCurrencySymbol(tenantId);
 
-      if (template.type === "INVOICE") {
+      const isInvoiceDoc =
+        template.type?.toUpperCase() === "INVOICE" ||
+        (template.name && template.name.toLowerCase().includes("invoice"));
+
+      if (isInvoiceDoc) {
         const hasInvertedTerms = /terms\s*&\s*conditions[\s\S]*?(tax\s*invoice|bill\s*to)/i.test(template.structureHtml || "");
         const hasLeadingPageBreak = /^\s*(<!--[\s\S]*?-->\s*)*<div[^>]*class="[^"]*page-break/i.test(template.structureHtml || "");
         if (!template.structureHtml || template.structureHtml.trim().length < 20 || hasInvertedTerms || hasLeadingPageBreak) {

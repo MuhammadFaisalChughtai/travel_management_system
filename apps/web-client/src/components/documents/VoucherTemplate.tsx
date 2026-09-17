@@ -43,8 +43,6 @@ export const VoucherTemplate: React.FC<VoucherTemplateProps> = ({
   const companyEmail = companyInfo?.email || "operations@toobatravels.co.uk";
   const companyWebsite = companyInfo?.website || "www.toobatravels.co.uk";
   const companyLogo = companyInfo?.logo;
-  const atolNo = companyInfo?.atolNumber || "11492";
-  const iataNo = companyInfo?.iataNumber || "9127845";
 
   const issueDate = new Date().toLocaleDateString("en-GB", {
     day: "2-digit",

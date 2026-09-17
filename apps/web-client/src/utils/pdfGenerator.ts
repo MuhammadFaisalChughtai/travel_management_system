@@ -6,8 +6,147 @@
 
 let isPrintingGlobalLock = false;
 
+export function normalizeDocumentLayout(html: string): string {
+  if (!html || typeof document === 'undefined') return html;
+
+  const isInvoice = /TAX\s*INVOICE/i.test(html) || /TERMS\s*&\s*CONDITIONS/i.test(html);
+  if (!isInvoice) return html;
+
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+
+  // 1. Remove any leading page breaks, empty text, or comments at document start
+  while (temp.firstChild) {
+    const node = temp.firstChild;
+    if (node.nodeType === Node.COMMENT_NODE) {
+      temp.removeChild(node);
+    } else if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
+      temp.removeChild(node);
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (
+        el.classList.contains('page-break') ||
+        (el.textContent?.trim() === '' && !el.querySelector('img, table, svg'))
+      ) {
+        temp.removeChild(node);
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  const docRoot = (temp.querySelector('.tax-invoice-document, .doc-container') as HTMLElement) || temp;
+  while (docRoot.firstChild) {
+    const node = docRoot.firstChild;
+    if (node.nodeType === Node.COMMENT_NODE) {
+      docRoot.removeChild(node);
+    } else if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
+      docRoot.removeChild(node);
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (
+        el.classList.contains('page-break') ||
+        (el.textContent?.trim() === '' && !el.querySelector('img, table, svg'))
+      ) {
+        docRoot.removeChild(node);
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  // 2. Identify Terms & Conditions block and Customer Acceptance block
+  const allElements = Array.from(temp.querySelectorAll('*'));
+  
+  const tcHeading = allElements.find((el) => {
+    const txt = el.textContent || '';
+    return /TERMS\s*&\s*CONDITIONS/i.test(txt) && (el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'DIV');
+  });
+
+  const sigHeading = allElements.find((el) => {
+    const txt = el.textContent || '';
+    return (
+      /CUSTOMER\s*ACCEPTANCE\s*&\s*SIGNATURE/i.test(txt) ||
+      /Legal Acceptance & Booking Confirmation Signatures/i.test(txt)
+    );
+  });
+
+  const invoiceHeader = allElements.find((el) => {
+    const txt = el.textContent || '';
+    return /TAX\s*INVOICE/i.test(txt) && (el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'DIV' || el.tagName === 'SPAN');
+  });
+
+  if (tcHeading && invoiceHeader) {
+    let tcContainer: HTMLElement = tcHeading as HTMLElement;
+    while (
+      tcContainer.parentElement &&
+      tcContainer.parentElement !== temp &&
+      tcContainer.parentElement !== docRoot &&
+      !tcContainer.parentElement.classList.contains('tax-invoice-document') &&
+      tcContainer.parentElement.id !== 'invoice-template'
+    ) {
+      tcContainer = tcContainer.parentElement;
+    }
+
+    let sigContainer: HTMLElement | null = null;
+    if (sigHeading) {
+      sigContainer = sigHeading as HTMLElement;
+      while (
+        sigContainer.parentElement &&
+        sigContainer.parentElement !== temp &&
+        sigContainer.parentElement !== docRoot &&
+        sigContainer.parentElement !== tcContainer &&
+        !sigContainer.parentElement.classList.contains('tax-invoice-document') &&
+        sigContainer.parentElement.id !== 'invoice-template'
+      ) {
+        sigContainer = sigContainer.parentElement;
+      }
+    }
+
+    const isTcBeforeInvoice = !!(tcContainer.compareDocumentPosition(invoiceHeader) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    if (isTcBeforeInvoice) {
+      tcContainer.remove();
+
+      if (sigContainer && sigContainer !== tcContainer) {
+        sigContainer.remove();
+      }
+
+      while (docRoot.firstElementChild && docRoot.firstElementChild.classList.contains('page-break')) {
+        docRoot.firstElementChild.remove();
+      }
+
+      const pageBreak = document.createElement('div');
+      pageBreak.className = 'page-break';
+      pageBreak.style.cssText = 'page-break-after: always; break-after: page; height: 0; margin: 0; padding: 0;';
+
+      docRoot.appendChild(pageBreak);
+      docRoot.appendChild(tcContainer);
+
+      if (sigContainer && sigContainer !== tcContainer) {
+        const sigWrap = document.createElement('div');
+        sigWrap.style.cssText = 'margin-top: 16px;';
+        sigWrap.appendChild(sigContainer);
+        docRoot.appendChild(sigWrap);
+      }
+    } else if (sigContainer && tcContainer && (sigContainer.compareDocumentPosition(tcContainer) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+      sigContainer.remove();
+      const sigWrap = document.createElement('div');
+      sigWrap.style.cssText = 'margin-top: 16px;';
+      sigWrap.appendChild(sigContainer);
+      docRoot.appendChild(sigWrap);
+    }
+  }
+
+  return temp.innerHTML;
+}
+
 export const printHtmlViaIframe = (
-  html: string,
+  rawHtml: string,
   css: string = '',
   filename: string = 'document.pdf'
 ) => {
@@ -18,10 +157,20 @@ export const printHtmlViaIframe = (
   isPrintingGlobalLock = true;
 
   try {
-    if (!html || !html.trim()) {
+    if (!rawHtml || !rawHtml.trim()) {
       console.warn('printHtmlViaIframe received empty HTML payload');
       isPrintingGlobalLock = false;
       return;
+    }
+
+    // Normalize layout order and strip leading empty pages/breaks
+    const html = normalizeDocumentLayout(rawHtml);
+    const cleanTitle = filename.replace(/\.pdf$/i, '');
+
+    // Set document title immediately so Chrome print dialog adopts it
+    const originalDocTitle = document.title;
+    if (cleanTitle) {
+      document.title = cleanTitle;
     }
 
     // Remove any previous print virtual frames
@@ -34,7 +183,6 @@ export const printHtmlViaIframe = (
     iframe.id = 'global-print-virtual-frame';
     
     // Position off-screen with non-zero dimensions and non-zero opacity
-    // (Crucial: WebKit and Gecko skip layout passes for display:none or opacity:0 iframes)
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
     iframe.style.bottom = '0';
@@ -53,8 +201,6 @@ export const printHtmlViaIframe = (
       isPrintingGlobalLock = false;
       return;
     }
-
-    const cleanTitle = filename.replace(/\.pdf$/i, '');
 
     // Collect all stylesheets and style elements from parent document
     let parentStyles = '';
@@ -140,7 +286,6 @@ export const printHtmlViaIframe = (
         fallbackTimeout = null;
       }
 
-      const originalDocTitle = document.title;
       try {
         if (cleanTitle) {
           document.title = cleanTitle;
@@ -158,7 +303,7 @@ export const printHtmlViaIframe = (
           if (iframe && iframe.parentNode) {
             iframe.parentNode.removeChild(iframe);
           }
-        }, 3000);
+        }, 8000);
       }
     };
 

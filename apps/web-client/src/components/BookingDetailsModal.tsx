@@ -206,6 +206,9 @@ export function BookingDetailsModal({
     if (!booking || isGeneratingPDF) return;
     setIsGeneratingPDF(true);
     const invoiceFileName = getDocumentFileName('Invoice');
+    const cleanDocTitle = invoiceFileName.replace(/\.pdf$/i, '');
+    const prevDocTitle = document.title;
+    document.title = cleanDocTitle;
     try {
       const templatesRes = await api.get('/finance/templates');
       let activeTemplate = templatesRes.data.templates?.find(
@@ -250,6 +253,11 @@ export function BookingDetailsModal({
       toast.error("Failed to generate invoice");
     } finally {
       setIsGeneratingPDF(false);
+      setTimeout(() => {
+        if (prevDocTitle) {
+          document.title = prevDocTitle;
+        }
+      }, 8000);
     }
   };
 

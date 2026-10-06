@@ -1434,8 +1434,15 @@ app.get("/agents/attendance", async (req: Request, res: Response) => {
       const user = await prisma.user.findUnique({
         where: { id: parseInt(userId as string) },
       });
-      if (user && user.agentId) {
-        where.agentId = user.agentId;
+      let targetAgentId = user?.agentId;
+      if (!targetAgentId && user?.email) {
+        const matchedAgent = await prisma.agent.findFirst({
+          where: { tenantId, email: user.email },
+        });
+        if (matchedAgent) targetAgentId = matchedAgent.id;
+      }
+      if (targetAgentId) {
+        where.agentId = targetAgentId;
       } else {
         where.agentId = -1;
       }
@@ -1598,11 +1605,27 @@ app.post(
   async (req: Request, res: Response) => {
     try {
       const tenantId = parseInt(req.headers["x-tenant-id"] as string);
-      const agentId = parseInt(req.params.id);
+      let agentId = parseInt(req.params.id);
       const { notes } = req.body || {};
 
       const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
       const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
+
+      if (req.params.id === "me" || isNaN(agentId)) {
+        if (userId) {
+          const u = await prisma.user.findUnique({
+            where: { id: parseInt(userId as string) },
+          });
+          if (u?.agentId) agentId = u.agentId;
+          else if (u?.email) {
+            const a = await prisma.agent.findFirst({
+              where: { tenantId, email: u.email },
+            });
+            if (a) agentId = a.id;
+          }
+        }
+      }
+
       if (userRole === "AGENT") {
         if (!userId) {
           return res
@@ -1615,7 +1638,14 @@ app.post(
         const user = await prisma.user.findUnique({
           where: { id: parseInt(userId as string) },
         });
-        if (!user || user.agentId !== agentId) {
+        let effectiveAgentId = user?.agentId;
+        if (!effectiveAgentId && user?.email) {
+          const matchedAgent = await prisma.agent.findFirst({
+            where: { tenantId, email: user.email },
+          });
+          if (matchedAgent) effectiveAgentId = matchedAgent.id;
+        }
+        if (!user || effectiveAgentId !== agentId) {
           return res
             .status(403)
             .json({
@@ -1632,7 +1662,7 @@ app.post(
       });
       if (!agent) return res.status(404).json({ error: "Agent not found" });
 
-      // Check if already checked in
+      // Check if already checked in (currently open session)
       const existing = await prisma.agentAttendance.findFirst({
         where: { tenantId, agentId, checkOut: null },
         orderBy: { checkIn: "desc" },
@@ -1640,7 +1670,30 @@ app.post(
       if (existing) {
         return res
           .status(400)
-          .json({ error: "Agent is already checked in", record: existing });
+          .json({ error: "You are already checked in today.", record: existing });
+      }
+
+      // Enforce: agent can only mark attendance ONCE per calendar day
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const existingToday = await prisma.agentAttendance.findFirst({
+        where: {
+          tenantId,
+          agentId,
+          checkIn: { gte: todayStart, lte: todayEnd },
+        },
+        orderBy: { checkIn: "desc" },
+      });
+      if (existingToday) {
+        return res
+          .status(400)
+          .json({
+            error: "Attendance has already been marked for today. You can only mark attendance once per day.",
+            record: existingToday,
+          });
       }
 
       const record = await prisma.agentAttendance.create({
@@ -1669,11 +1722,27 @@ app.post(
   async (req: Request, res: Response) => {
     try {
       const tenantId = parseInt(req.headers["x-tenant-id"] as string);
-      const agentId = parseInt(req.params.id);
+      let agentId = parseInt(req.params.id);
       const { notes } = req.body || {};
 
       const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
       const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
+
+      if (req.params.id === "me" || isNaN(agentId)) {
+        if (userId) {
+          const u = await prisma.user.findUnique({
+            where: { id: parseInt(userId as string) },
+          });
+          if (u?.agentId) agentId = u.agentId;
+          else if (u?.email) {
+            const a = await prisma.agent.findFirst({
+              where: { tenantId, email: u.email },
+            });
+            if (a) agentId = a.id;
+          }
+        }
+      }
+
       if (userRole === "AGENT") {
         if (!userId) {
           return res
@@ -1686,7 +1755,14 @@ app.post(
         const user = await prisma.user.findUnique({
           where: { id: parseInt(userId as string) },
         });
-        if (!user || user.agentId !== agentId) {
+        let effectiveAgentId = user?.agentId;
+        if (!effectiveAgentId && user?.email) {
+          const matchedAgent = await prisma.agent.findFirst({
+            where: { tenantId, email: user.email },
+          });
+          if (matchedAgent) effectiveAgentId = matchedAgent.id;
+        }
+        if (!user || effectiveAgentId !== agentId) {
           return res
             .status(403)
             .json({
@@ -1706,7 +1782,7 @@ app.post(
       if (!openRecord) {
         return res
           .status(400)
-          .json({ error: "Agent is not currently checked in" });
+          .json({ error: "Agent is not currently checked in or has already checked out for today" });
       }
 
       const checkOutTime = new Date();

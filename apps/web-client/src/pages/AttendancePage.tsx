@@ -61,27 +61,43 @@ export function AttendancePage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ todayCheckIns: 0, currentlyIn: 0 });
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const user = useAuthStore((state) => state.user);
-  const isAgent =
-    user?.role?.toUpperCase() === "AGENT" ||
-    !!user?.agentId ||
-    agents.some((a) => a.email === user?.email);
+
+  // Live timer for clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Determine user role: only platform/company admins see the management dashboard
+  const isAdmin =
+    user?.role === "SUPER_ADMIN" ||
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "MAIN_COMPANY_ADMIN" ||
+    user?.role === "ADMIN";
+  const isAgent = !isAdmin;
+
   const loggedInAgent = agents.find(
     (a) =>
       (user?.agentId && a.id === user.agentId) ||
-      a.email === user?.email ||
+      (user?.email && a.email?.toLowerCase() === user.email.toLowerCase()) ||
       (user?.name && a.name.toLowerCase() === user.name.toLowerCase()),
   );
+  const effectiveAgentId =
+    loggedInAgent?.id ||
+    user?.agentId ||
+    (records.length > 0 && isAgent ? records[0].agentId : undefined);
 
-  // Filters
+  // Filters for Admin view
   const [view, setView] = useState<ViewFilter>("today");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [search, setSearch] = useState("");
 
-  // Check-in modal
+  // Check-in state & modal
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [checkInAgentId, setCheckInAgentId] = useState("");
   const [checkInNotes, setCheckInNotes] = useState("");
@@ -99,7 +115,7 @@ export function AttendancePage() {
         if (toDate) params.append("to", toDate);
       }
       if (isAgent) {
-        const agentIdVal = loggedInAgent?.id || user?.agentId;
+        const agentIdVal = effectiveAgentId;
         if (agentIdVal) params.append("agentId", String(agentIdVal));
       } else if (selectedAgent) {
         params.append("agentId", selectedAgent);
@@ -118,7 +134,7 @@ export function AttendancePage() {
     } finally {
       setLoading(false);
     }
-  }, [view, selectedAgent, fromDate, toDate]);
+  }, [view, selectedAgent, fromDate, toDate, isAgent, effectiveAgentId]);
 
   useEffect(() => {
     fetchData();
@@ -126,13 +142,14 @@ export function AttendancePage() {
 
   useEffect(() => {
     if (showCheckInModal && isAgent) {
-      const agentIdVal = loggedInAgent?.id || user?.agentId;
+      const agentIdVal = effectiveAgentId;
       if (agentIdVal) {
         setCheckInAgentId(String(agentIdVal));
       }
     }
-  }, [showCheckInModal, isAgent, loggedInAgent, user]);
+  }, [showCheckInModal, isAgent, effectiveAgentId]);
 
+  // Admin Check-in (via modal)
   const handleCheckIn = async () => {
     if (!checkInAgentId) {
       toast.error("Please select an agent");
@@ -149,12 +166,48 @@ export function AttendancePage() {
       setCheckInNotes("");
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || "Failed to check in");
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check in");
     } finally {
       setCheckInLoading(false);
     }
   };
 
+  // Agent Check-In directly from agent view
+  const handleAgentCheckIn = async () => {
+    const targetId = effectiveAgentId || "me";
+    setCheckInLoading(true);
+    try {
+      await api.post(`/agents/${targetId}/attendance/checkin`, {
+        notes: checkInNotes || undefined,
+      });
+      toast.success("Attendance marked! Checked in successfully.");
+      setCheckInNotes("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check in");
+    } finally {
+      setCheckInLoading(false);
+    }
+  };
+
+  // Agent Check-Out directly from agent view
+  const handleAgentCheckOut = async () => {
+    const targetId = effectiveAgentId || "me";
+    setCheckOutLoading(typeof targetId === "number" ? targetId : 1);
+    try {
+      await api.post(`/agents/${targetId}/attendance/checkout`, {
+        notes: checkInNotes || undefined,
+      });
+      toast.success("Checked out successfully for today!");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check out");
+    } finally {
+      setCheckOutLoading(null);
+    }
+  };
+
+  // Admin Check-Out from table
   const handleCheckOut = async (agentId: number) => {
     setCheckOutLoading(agentId);
     try {
@@ -162,19 +215,30 @@ export function AttendancePage() {
       toast.success("Agent checked out successfully");
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || "Failed to check out");
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check out");
     } finally {
       setCheckOutLoading(null);
     }
   };
 
+  // Calculate Today's Attendance State for the logged-in agent
+  const todayDateString = new Date().toLocaleDateString("en-GB");
+  const myTodayRecord = records.find((r) => {
+    if (effectiveAgentId && r.agentId !== effectiveAgentId) return false;
+    return new Date(r.checkIn).toLocaleDateString("en-GB") === todayDateString;
+  });
+
+  const hasMarkedAttendanceToday = !!myTodayRecord;
+  const isCurrentlyCheckedIn = !!myTodayRecord && !myTodayRecord.checkOut;
+  const hasCheckedOutToday = !!myTodayRecord && !!myTodayRecord.checkOut;
+
+  // Filtered records for Admin table
   const filtered = records.filter((r) => {
     if (!search) return true;
     const name = r.agent?.name?.toLowerCase() || "";
     return name.includes(search.toLowerCase());
   });
 
-  // Get currently checked in agents (open records)
   const checkedInAgentIds = new Set(
     records.filter((r) => !r.checkOut).map((r) => r.agentId),
   );
@@ -186,6 +250,228 @@ export function AttendancePage() {
     custom: "Custom Range",
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // AGENT VIEW: Agents can see ONLY the check-in and check-out button
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (isAgent) {
+    return (
+      <div className="max-w-xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 py-6">
+        {/* Header card with live clock */}
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 sm:p-8 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold mb-2">
+                <Clock className="w-3.5 h-3.5" />
+                Attendance Module
+              </div>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                Daily Attendance Clock
+              </h1>
+              <p className="text-slate-500 text-xs mt-0.5">
+                {user?.name || "Agent"} {user?.email ? `• ${user.email}` : ""}
+              </p>
+            </div>
+
+            {/* Live Digital Clock */}
+            <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-3.5 text-right sm:min-w-[170px]">
+              <div className="text-2xl font-black font-mono tracking-tight text-slate-900">
+                {currentTime.toLocaleTimeString("en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })}
+              </div>
+              <div className="text-[11px] font-bold text-slate-500 mt-0.5">
+                {currentTime.toLocaleDateString("en-GB", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Today's Status Banner */}
+          <div className="mt-6">
+            {loading ? (
+              <div className="py-8 flex justify-center">
+                <LoadingState message="Loading your attendance status..." />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Status Indicator Card */}
+                <div
+                  className={`rounded-2xl p-4 sm:p-5 border transition-all ${
+                    hasCheckedOutToday
+                      ? "bg-slate-50 border-slate-200"
+                      : isCurrentlyCheckedIn
+                      ? "bg-emerald-50/70 border-emerald-200"
+                      : "bg-amber-50/60 border-amber-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-3.5 h-3.5 rounded-full ${
+                          hasCheckedOutToday
+                            ? "bg-slate-400"
+                            : isCurrentlyCheckedIn
+                            ? "bg-emerald-500 animate-pulse"
+                            : "bg-amber-500"
+                        }`}
+                      />
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                          Today's Status
+                        </div>
+                        <div className="text-base font-black text-slate-900">
+                          {hasCheckedOutToday
+                            ? "Attendance Completed for Today"
+                            : isCurrentlyCheckedIn
+                            ? "Clocked In (Active Shift)"
+                            : "Not Checked In Today"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                        hasCheckedOutToday
+                          ? "bg-slate-200 text-slate-700"
+                          : isCurrentlyCheckedIn
+                          ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/20"
+                          : "bg-amber-200 text-amber-900"
+                      }`}
+                    >
+                      {hasCheckedOutToday
+                        ? "Completed"
+                        : isCurrentlyCheckedIn
+                        ? "Active"
+                        : "Pending"}
+                    </span>
+                  </div>
+
+                  {myTodayRecord && (
+                    <div className="grid grid-cols-3 gap-2 pt-4 mt-4 border-t border-slate-200/60 text-center">
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">
+                          Check-In
+                        </div>
+                        <div className="text-sm font-black text-emerald-700 mt-0.5">
+                          {fmtTime(myTodayRecord.checkIn)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">
+                          Check-Out
+                        </div>
+                        <div className="text-sm font-black text-rose-700 mt-0.5">
+                          {myTodayRecord.checkOut
+                            ? fmtTime(myTodayRecord.checkOut)
+                            : "In Progress"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">
+                          Duration
+                        </div>
+                        <div className="text-sm font-black text-slate-800 mt-0.5">
+                          {myTodayRecord.durationMinutes !== null
+                            ? fmtDuration(myTodayRecord.durationMinutes)
+                            : "Active"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Optional Shift Notes */}
+                {!hasCheckedOutToday && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Shift Notes (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={checkInNotes}
+                      onChange={(e) => setCheckInNotes(e.target.value)}
+                      placeholder="e.g. Working from office / remote / client visit..."
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 placeholder:text-slate-400 bg-white"
+                    />
+                  </div>
+                )}
+
+                {/* ─── AGENT ACTION BUTTONS: ONLY CHECK-IN AND CHECK-OUT ─── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  {/* Check-In Button */}
+                  <button
+                    onClick={handleAgentCheckIn}
+                    disabled={hasMarkedAttendanceToday || checkInLoading || loading}
+                    className={`flex items-center justify-center gap-3 py-4 px-6 rounded-2xl text-base font-extrabold transition-all shadow-md active:scale-98 ${
+                      !hasMarkedAttendanceToday && !loading
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 cursor-pointer"
+                        : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                    }`}
+                  >
+                    {checkInLoading ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <LogIn className="w-5 h-5" />
+                    )}
+                    <span>
+                      {hasMarkedAttendanceToday ? "Checked In" : "Check In"}
+                    </span>
+                  </button>
+
+                  {/* Check-Out Button (Disabled when checked out) */}
+                  <button
+                    onClick={handleAgentCheckOut}
+                    disabled={!isCurrentlyCheckedIn || checkOutLoading !== null || loading}
+                    className={`flex items-center justify-center gap-3 py-4 px-6 rounded-2xl text-base font-extrabold transition-all shadow-md active:scale-98 ${
+                      isCurrentlyCheckedIn && !loading
+                        ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 cursor-pointer animate-pulse"
+                        : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                    }`}
+                  >
+                    {checkOutLoading !== null ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <LogOut className="w-5 h-5" />
+                    )}
+                    <span>
+                      {hasCheckedOutToday ? "Checked Out" : "Check Out"}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Helpful status note below buttons */}
+                <div className="text-center text-xs text-slate-400 font-medium pt-1">
+                  {hasCheckedOutToday ? (
+                    <span className="text-emerald-700 font-bold">
+                      ✓ Your attendance for today is complete. Buttons are disabled until tomorrow.
+                    </span>
+                  ) : isCurrentlyCheckedIn ? (
+                    <span className="text-amber-700 font-semibold">
+                      ● Active shift in progress. When you finish your day, click "Check Out".
+                    </span>
+                  ) : (
+                    <span>
+                      ⓘ You can mark attendance once per day. Click "Check In" to start your shift.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ADMIN VIEW: Full team attendance management for Super Admin / Company Admin
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
@@ -195,10 +481,10 @@ export function AttendancePage() {
             <div className="p-2 bg-indigo-100 rounded-xl">
               <Clock className="w-5 h-5 text-indigo-600" />
             </div>
-            Agent Attendance
+            Team Attendance Management
           </h1>
           <p className="text-slate-500 text-xs mt-1">
-            Track check-ins and check-outs for your team.
+            Track and manage check-ins and check-outs for all agents in your company.
           </p>
         </div>
         <button
@@ -295,24 +581,22 @@ export function AttendancePage() {
             )}
           </AnimatePresence>
 
-          {/* Agent filter */}
-          {!isAgent && (
-            <div className="relative">
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-              <select
-                value={selectedAgent}
-                onChange={(e) => setSelectedAgent(e.target.value)}
-                className="pl-3 pr-8 py-1.5 border border-slate-200 rounded-xl text-[12px] text-slate-700 outline-none focus:border-primary-500 appearance-none bg-white"
-              >
-                <option value="">All Agents</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Agent filter dropdown */}
+          <div className="relative">
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <select
+              value={selectedAgent}
+              onChange={(e) => setSelectedAgent(e.target.value)}
+              className="pl-3 pr-8 py-1.5 border border-slate-200 rounded-xl text-[12px] text-slate-700 outline-none focus:border-primary-500 appearance-none bg-white"
+            >
+              <option value="">All Agents</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Search */}
           <div className="relative ml-auto">
@@ -327,7 +611,7 @@ export function AttendancePage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Admin Table */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-8">
@@ -359,7 +643,9 @@ export function AttendancePage() {
                   return (
                     <tr
                       key={rec.id}
-                      className={`transition-colors hover:bg-slate-50/50 ${isOpen ? "bg-emerald-50/30" : ""}`}
+                      className={`transition-colors hover:bg-slate-50/50 ${
+                        isOpen ? "bg-emerald-50/30" : ""
+                      }`}
                     >
                       <td className="py-3 px-5">
                         <div className="flex items-center gap-2.5">
@@ -439,7 +725,7 @@ export function AttendancePage() {
         )}
       </div>
 
-      {/* Check-In Modal */}
+      {/* Admin Check-In Modal */}
       <AnimatePresence>
         {showCheckInModal && (
           <motion.div
@@ -489,46 +775,28 @@ export function AttendancePage() {
                   </label>
                   <select
                     value={checkInAgentId}
-                    onChange={(e) =>
-                      !isAgent && setCheckInAgentId(e.target.value)
-                    }
-                    disabled={isAgent}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 bg-white disabled:bg-slate-50 disabled:opacity-85 disabled:cursor-not-allowed"
+                    onChange={(e) => setCheckInAgentId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 bg-white"
                   >
-                    {isAgent ? (
-                      loggedInAgent ? (
-                        <option value={loggedInAgent.id}>
-                          {loggedInAgent.name}
+                    <option value="">-- Select Agent --</option>
+                    {agents
+                      .filter((a) => !checkedInAgentIds.has(a.id))
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
                         </option>
-                      ) : (
-                        <option value={user?.agentId || ""}>
-                          {user?.name || "Logged In Agent"}
-                        </option>
-                      )
-                    ) : (
-                      <>
-                        <option value="">-- Select Agent --</option>
-                        {agents
-                          .filter((a) => !checkedInAgentIds.has(a.id))
-                          .map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name}
-                            </option>
-                          ))}
-                      </>
-                    )}
+                      ))}
                   </select>
-                  {!isAgent &&
-                    agents.filter((a) => checkedInAgentIds.has(a.id)).length >
-                      0 && (
-                      <p className="mt-1 text-[10px] text-amber-600 font-medium">
-                        ⚠️ Already checked in:{" "}
-                        {agents
-                          .filter((a) => checkedInAgentIds.has(a.id))
-                          .map((a) => a.name)
-                          .join(", ")}
-                      </p>
-                    )}
+                  {agents.filter((a) => checkedInAgentIds.has(a.id)).length >
+                    0 && (
+                    <p className="mt-1 text-[10px] text-amber-600 font-medium">
+                      ⚠️ Already checked in:{" "}
+                      {agents
+                        .filter((a) => checkedInAgentIds.has(a.id))
+                        .map((a) => a.name)
+                        .join(", ")}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">

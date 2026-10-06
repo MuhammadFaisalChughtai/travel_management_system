@@ -90,7 +90,8 @@ function hasPermission(user: any, permission: string): boolean {
     AGENT: [
       'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING',
       'CREATE_CLIENT', 'READ_CLIENT', 'UPDATE_CLIENT',
-      'READ_VENDOR', 'READ_AGENT', 'READ_SERVICE', 'READ_TRANSACTION', 'READ_DASHBOARD'
+      'READ_VENDOR', 'READ_AGENT', 'READ_SERVICE', 'READ_TRANSACTION', 'READ_DASHBOARD',
+      'READ_ATTENDANCE', 'CREATE_ATTENDANCE'
     ],
     COMPANY_ADMIN: [
       'CREATE_BOOKING', 'READ_BOOKING', 'UPDATE_BOOKING', 'DELETE_BOOKING',
@@ -100,7 +101,8 @@ function hasPermission(user: any, permission: string): boolean {
       'CREATE_SERVICE', 'READ_SERVICE', 'UPDATE_SERVICE', 'DELETE_SERVICE',
       'READ_DASHBOARD',
       'CREATE_USER', 'READ_USER', 'UPDATE_USER', 'DELETE_USER',
-      'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION'
+      'CREATE_TRANSACTION', 'READ_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION',
+      'CREATE_ATTENDANCE', 'READ_ATTENDANCE', 'UPDATE_ATTENDANCE', 'DELETE_ATTENDANCE'
     ]
   };
   const rolePerms = defaults[user.role] || [];
@@ -165,6 +167,9 @@ export function Dashboard() {
     }
     if (item.id === 'templates' && user?.role !== 'SUPER_ADMIN') {
       return false;
+    }
+    if (user?.role === 'AGENT' && item.id === 'attendance') {
+      return true;
     }
     const requiredPerm = TAB_PERMISSIONS[item.id];
     if (requiredPerm) {

@@ -145,6 +145,19 @@ async function checkAgentPermission(
   roleId: number,
   permissionName: string,
 ): Promise<boolean> {
+  // Always permit attendance self-actions for agents
+  if (
+    permissionName === "CREATE_ATTENDANCE" ||
+    permissionName === "READ_ATTENDANCE"
+  ) {
+    return true;
+  }
+
+  // Baseline agent permissions are permitted by default
+  if (DEFAULT_ROLE_PERMISSIONS["AGENT"]?.includes(permissionName)) {
+    return true;
+  }
+
   const permission = await prisma.permission.findFirst({
     where: { name: permissionName },
   });
@@ -1354,6 +1367,77 @@ app.get(
 
 // ─── Agent Attendance Endpoints ───────────────────────────────────────────────
 
+// Helper to resolve an agent for a user context
+async function resolveAgentForUser(
+  userId: number,
+  tenantId: number,
+): Promise<any> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { role: true },
+  });
+  if (!user) return null;
+
+  // 1. If user has agentId, verify it exists in this tenant
+  if (user.agentId) {
+    const existingAgent = await prisma.agent.findFirst({
+      where: { id: user.agentId, tenantId },
+    });
+    if (existingAgent) return existingAgent;
+  }
+
+  // 2. Try matching agent by email (case-insensitive)
+  if (user.email) {
+    const matchedByEmail = await prisma.agent.findFirst({
+      where: {
+        tenantId,
+        email: { equals: user.email.trim(), mode: "insensitive" },
+      },
+    });
+    if (matchedByEmail) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { agentId: matchedByEmail.id },
+      });
+      return matchedByEmail;
+    }
+  }
+
+  // 3. Try matching agent by name (case-insensitive)
+  if (user.name) {
+    const matchedByName = await prisma.agent.findFirst({
+      where: {
+        tenantId,
+        name: { equals: user.name.trim(), mode: "insensitive" },
+      },
+    });
+    if (matchedByName) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { agentId: matchedByName.id },
+      });
+      return matchedByName;
+    }
+  }
+
+  // 4. Auto-create Agent record for AGENT user if not found
+  const agentName =
+    user.name || (user.email ? user.email.split("@")[0] : "Agent");
+  const newAgent = await prisma.agent.create({
+    data: {
+      tenantId,
+      name: agentName,
+      email: user.email,
+      jobStatus: "Active",
+    },
+  });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { agentId: newAgent.id },
+  });
+  return newAgent;
+}
+
 // GET /agents/attendance -- all agents' attendance with filters
 app.get("/agents/attendance", async (req: Request, res: Response) => {
   try {
@@ -1387,7 +1471,7 @@ app.get("/agents/attendance", async (req: Request, res: Response) => {
         999,
       );
     } else if (view === "week") {
-      const day = now.getDay(); // 0=Sun
+      const day = now.getDay();
       const monday = new Date(now);
       monday.setDate(now.getDate() - ((day + 6) % 7));
       monday.setHours(0, 0, 0, 0);
@@ -1431,18 +1515,12 @@ app.get("/agents/attendance", async (req: Request, res: Response) => {
             message: "Permission Denied: User context required",
           });
       }
-      const user = await prisma.user.findUnique({
-        where: { id: parseInt(userId as string) },
-      });
-      let targetAgentId = user?.agentId;
-      if (!targetAgentId && user?.email) {
-        const matchedAgent = await prisma.agent.findFirst({
-          where: { tenantId, email: user.email },
-        });
-        if (matchedAgent) targetAgentId = matchedAgent.id;
-      }
-      if (targetAgentId) {
-        where.agentId = targetAgentId;
+      const agent = await resolveAgentForUser(
+        parseInt(userId as string),
+        tenantId,
+      );
+      if (agent) {
+        where.agentId = agent.id;
       } else {
         where.agentId = -1;
       }
@@ -1520,7 +1598,19 @@ app.get("/agents/attendance", async (req: Request, res: Response) => {
 app.get("/agents/:id/attendance", async (req: Request, res: Response) => {
   try {
     const tenantId = parseInt(req.headers["x-tenant-id"] as string);
-    const agentId = parseInt(req.params.id);
+    let agentId = parseInt(req.params.id);
+    const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
+    const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
+
+    if (userRole === "AGENT" || req.params.id === "me" || isNaN(agentId)) {
+      if (userId) {
+        const agent = await resolveAgentForUser(
+          parseInt(userId as string),
+          tenantId,
+        );
+        if (agent) agentId = agent.id;
+      }
+    }
 
     const { from, to, view } = req.query as Record<string, string>;
     const now = new Date();
@@ -1611,21 +1701,6 @@ app.post(
       const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
       const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
 
-      if (req.params.id === "me" || isNaN(agentId)) {
-        if (userId) {
-          const u = await prisma.user.findUnique({
-            where: { id: parseInt(userId as string) },
-          });
-          if (u?.agentId) agentId = u.agentId;
-          else if (u?.email) {
-            const a = await prisma.agent.findFirst({
-              where: { tenantId, email: u.email },
-            });
-            if (a) agentId = a.id;
-          }
-        }
-      }
-
       if (userRole === "AGENT") {
         if (!userId) {
           return res
@@ -1635,24 +1710,25 @@ app.post(
               message: "Permission Denied: User context required",
             });
         }
-        const user = await prisma.user.findUnique({
-          where: { id: parseInt(userId as string) },
-        });
-        let effectiveAgentId = user?.agentId;
-        if (!effectiveAgentId && user?.email) {
-          const matchedAgent = await prisma.agent.findFirst({
-            where: { tenantId, email: user.email },
-          });
-          if (matchedAgent) effectiveAgentId = matchedAgent.id;
-        }
-        if (!user || effectiveAgentId !== agentId) {
+        const agent = await resolveAgentForUser(
+          parseInt(userId as string),
+          tenantId,
+        );
+        if (!agent) {
           return res
-            .status(403)
-            .json({
-              error: "Forbidden",
-              message:
-                "Permission Denied: Agents can only manage their own attendance",
-            });
+            .status(404)
+            .json({ error: "Agent record could not be resolved for this user" });
+        }
+        agentId = agent.id;
+      } else {
+        if (req.params.id === "me" || isNaN(agentId)) {
+          if (userId) {
+            const agent = await resolveAgentForUser(
+              parseInt(userId as string),
+              tenantId,
+            );
+            if (agent) agentId = agent.id;
+          }
         }
       }
 
@@ -1728,21 +1804,6 @@ app.post(
       const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
       const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
 
-      if (req.params.id === "me" || isNaN(agentId)) {
-        if (userId) {
-          const u = await prisma.user.findUnique({
-            where: { id: parseInt(userId as string) },
-          });
-          if (u?.agentId) agentId = u.agentId;
-          else if (u?.email) {
-            const a = await prisma.agent.findFirst({
-              where: { tenantId, email: u.email },
-            });
-            if (a) agentId = a.id;
-          }
-        }
-      }
-
       if (userRole === "AGENT") {
         if (!userId) {
           return res
@@ -1752,24 +1813,25 @@ app.post(
               message: "Permission Denied: User context required",
             });
         }
-        const user = await prisma.user.findUnique({
-          where: { id: parseInt(userId as string) },
-        });
-        let effectiveAgentId = user?.agentId;
-        if (!effectiveAgentId && user?.email) {
-          const matchedAgent = await prisma.agent.findFirst({
-            where: { tenantId, email: user.email },
-          });
-          if (matchedAgent) effectiveAgentId = matchedAgent.id;
-        }
-        if (!user || effectiveAgentId !== agentId) {
+        const agent = await resolveAgentForUser(
+          parseInt(userId as string),
+          tenantId,
+        );
+        if (!agent) {
           return res
-            .status(403)
-            .json({
-              error: "Forbidden",
-              message:
-                "Permission Denied: Agents can only manage their own attendance",
-            });
+            .status(404)
+            .json({ error: "Agent record could not be resolved for this user" });
+        }
+        agentId = agent.id;
+      } else {
+        if (req.params.id === "me" || isNaN(agentId)) {
+          if (userId) {
+            const agent = await resolveAgentForUser(
+              parseInt(userId as string),
+              tenantId,
+            );
+            if (agent) agentId = agent.id;
+          }
         }
       }
 
@@ -4466,6 +4528,15 @@ async function initPermissions() {
         });
       }
     }
+
+    // Seed missing default permissions for all existing roles across all tenants
+    const allRoles = await prisma.role.findMany();
+    for (const role of allRoles) {
+      if (DEFAULT_ROLE_PERMISSIONS[role.name]) {
+        await seedDefaultRolePermissions(role.id, role.name);
+      }
+    }
+
     console.log("System permissions initialized successfully");
   } catch (error) {
     console.error("Failed to initialize system permissions:", error);
@@ -4514,8 +4585,8 @@ async function ensureRolePermissionsSeeded(tenantId: number) {
       role = await prisma.role.create({
         data: { name, tenantId },
       });
-      await seedDefaultRolePermissions(role.id, name);
     }
+    await seedDefaultRolePermissions(role.id, name);
   }
 }
 

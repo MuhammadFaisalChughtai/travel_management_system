@@ -121,10 +121,18 @@ export function AttendancePage() {
         params.append("agentId", selectedAgent);
       }
 
-      const [attRes, agentsRes] = await Promise.all([
-        api.get(`/agents/attendance?${params}`),
-        api.get("/agents?limit=all"),
-      ]);
+      let attRes;
+      let agentsRes = { data: { agents: [] } };
+      if (isAgent) {
+        attRes = await api.get(`/agents/attendance?${params}`);
+      } else {
+        const [aRes, agRes] = await Promise.all([
+          api.get(`/agents/attendance?${params}`),
+          api.get("/agents?limit=all").catch(() => ({ data: { agents: [] } })),
+        ]);
+        attRes = aRes;
+        agentsRes = agRes;
+      }
 
       setRecords(attRes.data.attendance || []);
       setSummary(attRes.data.summary || { todayCheckIns: 0, currentlyIn: 0 });
@@ -166,7 +174,7 @@ export function AttendancePage() {
       setCheckInNotes("");
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check in");
+      toast.error(err?.response?.data?.message || err?.response?.data?.error || "Failed to check in");
     } finally {
       setCheckInLoading(false);
     }
@@ -184,7 +192,7 @@ export function AttendancePage() {
       setCheckInNotes("");
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check in");
+      toast.error(err?.response?.data?.message || err?.response?.data?.error || "Failed to check in");
     } finally {
       setCheckInLoading(false);
     }
@@ -201,7 +209,7 @@ export function AttendancePage() {
       toast.success("Checked out successfully for today!");
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check out");
+      toast.error(err?.response?.data?.message || err?.response?.data?.error || "Failed to check out");
     } finally {
       setCheckOutLoading(null);
     }
@@ -215,7 +223,7 @@ export function AttendancePage() {
       toast.success("Agent checked out successfully");
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || err?.response?.data?.message || "Failed to check out");
+      toast.error(err?.response?.data?.message || err?.response?.data?.error || "Failed to check out");
     } finally {
       setCheckOutLoading(null);
     }
@@ -224,7 +232,7 @@ export function AttendancePage() {
   // Calculate Today's Attendance State for the logged-in agent
   const todayDateString = new Date().toLocaleDateString("en-GB");
   const myTodayRecord = records.find((r) => {
-    if (effectiveAgentId && r.agentId !== effectiveAgentId) return false;
+    if (!isAgent && effectiveAgentId && r.agentId !== effectiveAgentId) return false;
     return new Date(r.checkIn).toLocaleDateString("en-GB") === todayDateString;
   });
 

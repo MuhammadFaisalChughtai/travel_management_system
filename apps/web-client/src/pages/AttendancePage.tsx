@@ -79,14 +79,24 @@ export function AttendancePage() {
     user?.role === "ADMIN";
   const isAgent = !isAdmin;
 
+  const [activeOpenRecord, setActiveOpenRecord] = useState<AttendanceRecord | null>(null);
+
   const loggedInAgent = agents.find(
     (a) =>
       (user?.agentId && a.id === user.agentId) ||
       (user?.email && a.email?.toLowerCase() === user.email.toLowerCase()) ||
       (user?.name && a.name.toLowerCase() === user.name.toLowerCase()),
   );
+  const agentFromRecords = records.find(
+    (r) =>
+      r.agent &&
+      ((user?.email && r.agent.email?.toLowerCase() === user.email.toLowerCase()) ||
+        (user?.name && r.agent.name?.toLowerCase() === user.name.toLowerCase())),
+  )?.agent;
+
   const effectiveAgentId =
     loggedInAgent?.id ||
+    agentFromRecords?.id ||
     user?.agentId ||
     (records.length > 0 && isAgent ? records[0].agentId : undefined);
 
@@ -121,22 +131,20 @@ export function AttendancePage() {
         params.append("agentId", selectedAgent);
       }
 
-      let attRes;
-      let agentsRes = { data: { agents: [] } };
-      if (isAgent) {
-        attRes = await api.get(`/agents/attendance?${params}`);
-      } else {
-        const [aRes, agRes] = await Promise.all([
-          api.get(`/agents/attendance?${params}`),
-          api.get("/agents?limit=all").catch(() => ({ data: { agents: [] } })),
-        ]);
-        attRes = aRes;
-        agentsRes = agRes;
-      }
+      const [aRes, agRes] = await Promise.all([
+        api.get(`/agents/attendance?${params}`),
+        api.get("/agents?limit=all").catch(() => ({ data: { agents: [] } })),
+      ]);
 
-      setRecords(attRes.data.attendance || []);
-      setSummary(attRes.data.summary || { todayCheckIns: 0, currentlyIn: 0 });
-      setAgents(agentsRes.data.agents || []);
+      const attData = aRes.data.attendance || [];
+      setRecords(attData);
+      if (aRes.data.openRecord) {
+        setActiveOpenRecord(aRes.data.openRecord);
+      } else if (aRes.data.isCheckedIn === false) {
+        setActiveOpenRecord(null);
+      }
+      setSummary(aRes.data.summary || { todayCheckIns: 0, currentlyIn: 0 });
+      setAgents(agRes.data.agents || []);
     } catch (err) {
       toast.error("Failed to load attendance records");
     } finally {
@@ -185,13 +193,31 @@ export function AttendancePage() {
     const targetId = effectiveAgentId || "me";
     setCheckInLoading(true);
     try {
-      await api.post(`/agents/${targetId}/attendance/checkin`, {
+      const res = await api.post(`/agents/${targetId}/attendance/checkin`, {
         notes: checkInNotes || undefined,
       });
       toast.success("Attendance marked! Checked in successfully.");
       setCheckInNotes("");
+      if (res.data?.record) {
+        setActiveOpenRecord(res.data.record);
+        setRecords((prev) => [
+          res.data.record,
+          ...prev.filter((r) => r.id !== res.data.record.id),
+        ]);
+      }
       fetchData();
     } catch (err: any) {
+      const existingRecord = err?.response?.data?.record;
+      if (existingRecord) {
+        if (!existingRecord.checkOut) {
+          setActiveOpenRecord(existingRecord);
+        }
+        setRecords((prev) => [
+          existingRecord,
+          ...prev.filter((r) => r.id !== existingRecord.id),
+        ]);
+        fetchData();
+      }
       toast.error(err?.response?.data?.message || err?.response?.data?.error || "Failed to check in");
     } finally {
       setCheckInLoading(false);
@@ -203,10 +229,18 @@ export function AttendancePage() {
     const targetId = effectiveAgentId || "me";
     setCheckOutLoading(typeof targetId === "number" ? targetId : 1);
     try {
-      await api.post(`/agents/${targetId}/attendance/checkout`, {
+      const res = await api.post(`/agents/${targetId}/attendance/checkout`, {
         notes: checkInNotes || undefined,
       });
       toast.success("Checked out successfully for today!");
+      setCheckInNotes("");
+      setActiveOpenRecord(null);
+      if (res.data?.record) {
+        setRecords((prev) => [
+          res.data.record,
+          ...prev.filter((r) => r.id !== res.data.record.id),
+        ]);
+      }
       fetchData();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || err?.response?.data?.error || "Failed to check out");
@@ -230,15 +264,36 @@ export function AttendancePage() {
   };
 
   // Calculate Today's Attendance State for the logged-in agent
-  const todayDateString = new Date().toLocaleDateString("en-GB");
-  const myTodayRecord = records.find((r) => {
-    if (!isAgent && effectiveAgentId && r.agentId !== effectiveAgentId) return false;
-    return new Date(r.checkIn).toLocaleDateString("en-GB") === todayDateString;
-  });
+  const isSameCalendarDay = (dateStr?: string | null) => {
+    if (!dateStr) return false;
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
+    } catch {
+      return false;
+    }
+  };
 
-  const hasMarkedAttendanceToday = !!myTodayRecord;
+  const myTodayRecord =
+    activeOpenRecord ||
+    records.find((r) => {
+      if (!isAgent && effectiveAgentId && r.agentId !== effectiveAgentId) return false;
+      if (isAgent && effectiveAgentId && r.agentId !== effectiveAgentId) return false;
+      return !r.checkOut || isSameCalendarDay(r.checkIn);
+    }) ||
+    null;
+
   const isCurrentlyCheckedIn = !!myTodayRecord && !myTodayRecord.checkOut;
-  const hasCheckedOutToday = !!myTodayRecord && !!myTodayRecord.checkOut;
+  const hasCheckedOutToday =
+    !!myTodayRecord &&
+    !!myTodayRecord.checkOut &&
+    (isSameCalendarDay(myTodayRecord.checkOut) || isSameCalendarDay(myTodayRecord.checkIn));
+  const hasMarkedAttendanceToday = isCurrentlyCheckedIn || hasCheckedOutToday;
 
   // Filtered records for Admin table
   const filtered = records.filter((r) => {

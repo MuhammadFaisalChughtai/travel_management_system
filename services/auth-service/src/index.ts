@@ -1438,11 +1438,76 @@ async function resolveAgentForUser(
   return newAgent;
 }
 
+async function autoCloseStaleAttendance(tenantId: number, agentId?: number) {
+  try {
+    const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+
+    const where: any = {
+      tenantId,
+      checkOut: null,
+      checkIn: { lt: todayStart },
+    };
+    if (agentId) {
+      where.agentId = agentId;
+    }
+
+    const staleRecords = await prisma.agentAttendance.findMany({
+      where,
+    });
+
+    for (const record of staleRecords) {
+      const checkInDate = new Date(record.checkIn);
+      const endOfDay = new Date(
+        checkInDate.getFullYear(),
+        checkInDate.getMonth(),
+        checkInDate.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
+      const standardShiftEnd = new Date(
+        checkInDate.getTime() + 8 * 60 * 60 * 1000,
+      );
+      const autoCheckOut =
+        standardShiftEnd < endOfDay ? standardShiftEnd : endOfDay;
+      const durationMinutes = Math.max(
+        0,
+        Math.round((autoCheckOut.getTime() - checkInDate.getTime()) / 60000),
+      );
+
+      await prisma.agentAttendance.update({
+        where: { id: record.id },
+        data: {
+          checkOut: autoCheckOut,
+          notes: record.notes
+            ? `${record.notes} (Auto-closed shift)`
+            : "(Auto-closed shift)",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Error auto-closing stale attendance:", err);
+  }
+}
+
 // GET /agents/attendance -- all agents' attendance with filters
 app.get("/agents/attendance", async (req: Request, res: Response) => {
   try {
     const tenantId = parseInt(req.headers["x-tenant-id"] as string);
     if (!tenantId) return res.status(400).json({ error: "Missing tenant" });
+
+    // Auto-close any stale unclosed attendance records from previous days
+    await autoCloseStaleAttendance(tenantId);
 
     const { agentId, from, to, view } = req.query as Record<string, string>;
 
@@ -1450,6 +1515,197 @@ app.get("/agents/attendance", async (req: Request, res: Response) => {
     let startDate: Date | undefined;
     let endDate: Date | undefined;
     const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const todayEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+
+    if (view === "today") {
+      startDate = todayStart;
+      endDate = todayEnd;
+    } else if (view === "week") {
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      startDate = monday;
+      endDate = sunday;
+    } else if (view === "month") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+    } else if (from || to) {
+      if (from) {
+        startDate = new Date(from);
+        startDate.setHours(0, 0, 0, 0);
+      }
+      if (to) {
+        endDate = new Date(to);
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
+    const userRole = String(
+      req.headers["x-user-role"] || req.headers["X-User-Role"] || "",
+    ).toUpperCase();
+    const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
+
+    const where: any = { tenantId };
+    let currentAgentId: number | null = null;
+
+    if (userRole === "AGENT") {
+      if (!userId) {
+        return res
+          .status(403)
+          .json({
+            error: "Forbidden",
+            message: "Permission Denied: User context required",
+          });
+      }
+      const agent = await resolveAgentForUser(
+        parseInt(userId as string),
+        tenantId,
+      );
+      if (agent) {
+        where.agentId = agent.id;
+        currentAgentId = agent.id;
+      } else {
+        where.agentId = -1;
+      }
+    } else {
+      if (agentId) {
+        where.agentId = parseInt(agentId);
+        currentAgentId = parseInt(agentId);
+      }
+    }
+    if (startDate || endDate) {
+      where.checkIn = {};
+      if (startDate) where.checkIn.gte = startDate;
+      if (endDate) where.checkIn.lte = endDate;
+    }
+
+    const records = await prisma.agentAttendance.findMany({
+      where,
+      include: {
+        agent: {
+          select: { id: true, name: true, email: true, jobStatus: true },
+        },
+      },
+      orderBy: { checkIn: "desc" },
+    });
+
+    // Compute duration
+    const data = records.map((r: any) => ({
+      ...r,
+      durationMinutes:
+        r.durationMinutes !== null && r.durationMinutes !== undefined
+          ? r.durationMinutes
+          : r.checkOut
+          ? Math.round(
+              (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) /
+                60000,
+            )
+          : null,
+    }));
+
+    // If scoped to a specific agent (e.g. AGENT user), check for active open session
+    let openRecord: any = null;
+    if (currentAgentId) {
+      openRecord = await prisma.agentAttendance.findFirst({
+        where: { tenantId, agentId: currentAgentId, checkOut: null },
+        include: {
+          agent: {
+            select: { id: true, name: true, email: true, jobStatus: true },
+          },
+        },
+        orderBy: { checkIn: "desc" },
+      });
+
+      if (openRecord) {
+        // If the openRecord is not in data, prepend it so the agent UI sees it
+        if (!data.some((r: any) => r.id === openRecord.id)) {
+          data.unshift({
+            ...openRecord,
+            durationMinutes: null,
+          });
+        }
+      }
+    }
+
+    const todayRecords = await prisma.agentAttendance.findMany({
+      where: { tenantId, checkIn: { gte: todayStart, lte: todayEnd } },
+    });
+    const currentlyIn = await prisma.agentAttendance.count({
+      where: { tenantId, checkOut: null },
+    });
+
+    return res.json({
+      attendance: data,
+      total: data.length,
+      isCheckedIn: !!openRecord,
+      openRecord: openRecord || null,
+      summary: {
+        todayCheckIns: todayRecords.length,
+        currentlyIn,
+      },
+    });
+  } catch (err) {
+    console.error("GET attendance error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// GET /agents/:id/attendance -- single agent attendance
+app.get("/agents/:id/attendance", async (req: Request, res: Response) => {
+  try {
+    const tenantId = parseInt(req.headers["x-tenant-id"] as string);
+    let agentId = parseInt(req.params.id);
+    const userRole = String(
+      req.headers["x-user-role"] || req.headers["X-User-Role"] || "",
+    ).toUpperCase();
+    const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
+
+    if (userRole === "AGENT" || req.params.id === "me" || isNaN(agentId)) {
+      if (userId) {
+        const agent = await resolveAgentForUser(
+          parseInt(userId as string),
+          tenantId,
+        );
+        if (agent) agentId = agent.id;
+      }
+    }
+
+    // Auto-close stale records for this tenant/agent
+    await autoCloseStaleAttendance(tenantId, agentId);
+
+    const { from, to, view } = req.query as Record<string, string>;
+    const now = new Date();
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
 
     if (view === "today") {
       startDate = new Date(
@@ -1502,153 +1758,6 @@ app.get("/agents/attendance", async (req: Request, res: Response) => {
       }
     }
 
-    const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
-    const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
-
-    const where: any = { tenantId };
-    if (userRole === "AGENT") {
-      if (!userId) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden",
-            message: "Permission Denied: User context required",
-          });
-      }
-      const agent = await resolveAgentForUser(
-        parseInt(userId as string),
-        tenantId,
-      );
-      if (agent) {
-        where.agentId = agent.id;
-      } else {
-        where.agentId = -1;
-      }
-    } else {
-      if (agentId) where.agentId = parseInt(agentId);
-    }
-    if (startDate || endDate) {
-      where.checkIn = {};
-      if (startDate) where.checkIn.gte = startDate;
-      if (endDate) where.checkIn.lte = endDate;
-    }
-
-    const records = await prisma.agentAttendance.findMany({
-      where,
-      include: {
-        agent: {
-          select: { id: true, name: true, email: true, jobStatus: true },
-        },
-      },
-      orderBy: { checkIn: "desc" },
-    });
-
-    // Compute duration
-    const data = records.map((r: any) => ({
-      ...r,
-      durationMinutes: r.checkOut
-        ? Math.round(
-            (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) /
-              60000,
-          )
-        : null,
-    }));
-
-    // Summary stats
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      0,
-      0,
-      0,
-      0,
-    );
-    const todayEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      23,
-      59,
-      59,
-      999,
-    );
-    const todayRecords = await prisma.agentAttendance.findMany({
-      where: { tenantId, checkIn: { gte: todayStart, lte: todayEnd } },
-    });
-    const currentlyIn = await prisma.agentAttendance.count({
-      where: { tenantId, checkOut: null },
-    });
-
-    return res.json({
-      attendance: data,
-      total: data.length,
-      summary: {
-        todayCheckIns: todayRecords.length,
-        currentlyIn,
-      },
-    });
-  } catch (err) {
-    console.error("GET attendance error:", err);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
-// GET /agents/:id/attendance -- single agent attendance
-app.get("/agents/:id/attendance", async (req: Request, res: Response) => {
-  try {
-    const tenantId = parseInt(req.headers["x-tenant-id"] as string);
-    let agentId = parseInt(req.params.id);
-    const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
-    const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
-
-    if (userRole === "AGENT" || req.params.id === "me" || isNaN(agentId)) {
-      if (userId) {
-        const agent = await resolveAgentForUser(
-          parseInt(userId as string),
-          tenantId,
-        );
-        if (agent) agentId = agent.id;
-      }
-    }
-
-    const { from, to, view } = req.query as Record<string, string>;
-    const now = new Date();
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-
-    if (view === "week") {
-      const day = now.getDay();
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - ((day + 6) % 7));
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-      startDate = monday;
-      endDate = sunday;
-    } else if (view === "month") {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      endDate = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
-    } else if (from || to) {
-      if (from) {
-        startDate = new Date(from);
-        startDate.setHours(0, 0, 0, 0);
-      }
-      if (to) {
-        endDate = new Date(to);
-        endDate.setHours(23, 59, 59, 999);
-      }
-    }
-
     const where: any = { tenantId, agentId };
     if (startDate || endDate) {
       where.checkIn = {};
@@ -1669,13 +1778,23 @@ app.get("/agents/:id/attendance", async (req: Request, res: Response) => {
 
     const data = records.map((r: any) => ({
       ...r,
-      durationMinutes: r.checkOut
-        ? Math.round(
-            (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) /
-              60000,
-          )
-        : null,
+      durationMinutes:
+        r.durationMinutes !== null && r.durationMinutes !== undefined
+          ? r.durationMinutes
+          : r.checkOut
+          ? Math.round(
+              (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) /
+                60000,
+            )
+          : null,
     }));
+
+    if (openRecord && !data.some((r: any) => r.id === openRecord.id)) {
+      data.unshift({
+        ...openRecord,
+        durationMinutes: null,
+      });
+    }
 
     return res.json({
       attendance: data,
@@ -1698,7 +1817,9 @@ app.post(
       let agentId = parseInt(req.params.id);
       const { notes } = req.body || {};
 
-      const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
+      const userRole = String(
+        req.headers["x-user-role"] || req.headers["X-User-Role"] || "",
+      ).toUpperCase();
       const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
 
       if (userRole === "AGENT") {
@@ -1738,23 +1859,58 @@ app.post(
       });
       if (!agent) return res.status(404).json({ error: "Agent not found" });
 
+      // Auto-close any stale unclosed attendance records from previous days first
+      await autoCloseStaleAttendance(tenantId, agentId);
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
       // Check if already checked in (currently open session)
       const existing = await prisma.agentAttendance.findFirst({
         where: { tenantId, agentId, checkOut: null },
         orderBy: { checkIn: "desc" },
       });
       if (existing) {
-        return res
-          .status(400)
-          .json({ error: "You are already checked in today.", record: existing });
+        if (new Date(existing.checkIn) < todayStart) {
+          // If the unclosed session was before todayStart, auto-close it
+          const checkInDate = new Date(existing.checkIn);
+          const endOfDay = new Date(
+            checkInDate.getFullYear(),
+            checkInDate.getMonth(),
+            checkInDate.getDate(),
+            23,
+            59,
+            59,
+            999,
+          );
+          const standardShiftEnd = new Date(
+            checkInDate.getTime() + 8 * 60 * 60 * 1000,
+          );
+          const autoCheckOut =
+            standardShiftEnd < endOfDay ? standardShiftEnd : endOfDay;
+          const durationMinutes = Math.max(
+            0,
+            Math.round((autoCheckOut.getTime() - checkInDate.getTime()) / 60000),
+          );
+          await prisma.agentAttendance.update({
+            where: { id: existing.id },
+            data: {
+              checkOut: autoCheckOut,
+              notes: existing.notes
+                ? `${existing.notes} (Auto-closed shift)`
+                : "(Auto-closed shift)",
+            },
+          });
+        } else {
+          return res
+            .status(400)
+            .json({ error: "You are already checked in today.", record: existing });
+        }
       }
 
       // Enforce: agent can only mark attendance ONCE per calendar day
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-
       const existingToday = await prisma.agentAttendance.findFirst({
         where: {
           tenantId,
@@ -1801,7 +1957,9 @@ app.post(
       let agentId = parseInt(req.params.id);
       const { notes } = req.body || {};
 
-      const userRole = req.headers["x-user-role"] || req.headers["X-User-Role"];
+      const userRole = String(
+        req.headers["x-user-role"] || req.headers["X-User-Role"] || "",
+      ).toUpperCase();
       const userId = req.headers["x-user-id"] || req.headers["X-User-Id"];
 
       if (userRole === "AGENT") {
@@ -1835,6 +1993,9 @@ app.post(
         }
       }
 
+      // Auto-close any stale unclosed attendance records from previous days first
+      await autoCloseStaleAttendance(tenantId, agentId);
+
       // Find open check-in record
       const openRecord = await prisma.agentAttendance.findFirst({
         where: { tenantId, agentId, checkOut: null },
@@ -1848,6 +2009,10 @@ app.post(
       }
 
       const checkOutTime = new Date();
+      const diffMs =
+        checkOutTime.getTime() - new Date(openRecord.checkIn).getTime();
+      const durationMinutes = Math.max(0, Math.round(diffMs / 60000));
+
       const record = await prisma.agentAttendance.update({
         where: { id: openRecord.id },
         data: {
@@ -1856,11 +2021,6 @@ app.post(
         },
         include: { agent: { select: { id: true, name: true, email: true } } },
       });
-
-      const durationMinutes = Math.round(
-        (checkOutTime.getTime() - new Date(openRecord.checkIn).getTime()) /
-          60000,
-      );
 
       return res.json({
         message: "Checked out successfully",

@@ -81,6 +81,15 @@ function getRequiredPermissionForPath(
   if (cleanPath === "/agents/attendance") {
     return "READ_ATTENDANCE";
   }
+  if (cleanPath.startsWith("/agents/attendance/")) {
+    const segments = cleanPath.split("/");
+    if (segments.length === 4) {
+      // /agents/attendance/:id
+      if (method === "PATCH" || method === "PUT") return "UPDATE_ATTENDANCE";
+      if (method === "DELETE") return "DELETE_ATTENDANCE";
+      if (method === "GET") return "READ_ATTENDANCE";
+    }
+  }
   if (cleanPath.startsWith("/agents/")) {
     const segments = cleanPath.split("/");
     if (segments.length === 4 && segments[3] === "attendance") {
@@ -2029,6 +2038,162 @@ app.post(
       });
     } catch (err) {
       console.error("Check-out error:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
+);
+
+// PATCH /agents/attendance/:id -- update attendance record (Super Admin / Admin)
+app.patch(
+  "/agents/attendance/:id",
+  async (req: Request, res: Response) => {
+    try {
+      const tenantId = parseInt(req.headers["x-tenant-id"] as string);
+      const isPlatformAdmin = req.headers["x-is-platform-admin"] === "true";
+      const userRole = String(
+        req.headers["x-user-role"] || req.headers["X-User-Role"] || "",
+      ).toUpperCase();
+
+      // Only Admin roles can edit attendance
+      const isAdmin =
+        isPlatformAdmin ||
+        userRole === "SUPER_ADMIN" ||
+        userRole === "COMPANY_ADMIN" ||
+        userRole === "MAIN_COMPANY_ADMIN" ||
+        userRole === "ADMIN";
+
+      if (!isAdmin) {
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Only administrators can edit attendance records",
+        });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid attendance record ID" });
+      }
+
+      const where: any = { id };
+      if (!isPlatformAdmin && tenantId) {
+        where.tenantId = tenantId;
+      }
+
+      const existing = await prisma.agentAttendance.findFirst({
+        where,
+        include: { agent: true },
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: "Attendance record not found" });
+      }
+
+      const { checkIn, checkOut, notes, agentId } = req.body;
+
+      const updateData: any = {};
+
+      if (checkIn !== undefined) {
+        updateData.checkIn = new Date(checkIn);
+      }
+      if (checkOut !== undefined) {
+        updateData.checkOut = checkOut ? new Date(checkOut) : null;
+      }
+      if (notes !== undefined) {
+        updateData.notes = notes ? String(notes).trim() : null;
+      }
+      if (agentId !== undefined && !isNaN(parseInt(agentId))) {
+        updateData.agentId = parseInt(agentId);
+      }
+
+      const updated = await prisma.agentAttendance.update({
+        where: { id: existing.id },
+        data: updateData,
+        include: {
+          agent: {
+            select: { id: true, name: true, email: true, jobStatus: true },
+          },
+        },
+      });
+
+      const finalCheckIn = updated.checkIn ? new Date(updated.checkIn).getTime() : 0;
+      const finalCheckOut = updated.checkOut ? new Date(updated.checkOut).getTime() : 0;
+      const durationMinutes =
+        finalCheckOut && finalCheckIn && finalCheckOut > finalCheckIn
+          ? Math.round((finalCheckOut - finalCheckIn) / 60000)
+          : null;
+
+      return res.json({
+        message: "Attendance record updated successfully",
+        record: {
+          ...updated,
+          durationMinutes,
+        },
+      });
+    } catch (err) {
+      console.error("Update attendance error:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
+);
+
+// PUT /agents/attendance/:id
+app.put("/agents/attendance/:id", (req: Request, res: Response, next: any) => {
+  req.method = "PATCH";
+  app._router.handle(req, res, next);
+});
+
+// DELETE /agents/attendance/:id -- delete attendance record (Super Admin / Admin)
+app.delete(
+  "/agents/attendance/:id",
+  async (req: Request, res: Response) => {
+    try {
+      const tenantId = parseInt(req.headers["x-tenant-id"] as string);
+      const isPlatformAdmin = req.headers["x-is-platform-admin"] === "true";
+      const userRole = String(
+        req.headers["x-user-role"] || req.headers["X-User-Role"] || "",
+      ).toUpperCase();
+
+      const isAdmin =
+        isPlatformAdmin ||
+        userRole === "SUPER_ADMIN" ||
+        userRole === "COMPANY_ADMIN" ||
+        userRole === "MAIN_COMPANY_ADMIN" ||
+        userRole === "ADMIN";
+
+      if (!isAdmin) {
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Only administrators can delete attendance records",
+        });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid attendance record ID" });
+      }
+
+      const where: any = { id };
+      if (!isPlatformAdmin && tenantId) {
+        where.tenantId = tenantId;
+      }
+
+      const existing = await prisma.agentAttendance.findFirst({
+        where,
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: "Attendance record not found" });
+      }
+
+      await prisma.agentAttendance.delete({
+        where: { id: existing.id },
+      });
+
+      return res.json({
+        message: "Attendance record deleted successfully",
+      });
+    } catch (err) {
+      console.error("Delete attendance error:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   },

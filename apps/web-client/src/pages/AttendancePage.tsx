@@ -10,6 +10,8 @@ import {
   X,
   ChevronDown,
   ClipboardList,
+  Edit3,
+  Trash2,
 } from "lucide-react";
 import { api } from "../api/axios";
 import toast from "react-hot-toast";
@@ -54,6 +56,18 @@ function fmtDuration(mins: number | null) {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function toLocalDatetimeInputString(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 export function AttendancePage() {
@@ -113,6 +127,16 @@ export function AttendancePage() {
   const [checkInNotes, setCheckInNotes] = useState("");
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkOutLoading, setCheckOutLoading] = useState<number | null>(null);
+
+  // Edit Attendance Modal state (Super Admin / Admin)
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
+  const [editCheckIn, setEditCheckIn] = useState("");
+  const [editCheckOut, setEditCheckOut] = useState("");
+  const [editIsOpen, setEditIsOpen] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -261,6 +285,102 @@ export function AttendancePage() {
     } finally {
       setCheckOutLoading(null);
     }
+  };
+
+  // Admin Edit Attendance handlers
+  const handleOpenEditModal = (rec: AttendanceRecord) => {
+    setEditingRecord(rec);
+    setEditCheckIn(toLocalDatetimeInputString(rec.checkIn));
+    setEditCheckOut(rec.checkOut ? toLocalDatetimeInputString(rec.checkOut) : "");
+    setEditIsOpen(!rec.checkOut);
+    setEditNotes(rec.notes || "");
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRecord) return;
+    if (!editCheckIn) {
+      toast.error("Please enter a check-in date and time");
+      return;
+    }
+    if (!editIsOpen && editCheckOut) {
+      if (new Date(editCheckOut).getTime() < new Date(editCheckIn).getTime()) {
+        toast.error("Check-out time cannot be earlier than check-in time");
+        return;
+      }
+    }
+
+    setEditLoading(true);
+    try {
+      const payload: any = {
+        checkIn: new Date(editCheckIn).toISOString(),
+        checkOut: editIsOpen || !editCheckOut ? null : new Date(editCheckOut).toISOString(),
+        notes: editNotes ? editNotes.trim() : null,
+      };
+
+      const res = await api.patch(`/agents/attendance/${editingRecord.id}`, payload);
+      toast.success("Attendance record updated successfully");
+      setShowEditModal(false);
+      setEditingRecord(null);
+
+      if (res.data?.record) {
+        setRecords((prev) =>
+          prev.map((r) => (r.id === res.data.record.id ? res.data.record : r))
+        );
+      }
+      fetchData();
+    } catch (err: any) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to update attendance record"
+      );
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!editingRecord) return;
+    const agentName = editingRecord.agent?.name || `Agent #${editingRecord.agentId}`;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete this attendance record for ${agentName}? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/agents/attendance/${editingRecord.id}`);
+      toast.success("Attendance record deleted successfully");
+      setShowEditModal(false);
+      setEditingRecord(null);
+      setRecords((prev) => prev.filter((r) => r.id !== editingRecord.id));
+      fetchData();
+    } catch (err: any) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to delete attendance record"
+      );
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const calculateEditDuration = () => {
+    if (editIsOpen) return "Active (Shift in progress)";
+    if (!editCheckIn || !editCheckOut) return "--";
+    const inMs = new Date(editCheckIn).getTime();
+    const outMs = new Date(editCheckOut).getTime();
+    const diff = outMs - inMs;
+    if (diff < 0) return "Invalid (Check-out before Check-in)";
+    const mins = Math.round(diff / 60000);
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h > 0 ? `${h}h ` : ""}${m}m (${mins} minutes)`;
   };
 
   // Calculate Today's Attendance State for the logged-in agent
@@ -760,24 +880,31 @@ export function AttendancePage() {
                         {rec.notes || "--"}
                       </td>
                       <td className="py-3 px-5 text-center">
-                        {isOpen ? (
+                        <div className="flex items-center justify-center gap-1.5">
+                          {isOpen && (
+                            <button
+                              onClick={() => handleCheckOut(rec.agentId)}
+                              disabled={checkOutLoading === rec.agentId}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
+                              title="Check Out Agent"
+                            >
+                              {checkOutLoading === rec.agentId ? (
+                                <div className="w-3.5 h-3.5 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin" />
+                              ) : (
+                                <LogOut className="w-3.5 h-3.5" />
+                              )}
+                              Check Out
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleCheckOut(rec.agentId)}
-                            disabled={checkOutLoading === rec.agentId}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
+                            onClick={() => handleOpenEditModal(rec)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold transition-all border border-indigo-200/50"
+                            title="Edit Attendance Record"
                           >
-                            {checkOutLoading === rec.agentId ? (
-                              <div className="w-3.5 h-3.5 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin" />
-                            ) : (
-                              <LogOut className="w-3.5 h-3.5" />
-                            )}
-                            Check Out
+                            <Edit3 className="w-3.5 h-3.5" />
+                            Edit
                           </button>
-                        ) : (
-                          <span className="text-slate-300 text-[11px] font-medium">
-                            Completed
-                          </span>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -893,6 +1020,197 @@ export function AttendancePage() {
                     )}
                     {checkInLoading ? "Checking In…" : "Confirm Check-In"}
                   </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Admin Edit Attendance Modal */}
+        {showEditModal && editingRecord && (
+          <motion.div
+            key="edit-attendance-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+          >
+            <motion.div
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              onClick={() => !editLoading && !deleteLoading && setShowEditModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              transition={{ type: "spring", damping: 24, stiffness: 220 }}
+              className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100"
+            >
+              <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-primary-600 px-6 py-5 text-white relative overflow-hidden">
+                <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+                <div className="relative z-10 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center">
+                    <Edit3 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-[16px] font-extrabold tracking-tight">
+                      Edit Attendance Record
+                    </h3>
+                    <p className="text-[11px] text-indigo-100">
+                      {editingRecord.agent?.name || `Agent #${editingRecord.agentId}`}
+                      {editingRecord.agent?.email ? ` • ${editingRecord.agent.email}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  disabled={editLoading || deleteLoading}
+                  className="absolute right-4 top-4 w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                {/* Agent Quick Info */}
+                <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-3.5 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                      Target Agent
+                    </div>
+                    <div className="text-sm font-black text-slate-800">
+                      {editingRecord.agent?.name || `Agent #${editingRecord.agentId}`}
+                    </div>
+                  </div>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      editIsOpen
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {editIsOpen ? "Active Shift" : "Completed Shift"}
+                  </span>
+                </div>
+
+                {/* Check-In Date & Time */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <LogIn className="w-3.5 h-3.5 text-emerald-600" />
+                    Check-In Date & Time *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editCheckIn}
+                    onChange={(e) => setEditCheckIn(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 bg-white font-medium"
+                  />
+                </div>
+
+                {/* Open Session Toggle */}
+                <div className="flex items-center gap-2.5 py-1">
+                  <input
+                    type="checkbox"
+                    id="editIsOpenCheckbox"
+                    checked={editIsOpen}
+                    onChange={(e) => {
+                      setEditIsOpen(e.target.checked);
+                      if (e.target.checked) {
+                        setEditCheckOut("");
+                      } else if (!editCheckOut) {
+                        setEditCheckOut(toLocalDatetimeInputString(new Date().toISOString()));
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                  />
+                  <label
+                    htmlFor="editIsOpenCheckbox"
+                    className="text-xs font-bold text-slate-700 cursor-pointer select-none"
+                  >
+                    Shift still in progress (No check-out yet)
+                  </label>
+                </div>
+
+                {/* Check-Out Date & Time */}
+                {!editIsOpen && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                      Check-Out Date & Time *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editCheckOut}
+                      onChange={(e) => setEditCheckOut(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 bg-white font-medium"
+                    />
+                  </div>
+                )}
+
+                {/* Live Calculated Duration Preview */}
+                <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 flex items-center justify-between">
+                  <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    Calculated Shift Duration
+                  </div>
+                  <div className="text-xs font-black text-indigo-900 font-mono">
+                    {calculateEditDuration()}
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Shift Notes / Edit Reason
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="e.g. Corrected clock-in time per supervisor approval"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 text-[13px] outline-none focus:border-primary-500 placeholder:text-slate-400 resize-none bg-white"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={handleDeleteRecord}
+                    disabled={editLoading || deleteLoading}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[12px] font-bold transition-all disabled:opacity-50"
+                  >
+                    {deleteLoading ? (
+                      <div className="w-3.5 h-3.5 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    Delete
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditModal(false)}
+                      disabled={editLoading || deleteLoading}
+                      className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveEdit}
+                      disabled={editLoading || deleteLoading}
+                      className="py-2.5 px-5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-[13px] font-bold shadow-md shadow-primary-500/30 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                    >
+                      {editLoading ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      Save Changes
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
